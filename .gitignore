@@ -1,0 +1,61 @@
+# Local Codex context and outputs
+/codex/
+
+# .NET build and package outputs
+**/[Bb]in/
+**/[Oo]bj/
+*.nupkg
+*.snupkg
+
+# IDE and per-user settings
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Test results and coverage
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+coverage.cobertura.xml
+coverage.opencover.xml
+
+# Android / Kotlin generated files and local SDK configuration
+.gradle/
+.kotlin/
+/mobile/**/build/
+/mobile/**/.cxx/
+/mobile/**/.externalNativeBuild/
+/mobile/**/local.properties
+*.apk
+*.aab
+
+# Local secrets, signing material, and environment overrides
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.template
+!.env.sample
+appsettings.Local.json
+appsettings.*.Local.json
+*.pfx
+*.p12
+*.jks
+*.keystore
+
+# Local SQL Server data and diagnostic output
+*.mdf
+*.ndf
+*.ldf
+*.log
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
