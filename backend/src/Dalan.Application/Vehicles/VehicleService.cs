@@ -5,7 +5,8 @@ namespace Dalan.Application.Vehicles;
 public sealed class VehicleService(IVehicleRepository repository) : IVehicleService
 {
     public async Task<VehicleRegistrationResult> RegisterAsync(
-        RegisterVehicleCommand command, CancellationToken cancellationToken = default)
+        RegisterVehicleCommand command,
+        CancellationToken cancellationToken = default)
     {
         Vehicle vehicle;
         try
@@ -23,11 +24,21 @@ public sealed class VehicleService(IVehicleRepository repository) : IVehicleServ
             : new(VehicleRegistrationStatus.Registered, ToDetails(vehicle));
     }
 
-    public async Task<VehicleDetails?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<VehicleDetails?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var vehicle = await repository.GetByIdAsync(id, cancellationToken);
         return vehicle is null ? null : ToDetails(vehicle);
     }
 
-    private static VehicleDetails ToDetails(Vehicle vehicle) => new(vehicle.Id, vehicle.RegistrationNumber);
+    public async Task<IReadOnlyList<VehicleDetails>> ListAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var vehicles = await repository.ListAsync(cancellationToken);
+        return vehicles.Select(ToDetails).ToArray();
+    }
+
+    private static VehicleDetails ToDetails(Vehicle vehicle)
+        => new(vehicle.Id, vehicle.RegistrationNumber);
 }

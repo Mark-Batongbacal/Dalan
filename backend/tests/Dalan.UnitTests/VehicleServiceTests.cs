@@ -52,23 +52,52 @@ public sealed class VehicleServiceTests
         Assert.Null(await service.GetByIdAsync(Guid.NewGuid()));
     }
 
+    [Fact]
+    public async Task Listing_maps_all_vehicles_and_passes_cancellation_to_repository()
+    {
+        var first = Vehicle.Register("ABC-123");
+        var second = Vehicle.Register("XYZ-789");
+        var repository = new FakeRepository { Vehicles = [first, second] };
+        var service = new VehicleService(repository);
+        using var source = new CancellationTokenSource();
+
+        var result = await service.ListAsync(source.Token);
+
+        Assert.Equal(
+            [new VehicleDetails(first.Id, "ABC-123"), new VehicleDetails(second.Id, "XYZ-789")],
+            result);
+        Assert.Equal(source.Token, repository.Token);
+    }
+
     private sealed class FakeRepository : IVehicleRepository
     {
         public Vehicle? Stored { get; set; }
+        public IReadOnlyList<Vehicle> Vehicles { get; set; } = [];
         public CancellationToken Token { get; private set; }
         public AddVehicleOutcome Outcome { get; init; } = AddVehicleOutcome.Added;
 
-        public Task<AddVehicleOutcome> AddAsync(Vehicle vehicle, CancellationToken cancellationToken = default)
+        public Task<AddVehicleOutcome> AddAsync(
+            Vehicle vehicle,
+            CancellationToken cancellationToken = default)
         {
             Stored = vehicle;
             Token = cancellationToken;
             return Task.FromResult(Outcome);
         }
 
-        public Task<Vehicle?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        public Task<Vehicle?> GetByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default)
         {
             Token = cancellationToken;
             return Task.FromResult(Stored?.Id == id ? Stored : null);
+        }
+
+        public Task<IReadOnlyList<Vehicle>> ListAsync(
+            CancellationToken cancellationToken = default)
+        {
+            Token = cancellationToken;
+            return Task.FromResult(Vehicles);
         }
     }
 }
