@@ -9,6 +9,10 @@
         <h1>Fleet Registry</h1>
         <p class="text-muted mb-0">Registered company vehicles.</p>
     </div>
+    @if (User.IsInRole("Admin"))
+    {
+        <a asp-action="Create" class="btn btn-primary">Register vehicle</a>
+    }
 </div>
 
 @if (Model.Vehicles.Count == 0)

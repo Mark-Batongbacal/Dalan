@@ -13,5 +13,6 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <ProjectReference Include="../../src/Dalan.Application/Dalan.Application.csproj" />
+    <ProjectReference Include="../../src/Dalan.Infrastructure/Dalan.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

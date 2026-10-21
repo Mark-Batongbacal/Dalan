@@ -1,6 +1,7 @@
 using Dalan.Application.Vehicles;
 using Dalan.Contracts.Vehicles;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Dalan.InternalApi.Controllers;
 
@@ -9,6 +10,7 @@ namespace Dalan.InternalApi.Controllers;
 public sealed class VehiclesController(IVehicleService vehicleService) : ControllerBase
 {
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType<VehicleResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
@@ -35,6 +37,7 @@ public sealed class VehiclesController(IVehicleService vehicleService) : Control
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "Admin,Dispatcher")]
     [ProducesResponseType<VehicleResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<VehicleResponse>> GetById(Guid id, CancellationToken cancellationToken)

@@ -1,9 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using Dalan.Contracts.Vehicles;
+using Dalan.Contracts.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Dalan.IntegrationTests;
@@ -18,11 +23,35 @@ public sealed class VehiclesApiTests(SqlServerFixture fixture)
             builder.UseSetting("ConnectionStrings:Dalan", fixture.ConnectionString);
         });
 
+    private static async Task<HttpClient> CreateAuthorizedClientAsync(
+        WebApplicationFactory<Program> factory, string role = "Admin")
+    {
+        using var scope = factory.Services.CreateScope();
+        var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        if (!await roles.RoleExistsAsync(role))
+            Assert.True((await roles.CreateAsync(new IdentityRole(role))).Succeeded);
+
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        var email = $"test-{Guid.NewGuid():N}@example.test";
+        const string password = "TestPassword-12345";
+        var user = new IdentityUser { UserName = email, Email = email, EmailConfirmed = true };
+        Assert.True((await users.CreateAsync(user, password)).Succeeded);
+        Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
+
+        var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var login = await client.PostAsJsonAsync("/api/auth/login", new StaffLoginRequest(email, password));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        using var token = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", token.RootElement.GetProperty("accessToken").GetString());
+        return client;
+    }
+
     [Fact]
     public async Task Create_returns_location_and_get_returns_persisted_dto()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var client = await CreateAuthorizedClientAsync(factory);
         var registration = Guid.NewGuid().ToString("N");
 
         using var response = await client.PostAsJsonAsync("/api/vehicles", new RegisterVehicleRequest(" " + registration + " "));
@@ -49,7 +78,7 @@ public sealed class VehiclesApiTests(SqlServerFixture fixture)
     public async Task Invalid_registration_returns_validation_problem(string? registration)
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var client = await CreateAuthorizedClientAsync(factory);
         using var response = await client.PostAsJsonAsync("/api/vehicles", new RegisterVehicleRequest(registration));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -61,8 +90,32 @@ public sealed class VehiclesApiTests(SqlServerFixture fixture)
     public async Task Missing_vehicle_returns_not_found()
     {
         using var factory = CreateFactory();
-        using var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var client = await CreateAuthorizedClientAsync(factory);
         using var response = await client.GetAsync($"/api/vehicles/{Guid.NewGuid()}");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Anonymous_vehicle_requests_are_rejected()
+    {
+        using var factory = CreateFactory();
+        using var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+
+        using var get = await client.GetAsync($"/api/vehicles/{Guid.NewGuid()}");
+        using var post = await client.PostAsJsonAsync("/api/vehicles", new RegisterVehicleRequest("TEST-123"));
+        Assert.Equal(HttpStatusCode.Unauthorized, get.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
+    }
+
+    [Fact]
+    public async Task Dispatcher_can_read_but_cannot_register_vehicle()
+    {
+        using var factory = CreateFactory();
+        using var client = await CreateAuthorizedClientAsync(factory, "Dispatcher");
+
+        using var get = await client.GetAsync($"/api/vehicles/{Guid.NewGuid()}");
+        using var post = await client.PostAsJsonAsync("/api/vehicles", new RegisterVehicleRequest("TEST-123"));
+        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
     }
 }

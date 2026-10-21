@@ -13,7 +13,30 @@ Vehicle fields are a generated UUID and a registration number. Registration numb
 | `POST /api/vehicles` | Body: `{"registrationNumber":"abc-123"}`. Returns `201` with `{ "id": "<uuid>", "registrationNumber": "ABC-123" }` and a retrieval Location header; `400` validation problem for invalid input; `409` problem for duplicate registration. |
 | `GET /api/vehicles/{id}` | Returns the vehicle DTO with `200`, or `404` when absent. The route requires a UUID. |
 
-Existing weather endpoints remain. MVC, authentication/roles, drivers, deliveries, Hangfire processing, routing, Android, and marketplace behavior are not implemented in this milestone. These vehicle endpoints currently have no authentication policy.
+Existing weather endpoints remain. Delivery lifecycle, driver accounts, Hangfire processing, Android, and marketplace behavior are not implemented. MVC has a Fleet Registry page, an Admin-only vehicle registration form, and a Dispatcher Fleet Planner.
+
+## Staff access
+
+The MVC app uses ASP.NET Core Identity cookies. Admin and Dispatcher can view the Fleet Registry; Admin can register vehicles and create staff accounts; Dispatcher can use the Fleet Planner. There is no public self-registration. The Internal API uses Identity bearer tokens: `POST /api/auth/login` accepts staff email/password and returns a token. Its vehicle POST requires Admin; GET-by-ID allows Admin or Dispatcher; fleet optimization requires Dispatcher. Driver authentication is not included.
+
+Apply migrations explicitly before running either host. For a new development database, apply both migrations with the command below. The initial Admin email is fixed as `admin@dalan.local`. Supply `DALAN_ADMIN_PASSWORD` in the Web process environment for its first startup. The app creates Admin and Dispatcher roles and the initial Admin account, but does not migrate the database or reset an existing account's password. Remove the environment variable after creation. No password is committed. Further staff accounts can be created by an Admin in the MVC app.
+
+## Fleet optimization and Valhalla
+
+Set `Valhalla:BaseUrl` (or `Valhalla__BaseUrl`) to the base URL of a permitted Valhalla instance. This enables the Dispatcher Fleet Planner and `POST /api/fleet/optimize`. Without it, the API returns `503` and the MVC planner reports that routing is unavailable. The optimizer uses Valhalla's automobile time-distance matrix to assign unassigned jobs to registered vehicles and improve the order of jobs already assigned to a vehicle. Every job has pickup and drop-off coordinates; pickup always precedes drop-off. It minimizes estimated total driving time using a heuristic, so it does not guarantee a global optimum.
+
+The optimizer accepts 1–8 vehicles and 1–15 jobs. Vehicle IDs must already exist in the registry. Each vehicle needs a starting coordinate. A job's optional `assignedVehicleId` keeps it on that vehicle; omitting it lets the planner assign it. The response lists each vehicle's ordered stops, estimated road distance/time, and jobs for which no feasible road route was found. The calculation is a preview only: jobs and plans are not stored or dispatched. Capacity, time windows, service time, traffic departure time, and return-to-depot are not modeled. Manual coordinates are used; no map, geocoder, Google Places, or Valhalla server is bundled.
+
+Example request body for `POST /api/fleet/optimize` (use a Dispatcher bearer token):
+
+```json
+{
+  "vehicles": [{ "vehicleId": "<registered-vehicle-uuid>", "start": { "latitude": 14.6, "longitude": 121.0 } }],
+  "jobs": [{ "jobId": "JOB-1", "pickup": { "latitude": 14.61, "longitude": 121.01 }, "dropoff": { "latitude": 14.62, "longitude": 121.02 } }]
+}
+```
+
+An application-level `IRoutingService` and a Valhalla route adapter also return point-to-point road distance, duration, and encoded polyline6 geometry for future map display. No public route geometry endpoint exists yet. Choose the provider host and vehicle costing rules before deployment.
 
 ## Development setup
 
@@ -31,7 +54,7 @@ Development configuration targets `localhost`, database `Dalan.Development`, usi
 dotnet user-secrets set "ConnectionStrings:Dalan" "Server=YOUR_SERVER;Database=YOUR_DEV_DATABASE;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" --project src/Dalan.InternalApi
 ```
 
-After selecting the intended development database, apply the initial migration explicitly:
+After selecting the intended development database, apply migrations explicitly:
 
 ```powershell
 dotnet tool run dotnet-ef -- database update --project src/Dalan.Infrastructure --startup-project src/Dalan.InternalApi -- --environment Development
@@ -55,4 +78,4 @@ Unit tests require no database. Integration tests require a reachable SQL Server
 
 The fixture always replaces the supplied database name with a new `DalanTests_<uuid>` name, applies the actual migration, and deletes only that generated database during teardown. Tests do not silently skip when SQL Server is unavailable. They exercise repository persistence, simultaneous duplicate inserts, constraints, API validation, Location/retrieval, duplicate responses, and missing vehicles.
 
-Verified on 2026-10-16: 10 unit tests and 9 SQL Server/API integration tests pass.
+The current unit suite includes vehicle and Valhalla adapter tests. SQL Server/API integration tests require the database service described above.
