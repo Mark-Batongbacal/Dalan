@@ -1,9 +1,12 @@
 ﻿using Dalan.Application.Vehicles;
+using Dalan.Web.Identity;
 using Dalan.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dalan.Web.Controllers;
 
+[Authorize(Roles = IdentityRoles.FleetRegistryViewer)]
 public sealed class VehiclesController(IVehicleService vehicleService) : Controller
 {
     public async Task<IActionResult> Index(
