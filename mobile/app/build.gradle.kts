@@ -69,4 +69,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
 }
