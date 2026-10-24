@@ -11,13 +11,14 @@ Vehicle fields are a generated UUID and a registration number. Registration numb
 | InternalApi route | Behavior |
 |---|---|
 | `POST /api/vehicles` | Body: `{"registrationNumber":"abc-123"}`. Returns `201` with `{ "id": "<uuid>", "registrationNumber": "ABC-123" }` and a retrieval Location header; `400` validation problem for invalid input; `409` problem for duplicate registration. |
+| `GET /api/vehicles` | Admin or Dispatcher only. Returns the registered fleet as vehicle DTOs. |
 | `GET /api/vehicles/{id}` | Returns the vehicle DTO with `200`, or `404` when absent. The route requires a UUID. |
 
 Existing weather endpoints remain. Delivery lifecycle, driver accounts, Hangfire processing, Android, and marketplace behavior are not implemented. MVC has a Fleet Registry page, an Admin-only vehicle registration form, and a Dispatcher Fleet Planner.
 
 ## Staff access
 
-The MVC app uses ASP.NET Core Identity cookies. Admin and Dispatcher can view the Fleet Registry; Admin can register vehicles and create staff accounts; Dispatcher can use the Fleet Planner. There is no public self-registration. The Internal API uses Identity bearer tokens: `POST /api/auth/login` accepts staff email/password and returns a token. Its vehicle POST requires Admin; GET-by-ID allows Admin or Dispatcher; fleet optimization requires Dispatcher. Driver authentication is not included.
+The MVC app uses ASP.NET Core Identity cookies. Admin and Dispatcher can view the Fleet Registry; Admin can register vehicles and create staff accounts; Dispatcher can use the Fleet Planner. There is no public self-registration. The Internal API uses Identity bearer tokens: `POST /api/auth/login` accepts staff email/password and returns a token, and `GET /api/auth/me` returns the authenticated staff member and roles. Its vehicle POST requires Admin; list and GET-by-ID allow Admin or Dispatcher; Driver authentication is not included.
 
 Apply migrations explicitly before running either host. For a new development database, apply both migrations with the command below. The initial Admin email is fixed as `admin@dalan.local`. Supply `DALAN_ADMIN_PASSWORD` in the Web process environment for its first startup. The app creates Admin and Dispatcher roles and the initial Admin account, but does not migrate the database or reset an existing account's password. Remove the environment variable after creation. No password is committed. Further staff accounts can be created by an Admin in the MVC app.
 

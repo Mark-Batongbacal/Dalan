@@ -9,6 +9,17 @@ namespace Dalan.InternalApi.Controllers;
 [Route("api/vehicles")]
 public sealed class VehiclesController(IVehicleService vehicleService) : ControllerBase
 {
+    [HttpGet]
+    [Authorize(Roles = "Admin,Dispatcher")]
+    [ProducesResponseType<IReadOnlyList<VehicleResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<VehicleResponse>>> List(
+    CancellationToken cancellationToken)
+    {
+        var vehicles = await vehicleService.ListAsync(cancellationToken);
+
+        return Ok(vehicles.Select(ToResponse).ToArray());
+    }
+
     [HttpPost]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType<VehicleResponse>(StatusCodes.Status201Created)]
