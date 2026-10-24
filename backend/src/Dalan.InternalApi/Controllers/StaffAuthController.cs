@@ -28,4 +28,21 @@ public sealed class StaffAuthController(
         var principal = await signInManager.CreateUserPrincipalAsync(user);
         return SignIn(principal, IdentityConstants.BearerScheme);
     }
+
+    [Authorize(Roles = "Admin,Dispatcher")]
+    [HttpGet("me")]
+    [ProducesResponseType<StaffProfileResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<StaffProfileResponse>> Me()
+    {
+        var user = await users.GetUserAsync(User);
+        if (user is null || string.IsNullOrWhiteSpace(user.Email))
+            return Unauthorized();
+
+        var roles = await users.GetRolesAsync(user);
+
+        return Ok(new StaffProfileResponse(
+            user.Id,
+            user.Email,
+            roles.OrderBy(role => role).ToArray()));
+    }
 }
