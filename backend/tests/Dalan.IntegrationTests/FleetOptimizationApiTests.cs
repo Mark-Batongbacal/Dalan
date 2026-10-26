@@ -1,18 +1,19 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using Dalan.Application.FleetOptimization;
 using Dalan.Application.Vehicles;
 using Dalan.Contracts.FleetOptimization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using Xunit;
 
 namespace Dalan.IntegrationTests;
@@ -28,23 +29,7 @@ public sealed class FleetOptimizationApiTests
     public async Task Optimization_requires_dispatcher_and_returns_ordered_plan(
         string? role, HttpStatusCode expected)
     {
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment("Testing");
-            builder.UseSetting("ConnectionStrings:Dalan", "Server=localhost;Database=Unused;Integrated Security=True;TrustServerCertificate=True");
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IVehicleService>();
-                services.AddScoped<IVehicleService, FakeVehicleService>();
-                services.AddScoped<IFleetOptimizer, FakeOptimizer>();
-                services.AddAuthentication(options =>
-                {
-                    options.DefaultAuthenticateScheme = "Test";
-                    options.DefaultChallengeScheme = "Test";
-                    options.DefaultForbidScheme = "Test";
-                }).AddScheme<AuthenticationSchemeOptions, RoleHeaderHandler>("Test", _ => { });
-            });
-        });
+        using var factory = CreateFactory(new FakeOptimizer());
         using var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
         if (role is not null) client.DefaultRequestHeaders.Add("X-Test-Role", role);
 
@@ -60,6 +45,142 @@ public sealed class FleetOptimizationApiTests
             Assert.Equal("Pickup", plan.Routes[0].Stops[0].Kind);
         }
     }
+
+    [Fact]
+    public async Task Optimization_returns_service_unavailable_when_routing_is_not_configured()
+    {
+        using var factory = CreateFactory(optimizer: null);
+        using var client = factory.CreateClient(new()
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Dispatcher");
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/fleet/optimize",
+            new FleetOptimizeRequest(
+                [new(VehicleId, new CoordinateRequest(14.6, 121.0))],
+                [new("JOB-1", new(14.61, 121.01), new(14.62, 121.02))]));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("Routing is unavailable", problem!.Title);
+    }
+
+    [Fact]
+    public async Task Optimization_rejects_an_unregistered_vehicle()
+    {
+        using var factory = CreateFactory(new FakeOptimizer());
+        using var client = factory.CreateClient(new()
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Dispatcher");
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/fleet/optimize",
+            new FleetOptimizeRequest(
+                [new(Guid.NewGuid(), new CoordinateRequest(14.6, 121.0))],
+                [new("JOB-1", new(14.61, 121.01), new(14.62, 121.02))]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.Contains("Vehicles", problem!.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task Optimization_returns_bad_gateway_when_routing_provider_fails()
+    {
+        using var factory = CreateFactory(new ThrowingOptimizer(new HttpRequestException()));
+        using var client = factory.CreateClient(new()
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Dispatcher");
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/fleet/optimize",
+            new FleetOptimizeRequest(
+                [new(VehicleId, new CoordinateRequest(14.6, 121.0))],
+                [new("JOB-1", new(14.61, 121.01), new(14.62, 121.02))]));
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("Routing provider failed", problem!.Title);
+    }
+
+    [Fact]
+    public async Task Optimization_returns_gateway_timeout_when_routing_provider_times_out()
+    {
+        using var factory = CreateFactory(new ThrowingOptimizer(new TaskCanceledException()));
+        using var client = factory.CreateClient(new()
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Dispatcher");
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/fleet/optimize",
+            new FleetOptimizeRequest(
+                [new(VehicleId, new CoordinateRequest(14.6, 121.0))],
+                [new("JOB-1", new(14.61, 121.01), new(14.62, 121.02))]));
+
+        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("Routing provider timed out", problem!.Title);
+    }
+
+    [Fact]
+    public async Task Optimization_returns_bad_gateway_when_routing_provider_returns_invalid_data()
+    {
+        using var factory = CreateFactory(new ThrowingOptimizer(new InvalidDataException()));
+        using var client = factory.CreateClient(new()
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        client.DefaultRequestHeaders.Add("X-Test-Role", "Dispatcher");
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/fleet/optimize",
+            new FleetOptimizeRequest(
+                [new(VehicleId, new CoordinateRequest(14.6, 121.0))],
+                [new("JOB-1", new(14.61, 121.01), new(14.62, 121.02))]));
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("Routing provider returned invalid data", problem!.Title);
+    }
+
+    private static WebApplicationFactory<Program> CreateFactory(IFleetOptimizer? optimizer)
+    => new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+    {
+        builder.UseEnvironment("Testing");
+        builder.UseSetting(
+            "ConnectionStrings:Dalan",
+            "Server=localhost;Database=Unused;Integrated Security=True;TrustServerCertificate=True");
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IVehicleService>();
+            services.AddScoped<IVehicleService, FakeVehicleService>();
+
+            services.RemoveAll<IFleetOptimizer>();
+            if (optimizer is not null)
+                services.AddScoped<IFleetOptimizer>(_ => optimizer);
+
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = "Test";
+                options.DefaultChallengeScheme = "Test";
+                options.DefaultForbidScheme = "Test";
+            }).AddScheme<AuthenticationSchemeOptions, RoleHeaderHandler>("Test", _ => { });
+        });
+    });
 
     private sealed class FakeVehicleService : IVehicleService
     {
@@ -84,6 +205,14 @@ public sealed class FleetOptimizationApiTests
                      new FleetStop(job.Id, FleetStopKind.Dropoff, job.Dropoff)], 1200, 300)],
                 []));
         }
+    }
+
+    private sealed class ThrowingOptimizer(Exception error) : IFleetOptimizer
+    {
+        public Task<FleetOptimizationResult> OptimizeAsync(
+            FleetOptimizationRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromException<FleetOptimizationResult>(error);
     }
 
     private sealed class RoleHeaderHandler(
