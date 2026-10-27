@@ -96,15 +96,77 @@ public sealed class VehiclesApiTests(SqlServerFixture fixture)
     }
 
     [Fact]
+    public async Task Authenticated_staff_can_read_their_profile()
+    {
+        using var factory = CreateFactory();
+        using var client = await CreateAuthorizedClientAsync(factory, "Dispatcher");
+
+        using var response = await client.GetAsync("/api/auth/me");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var profile = await response.Content
+            .ReadFromJsonAsync<StaffProfileResponse>();
+
+        Assert.NotNull(profile);
+        Assert.False(string.IsNullOrWhiteSpace(profile.Email));
+        Assert.Contains("Dispatcher", profile.Roles);
+    }
+
+    [Fact]
+    public async Task Admin_and_dispatcher_can_list_registered_vehicles()
+    {
+        using var factory = CreateFactory();
+        using var admin = await CreateAuthorizedClientAsync(factory);
+
+        var registration = Guid.NewGuid().ToString("N");
+        using var create = await admin.PostAsJsonAsync(
+            "/api/vehicles",
+            new RegisterVehicleRequest(registration));
+
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        using var adminList = await admin.GetAsync("/api/vehicles");
+
+        Assert.Equal(HttpStatusCode.OK, adminList.StatusCode);
+
+        var adminVehicles = await adminList.Content
+            .ReadFromJsonAsync<IReadOnlyList<VehicleResponse>>();
+
+        Assert.Contains(
+            adminVehicles!,
+            vehicle => vehicle.RegistrationNumber == registration.ToUpperInvariant());
+
+        using var dispatcher = await CreateAuthorizedClientAsync(
+            factory,
+            "Dispatcher");
+
+        using var response = await dispatcher.GetAsync("/api/vehicles");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var vehicles = await response.Content
+            .ReadFromJsonAsync<IReadOnlyList<VehicleResponse>>();
+
+        Assert.Contains(
+            vehicles!,
+            vehicle => vehicle.RegistrationNumber == registration.ToUpperInvariant());
+    }
+
+    [Fact]
     public async Task Anonymous_vehicle_requests_are_rejected()
     {
         using var factory = CreateFactory();
         using var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var list = await client.GetAsync("/api/vehicles");
+        using var profile = await client.GetAsync("/api/auth/me");
 
         using var get = await client.GetAsync($"/api/vehicles/{Guid.NewGuid()}");
         using var post = await client.PostAsJsonAsync("/api/vehicles", new RegisterVehicleRequest("TEST-123"));
         Assert.Equal(HttpStatusCode.Unauthorized, get.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, list.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, profile.StatusCode);
     }
 
     [Fact]
