@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<ItemGroup>
+		<ProjectReference Include="..\Dalan.Application\Dalan.Application.csproj" />
+		<ProjectReference Include="..\Dalan.Contracts\Dalan.Contracts.csproj" />
+		<ProjectReference Include="..\Dalan.Infrastructure\Dalan.Infrastructure.csproj" />
+	</ItemGroup>
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+</Project>

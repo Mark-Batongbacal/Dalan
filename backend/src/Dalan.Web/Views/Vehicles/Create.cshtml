@@ -1,0 +1,16 @@
+@model CreateVehicleViewModel
+@{
+    ViewData["Title"] = "Register vehicle";
+}
+
+<h1>Register vehicle</h1>
+<form asp-action="Create" method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="RegistrationNumber" class="form-label"></label>
+        <input asp-for="RegistrationNumber" class="form-control" maxlength="32" />
+        <span asp-validation-for="RegistrationNumber" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Register</button>
+</form>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

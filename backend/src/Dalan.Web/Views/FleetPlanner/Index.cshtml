@@ -1,0 +1,135 @@
+@model FleetPlannerViewModel
+@{
+    ViewData["Title"] = "Fleet Planner";
+}
+
+<h1>Fleet Planner</h1>
+<p class="text-muted">Assign pickup and drop-off jobs to vehicles, or keep a job on a selected vehicle and improve its stop order. Enter confirmed coordinates. This preview does not save or dispatch jobs.</p>
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.Error</div>
+}
+
+<form asp-action="Index" method="post">
+    <h2 class="h4 mt-4">Vehicles and starting points</h2>
+    @if (Model.Vehicles.Count == 0)
+    {
+        <p>No vehicles are registered. Ask an Admin to register vehicles first.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Use</th><th>Vehicle</th><th>Start latitude</th><th>Start longitude</th></tr></thead>
+                <tbody>
+                @for (var i = 0; i < Model.Vehicles.Count; i++)
+                {
+                    <tr>
+                        <td><input asp-for="Vehicles[i].Selected" class="form-check-input" /><input asp-for="Vehicles[i].Id" type="hidden" /></td>
+                        <td>@Model.Vehicles[i].RegistrationNumber</td>
+                        <td><input asp-for="Vehicles[i].StartLatitude" class="form-control form-control-sm" type="number" step="any" min="-90" max="90" aria-label="Start latitude for @Model.Vehicles[i].RegistrationNumber" /></td>
+                        <td><input asp-for="Vehicles[i].StartLongitude" class="form-control form-control-sm" type="number" step="any" min="-180" max="180" aria-label="Start longitude for @Model.Vehicles[i].RegistrationNumber" /></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <h2 class="h4">Jobs</h2>
+        <button type="button" id="add-job" class="btn btn-outline-secondary btn-sm">Add job</button>
+    </div>
+    <p class="text-muted">Leave “Vehicle” blank to let the planner assign a job. A selected vehicle keeps that job while the planner reorders its stops.</p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle" id="jobs-table">
+            <thead><tr><th>Job ID</th><th>Pickup lat</th><th>Pickup lon</th><th>Drop-off lat</th><th>Drop-off lon</th><th>Vehicle</th></tr></thead>
+            <tbody>
+            @for (var i = 0; i < Model.Jobs.Count; i++)
+            {
+                <tr>
+                    <td><input asp-for="Jobs[i].Id" class="form-control form-control-sm" aria-label="Job ID" /></td>
+                    <td><input asp-for="Jobs[i].PickupLatitude" class="form-control form-control-sm" type="number" step="any" min="-90" max="90" aria-label="Pickup latitude" /></td>
+                    <td><input asp-for="Jobs[i].PickupLongitude" class="form-control form-control-sm" type="number" step="any" min="-180" max="180" aria-label="Pickup longitude" /></td>
+                    <td><input asp-for="Jobs[i].DropoffLatitude" class="form-control form-control-sm" type="number" step="any" min="-90" max="90" aria-label="Drop-off latitude" /></td>
+                    <td><input asp-for="Jobs[i].DropoffLongitude" class="form-control form-control-sm" type="number" step="any" min="-180" max="180" aria-label="Drop-off longitude" /></td>
+                    <td><select asp-for="Jobs[i].AssignedVehicleId" class="form-select form-select-sm" aria-label="Assigned vehicle">
+                        <option value="">Assign automatically</option>
+                        @foreach (var vehicle in Model.Vehicles)
+                        {
+                            <option value="@vehicle.Id">@vehicle.RegistrationNumber</option>
+                        }
+                    </select></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <button type="submit" class="btn btn-primary" disabled="@(Model.Vehicles.Count == 0)">Optimize plan</button>
+</form>
+
+@if (Model.Result is not null)
+{
+    <h2 class="h4 mt-5">Proposed plan</h2>
+    @foreach (var route in Model.Result.Routes)
+    {
+        var registration = Model.Vehicles.First(vehicle => vehicle.Id == route.VehicleId).RegistrationNumber;
+        <section class="mb-4">
+            <h3 class="h5">@registration</h3>
+            <p>@((route.DistanceMeters / 1000.0).ToString("N2")) km · @((route.DurationSeconds / 60.0).ToString("N0")) min estimated driving</p>
+            @if (route.Stops.Count == 0)
+            {
+                <p>No jobs assigned.</p>
+            }
+            else
+            {
+                <ol>
+                    @foreach (var stop in route.Stops)
+                    {
+                        <li>@stop.Kind: @stop.JobId (@stop.Point.Latitude, @stop.Point.Longitude)</li>
+                    }
+                </ol>
+            }
+        </section>
+    }
+    @if (Model.Result.UnassignedJobIds.Count > 0)
+    {
+        <div class="alert alert-warning" role="status">No road-feasible assignment was found for: @string.Join(", ", Model.Result.UnassignedJobIds)</div>
+    }
+}
+
+@section Scripts {
+<script>
+    document.getElementById('add-job').addEventListener('click', () => {
+        const body = document.querySelector('#jobs-table tbody');
+        if (body.rows.length >= 15) return;
+        const index = body.rows.length;
+        const row = document.createElement('tr');
+        const fields = [
+            ['Id', 'text', 'Job ID'],
+            ['PickupLatitude', 'number', 'Pickup latitude'],
+            ['PickupLongitude', 'number', 'Pickup longitude'],
+            ['DropoffLatitude', 'number', 'Drop-off latitude'],
+            ['DropoffLongitude', 'number', 'Drop-off longitude']
+        ];
+        for (const [name, type, label] of fields) {
+            const cell = row.insertCell();
+            const input = document.createElement('input');
+            input.name = `Jobs[${index}].${name}`;
+            input.type = type;
+            input.setAttribute('aria-label', label);
+            input.className = 'form-control form-control-sm';
+            if (type === 'number') input.step = 'any';
+            cell.appendChild(input);
+        }
+        const cell = row.insertCell();
+        const select = document.querySelector('select[name="Jobs[0].AssignedVehicleId"]').cloneNode(true);
+        select.name = `Jobs[${index}].AssignedVehicleId`;
+        select.id = `Jobs_${index}__AssignedVehicleId`;
+        select.value = '';
+        cell.appendChild(select);
+        body.appendChild(row);
+    });
+</script>
+}

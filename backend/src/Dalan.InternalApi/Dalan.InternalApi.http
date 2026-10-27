@@ -1,0 +1,6 @@
+@Dalan.InternalApi_HostAddress = http://localhost:5072
+
+GET {{Dalan.InternalApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

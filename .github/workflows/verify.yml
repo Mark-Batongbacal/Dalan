@@ -1,0 +1,40 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  backend-unit-tests:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore backend dependencies
+        working-directory: backend
+        run: dotnet restore Dalan.sln
+
+      - name: Restore .NET tools
+        working-directory: backend
+        run: dotnet tool restore
+
+      - name: Build backend
+        working-directory: backend
+        run: dotnet build Dalan.sln --no-restore
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: dotnet test tests/Dalan.UnitTests --no-build --no-restore
