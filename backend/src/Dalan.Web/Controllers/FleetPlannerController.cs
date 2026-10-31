@@ -69,6 +69,7 @@ public sealed class FleetPlannerController(
             .ToDictionary(group => group.Key, group => group.First())
             ?? [];
         model.Vehicles = (await vehicleService.ListAsync(cancellationToken))
+            .Where(vehicle => vehicle.Availability == "Available")
             .Select(vehicle =>
             {
                 submitted.TryGetValue(vehicle.Id, out var previous);

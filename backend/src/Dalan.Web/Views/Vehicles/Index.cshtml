@@ -4,10 +4,11 @@
     ViewData["Title"] = "Fleet Registry";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 page-heading">
     <div>
+        <span class="page-kicker">Fleet operations</span>
         <h1>Fleet Registry</h1>
-        <p class="text-muted mb-0">Registered company vehicles.</p>
+        <p>Registered company vehicles, ready for planning.</p>
     </div>
     @if (User.IsInRole("Admin"))
     {
@@ -15,6 +16,7 @@
     }
 </div>
 
+<div class="content-card">
 @if (Model.Vehicles.Count == 0)
 {
     <div class="alert alert-info" role="status">
@@ -28,6 +30,11 @@ else
             <thead>
                 <tr>
                     <th scope="col">Registration number</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Capacity</th>
+                    <th scope="col">Availability</th>
+                    <th scope="col">Maintenance due</th>
+                    @if (User.IsInRole("Admin")) { <th scope="col">Actions</th> }
                 </tr>
             </thead>
             <tbody>
@@ -35,9 +42,22 @@ else
                 {
                     <tr>
                         <td>@vehicle.RegistrationNumber</td>
+                        <td>@(vehicle.Type ?? "—")</td>
+                        <td>
+                            @if (vehicle.PayloadCapacityKg is not null) { <span>@vehicle.PayloadCapacityKg.Value.ToString("N2") kg</span> }
+                            @if (vehicle.SeatCapacity is not null) { <span class="d-block">@vehicle.SeatCapacity seats</span> }
+                            @if (vehicle.PayloadCapacityKg is null && vehicle.SeatCapacity is null) { <span>—</span> }
+                        </td>
+                        <td><span class="status-chip">@vehicle.Availability</span></td>
+                        <td>@(vehicle.NextMaintenanceDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <td><a asp-action="Edit" asp-route-id="@vehicle.Id">Edit</a></td>
+                        }
                     </tr>
                 }
             </tbody>
         </table>
     </div>
 }
+</div>
