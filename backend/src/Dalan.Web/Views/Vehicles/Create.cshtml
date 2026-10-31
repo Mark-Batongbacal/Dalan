@@ -3,12 +3,7 @@
     ViewData["Title"] = "Register vehicle";
 }
 
-<div class="page-heading">
-    <span class="page-kicker">Fleet administration</span>
-    <h1>Register vehicle</h1>
-    <p>Add a registration number to make this vehicle available in the fleet registry and planner.</p>
-</div>
-<div class="content-card form-panel">
+<h1>Register vehicle</h1>
 <form asp-action="Create" method="post">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="mb-3">
@@ -16,29 +11,6 @@
         <input asp-for="RegistrationNumber" class="form-control" maxlength="32" />
         <span asp-validation-for="RegistrationNumber" class="text-danger"></span>
     </div>
-    <div class="mb-3">
-        <label asp-for="Type" class="form-label"></label>
-        <input asp-for="Type" class="form-control" maxlength="64" placeholder="Enter the fleet's own description" />
-        <span asp-validation-for="Type" class="text-danger"></span>
-    </div>
-    <div class="row g-3 mb-3">
-        <div class="col-sm-6">
-            <label asp-for="PayloadCapacityKg" class="form-label"></label>
-            <input asp-for="PayloadCapacityKg" class="form-control" type="number" step="0.01" min="0.01" />
-            <span asp-validation-for="PayloadCapacityKg" class="text-danger"></span>
-        </div>
-        <div class="col-sm-6">
-            <label asp-for="SeatCapacity" class="form-label"></label>
-            <input asp-for="SeatCapacity" class="form-control" type="number" min="1" />
-            <span asp-validation-for="SeatCapacity" class="text-danger"></span>
-        </div>
-    </div>
-    <div class="mb-3">
-        <label asp-for="NextMaintenanceDate" class="form-label"></label>
-        <input asp-for="NextMaintenanceDate" class="form-control" type="date" />
-        <span asp-validation-for="NextMaintenanceDate" class="text-danger"></span>
-    </div>
     <button type="submit" class="btn btn-primary">Register</button>
 </form>
-</div>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

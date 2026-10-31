@@ -99,15 +99,5 @@ public sealed class VehicleServiceTests
             Token = cancellationToken;
             return Task.FromResult(Vehicles);
         }
-
-        public Task<bool> UpdateAsync(Vehicle vehicle, CancellationToken cancellationToken = default)
-        {
-            Stored = vehicle;
-            Token = cancellationToken;
-            return Task.FromResult(true);
-        }
-
-        public Task<bool> HasAssignedDriverAsync(Guid id, CancellationToken cancellationToken = default)
-            => Task.FromResult(false);
     }
 }

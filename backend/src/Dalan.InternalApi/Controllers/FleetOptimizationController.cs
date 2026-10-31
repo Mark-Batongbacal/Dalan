@@ -30,17 +30,10 @@ public sealed class FleetOptimizationController(
 
         foreach (var vehicle in request.Vehicles)
         {
-            var registered = await vehicles.GetByIdAsync(vehicle.VehicleId, cancellationToken);
-            if (registered is null)
+            if (await vehicles.GetByIdAsync(vehicle.VehicleId, cancellationToken) is null)
             {
                 ModelState.AddModelError(nameof(request.Vehicles),
                     $"Vehicle {vehicle.VehicleId} is not registered.");
-                return ValidationProblem(ModelState);
-            }
-            if (registered.Availability != "Available")
-            {
-                ModelState.AddModelError(nameof(request.Vehicles),
-                    $"Vehicle {vehicle.VehicleId} is not available for planning.");
                 return ValidationProblem(ModelState);
             }
         }

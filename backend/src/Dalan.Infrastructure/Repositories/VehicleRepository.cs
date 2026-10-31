@@ -41,24 +41,4 @@ public sealed class VehicleRepository(DalanDbContext dbContext) : IVehicleReposi
         => await dbContext.Vehicles
             .AsNoTracking()
             .ToListAsync(cancellationToken);
-
-    public async Task<bool> UpdateAsync(
-        Vehicle vehicle, CancellationToken cancellationToken = default)
-    {
-        dbContext.Vehicles.Update(vehicle);
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-            return true;
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            dbContext.Entry(vehicle).State = EntityState.Detached;
-            return false;
-        }
-    }
-
-    public Task<bool> HasAssignedDriverAsync(Guid id, CancellationToken cancellationToken = default)
-        => dbContext.Drivers.AsNoTracking()
-            .AnyAsync(driver => driver.AssignedVehicleId == id, cancellationToken);
 }

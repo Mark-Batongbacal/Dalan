@@ -1,5 +1,4 @@
 using Dalan.Application.Vehicles;
-using Dalan.Application.Drivers;
 using Dalan.Application.FleetOptimization;
 using Dalan.Infrastructure;
 using Dalan.Infrastructure.Persistence;
@@ -11,7 +10,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
-builder.Services.AddScoped<IDriverService, DriverService>();
 builder.Services.AddDalanInfrastructure(builder.Configuration);
 if (!string.IsNullOrWhiteSpace(builder.Configuration["Valhalla:BaseUrl"]))
     builder.Services.AddScoped<IFleetOptimizer, FleetOptimizer>();

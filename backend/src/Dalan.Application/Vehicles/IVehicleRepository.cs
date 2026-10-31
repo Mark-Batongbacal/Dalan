@@ -9,6 +9,4 @@ public interface IVehicleRepository
     Task<AddVehicleOutcome> AddAsync(Vehicle vehicle, CancellationToken cancellationToken = default);
     Task<Vehicle?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Vehicle>> ListAsync(CancellationToken cancellationToken = default);
-    Task<bool> UpdateAsync(Vehicle vehicle, CancellationToken cancellationToken = default);
-    Task<bool> HasAssignedDriverAsync(Guid id, CancellationToken cancellationToken = default);
 }
