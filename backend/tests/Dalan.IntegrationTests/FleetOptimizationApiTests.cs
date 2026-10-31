@@ -191,6 +191,12 @@ public sealed class FleetOptimizationApiTests
         public Task<VehicleRegistrationResult> RegisterAsync(
             RegisterVehicleCommand command, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+        public Task<VehicleMutationResult> UpdateAsync(
+            Guid id, UpdateVehicleCommand command, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+        public Task<VehicleMutationResult> DeactivateAsync(
+            Guid id, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class FakeOptimizer : IFleetOptimizer

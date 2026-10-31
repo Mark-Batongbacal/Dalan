@@ -3,7 +3,11 @@
     ViewData["Title"] = "Sign in";
 }
 
-<h1>Sign in</h1>
+<div class="auth-wrap">
+<div class="content-card">
+<span class="auth-badge">Staff access</span>
+<h1>Welcome back.</h1>
+<p>Sign in to manage your fleet workspace.</p>
 <form asp-action="Login" method="post">
     <input asp-for="ReturnUrl" type="hidden" />
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
@@ -19,4 +23,6 @@
     </div>
     <button class="btn btn-primary" type="submit">Sign in</button>
 </form>
+</div>
+</div>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }
