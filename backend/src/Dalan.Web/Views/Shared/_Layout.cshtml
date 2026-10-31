@@ -1,72 +1,77 @@
-﻿<!DOCTYPE html>
+@{
+    var pageTitle = ViewData["Title"] as string ?? "Workspace";
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Dalan.Web</title>
-    <script type="importmap"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@pageTitle · Dalan</title>
+    <script>
+        (function () {
+            var choice = localStorage.getItem('dalan-theme') || 'system';
+            document.documentElement.dataset.theme = choice;
+        })();
+    </script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Dalan.Web.styles.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Dalan.Web</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Vehicles" asp-action="Index">Fleet Registry</a>
-                        </li>
-                        @if (User.IsInRole("Admin"))
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-controller="StaffAccounts" asp-action="Create">Create staff account</a>
-                            </li>
-                        }
-                        @if (User.IsInRole("Dispatcher"))
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-controller="FleetPlanner" asp-action="Index">Fleet Planner</a>
-                            </li>
-                        }
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                    </ul>
-                    @if (User.Identity?.IsAuthenticated == true)
+    <div class="app-shell">
+        @if (signedIn)
+        {
+            <aside class="sidebar" id="main-navigation">
+                <a class="brand" asp-controller="Home" asp-action="Index"><span class="brand-mark">D</span><span>Dalan<small>Fleet workspace</small></span></a>
+                <nav class="sidebar-nav" aria-label="Main navigation">
+                    <a class="@(controller == "Home" ? "active" : "")" asp-controller="Home" asp-action="Index">Overview</a>
+                    <a class="@(controller == "Vehicles" ? "active" : "")" asp-controller="Vehicles" asp-action="Index">Fleet registry</a>
+                    @if (User.IsInRole("Dispatcher"))
                     {
-                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-flex">
-                            <button type="submit" class="btn btn-outline-secondary">Sign out</button>
-                        </form>
+                        <a class="@(controller == "FleetPlanner" ? "active" : "")" asp-controller="FleetPlanner" asp-action="Index">Fleet planner</a>
                     }
-                    else
+                    @if (User.IsInRole("Admin"))
                     {
-                        <a asp-controller="Account" asp-action="Login" class="btn btn-outline-primary">Sign in</a>
+                        <a class="@(controller == "Drivers" ? "active" : "")" asp-controller="Drivers" asp-action="Index">Drivers</a>
+                        <a class="@(controller == "StaffAccounts" ? "active" : "")" asp-controller="StaffAccounts" asp-action="Create">Staff accounts</a>
                     }
-                </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - Dalan.Web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+                </nav>
+                <div class="sidebar-foot">Internal operations</div>
+            </aside>
+        }
+        <div class="main-column">
+            <header class="topbar">
+                @if (signedIn)
+                {
+                    <button class="nav-toggle btn btn-outline-secondary" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="main-navigation" onclick="var nav=document.getElementById('main-navigation'); var open=nav.classList.toggle('open'); this.setAttribute('aria-expanded', open);">☰</button>
+                    <span class="topbar-title">@pageTitle</span>
+                    <div class="topbar-actions">
+                        <span class="account-name">@User.Identity?.Name</span>
+                        <form asp-controller="Account" asp-action="Logout" method="post"><button type="submit" class="btn btn-link">Sign out</button></form>
+                    </div>
+                }
+                else
+                {
+                    <a class="topbar-brand" asp-controller="Home" asp-action="Index">Dalan</a>
+                    <span class="topbar-title">Fleet workspace</span>
+                }
+            </header>
+            <main class="main-content" id="main-content" role="main">@RenderBody()</main>
+            <footer class="app-footer"><span>Dalan · Internal fleet operations · <a asp-controller="Home" asp-action="Privacy">Privacy</a></span><label for="theme-select">Appearance <select id="theme-select" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></footer>
         </div>
-    </footer>
+    </div>
+    <script>
+        (function () {
+            var select = document.getElementById('theme-select');
+            select.value = document.documentElement.dataset.theme;
+            select.addEventListener('change', function () {
+                document.documentElement.dataset.theme = select.value;
+                localStorage.setItem('dalan-theme', select.value);
+            });
+        })();
+    </script>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
