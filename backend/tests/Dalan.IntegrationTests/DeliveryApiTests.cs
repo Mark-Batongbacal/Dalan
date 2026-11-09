@@ -142,6 +142,27 @@ public sealed class DeliveryApiTests
     }
 
     [Fact]
+    public async Task Delivery_list_filters_by_status_and_rejects_unknown_status()
+    {
+        using var factory = CreateFactory();
+        using var client = CreateDispatcherClient(factory);
+
+        using var pending = await client.GetAsync("/api/deliveries?status=Pending");
+        Assert.Equal(HttpStatusCode.OK, pending.StatusCode);
+        var pendingItems = await pending.Content.ReadFromJsonAsync<DeliveryResponse[]>();
+        var pendingItem = Assert.Single(pendingItems!);
+        Assert.Equal("Pending", pendingItem.Status);
+
+        using var delivered = await client.GetAsync("/api/deliveries?status=Delivered");
+        Assert.Equal(HttpStatusCode.OK, delivered.StatusCode);
+        var deliveredItems = await delivered.Content.ReadFromJsonAsync<DeliveryResponse[]>();
+        Assert.Empty(deliveredItems!);
+
+        using var invalid = await client.GetAsync("/api/deliveries?status=Unknown");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+    }
+
+    [Fact]
     public async Task Application_validation_returns_validation_problem()
     {
         using var factory = CreateFactory();

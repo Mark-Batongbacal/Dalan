@@ -1,5 +1,6 @@
 ﻿using Dalan.Application.Deliveries;
 using Dalan.Contracts.Deliveries;
+using Dalan.Domain.Deliveries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,11 +14,27 @@ public sealed class DeliveriesController(IDeliveryService deliveries)
 {
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<DeliveryResponse>>(
-        StatusCodes.Status200OK)]
+    StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(
+    StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<IReadOnlyList<DeliveryResponse>>> List(
-        CancellationToken cancellationToken)
+    [FromQuery] string? status,
+    CancellationToken cancellationToken)
     {
+        DeliveryStatus parsedStatus = default;
+        if (status is not null &&
+            (!Enum.TryParse(status, true, out parsedStatus) ||
+             !Enum.IsDefined(parsedStatus)))
+        {
+            ModelState.AddModelError(
+                "status",
+                "Choose Pending, Assigned, PickedUp, Delivered, or Cancelled.");
+            return BadRequest(new ValidationProblemDetails(ModelState));
+        }
+
         var results = await deliveries.ListAsync(cancellationToken);
+        if (status is not null)
+            results = results.Where(delivery => delivery.Status == parsedStatus).ToArray();
 
         return Ok(results.Select(ToResponse).ToArray());
     }

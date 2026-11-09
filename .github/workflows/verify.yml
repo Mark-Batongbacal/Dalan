@@ -38,3 +38,6 @@ jobs:
       - name: Run backend unit tests
         working-directory: backend
         run: dotnet test tests/Dalan.UnitTests --no-build --no-restore
+      - name: Run delivery API tests
+        working-directory: backend
+        run: dotnet test tests/Dalan.IntegrationTests --no-build --no-restore --filter FullyQualifiedName~DeliveryApiTests
