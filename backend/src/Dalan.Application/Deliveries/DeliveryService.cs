@@ -48,6 +48,11 @@ public sealed class DeliveryService(
         if (delivery is null)
             return new(DeliveryMutationStatus.NotFound);
 
+        if (await deliveries.IsInConfirmedPlanAsync(id, cancellationToken))
+            return new(
+                DeliveryMutationStatus.Conflict,
+                Error: "A confirmed dispatch plan already includes this delivery.");
+
         var driver = await drivers.GetByIdAsync(
             command.DriverId,
             cancellationToken);

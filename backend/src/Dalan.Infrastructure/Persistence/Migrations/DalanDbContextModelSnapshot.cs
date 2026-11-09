@@ -141,6 +141,93 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                     b.ToTable("DeliveryProofs", (string)null);
                 });
 
+            modelBuilder.Entity("Dalan.Domain.Dispatch.DispatchPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ConfirmedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DispatchPlans", (string)null);
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Dispatch.DispatchRoute", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("DistanceMeters")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("DurationSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("StartLatitude")
+                        .HasColumnType("float");
+
+                    b.Property<double>("StartLongitude")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("VehicleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("VehicleId");
+
+                    b.HasIndex("PlanId", "VehicleId")
+                        .IsUnique();
+
+                    b.ToTable("DispatchRoutes", (string)null);
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Dispatch.DispatchStop", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RouteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryId", "Kind")
+                        .IsUnique();
+
+                    b.HasIndex("RouteId", "Position")
+                        .IsUnique();
+
+                    b.ToTable("DispatchStops", (string)null);
+                });
+
             modelBuilder.Entity("Dalan.Domain.Drivers.Driver", b =>
                 {
                     b.Property<Guid>("Id")
@@ -445,6 +532,42 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Dalan.Domain.Dispatch.DispatchRoute", b =>
+                {
+                    b.HasOne("Dalan.Domain.Drivers.Driver", null)
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dalan.Domain.Dispatch.DispatchPlan", null)
+                        .WithMany("Routes")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Dalan.Domain.Vehicles.Vehicle", null)
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Dispatch.DispatchStop", b =>
+                {
+                    b.HasOne("Dalan.Domain.Deliveries.Delivery", null)
+                        .WithMany()
+                        .HasForeignKey("DeliveryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dalan.Domain.Dispatch.DispatchRoute", null)
+                        .WithMany("Stops")
+                        .HasForeignKey("RouteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Dalan.Domain.Drivers.Driver", b =>
                 {
                     b.HasOne("Dalan.Domain.Vehicles.Vehicle", null)
@@ -507,6 +630,16 @@ namespace Dalan.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Dalan.Domain.Deliveries.Delivery", b =>
                 {
                     b.Navigation("Proof");
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Dispatch.DispatchPlan", b =>
+                {
+                    b.Navigation("Routes");
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Dispatch.DispatchRoute", b =>
+                {
+                    b.Navigation("Stops");
                 });
 #pragma warning restore 612, 618
         }

@@ -11,4 +11,6 @@ public interface IDeliveryRepository
     Task<IReadOnlyList<Delivery>> ListAsync(CancellationToken cancellationToken = default);
     Task<SaveDeliveryOutcome> UpdateAsync(
         Delivery delivery, CancellationToken cancellationToken = default);
+    Task<bool> IsInConfirmedPlanAsync(
+        Guid deliveryId, CancellationToken cancellationToken = default);
 }

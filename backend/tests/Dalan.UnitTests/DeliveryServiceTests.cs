@@ -214,6 +214,12 @@ public sealed class DeliveryServiceTests
             return Task.FromResult(Stored?.Id == id ? Stored : null);
         }
 
+        public bool IsInConfirmedPlan { get; set; }
+
+        public Task<bool> IsInConfirmedPlanAsync(
+            Guid deliveryId, CancellationToken cancellationToken = default)
+            => Task.FromResult(IsInConfirmedPlan);
+
         public Task<IReadOnlyList<Delivery>> ListAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<Delivery>>(Stored is null ? [] : [Stored]);

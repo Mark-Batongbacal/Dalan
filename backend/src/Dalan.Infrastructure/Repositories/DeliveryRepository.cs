@@ -20,6 +20,11 @@ public sealed class DeliveryRepository(DalanDbContext dbContext) : IDeliveryRepo
             .Include(delivery => delivery.Proof)
             .SingleOrDefaultAsync(delivery => delivery.Id == id, cancellationToken);
 
+    public Task<bool> IsInConfirmedPlanAsync(
+    Guid deliveryId, CancellationToken cancellationToken = default)
+    => dbContext.DispatchStops.AsNoTracking()
+        .AnyAsync(stop => stop.DeliveryId == deliveryId, cancellationToken);
+
     public async Task<IReadOnlyList<Delivery>> ListAsync(
         CancellationToken cancellationToken = default)
         => await dbContext.Deliveries.AsNoTracking()
