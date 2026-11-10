@@ -2,11 +2,16 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Dalan.Application.Deliveries;
+using Dalan.Application.Dispatch;
+using Dalan.Domain.Dispatch;
+using Dalan.Web.Controllers;
+using Dalan.Web.Models;
 using Dalan.Application.Drivers;
 using Dalan.Application.Vehicles;
 using Dalan.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -63,6 +68,76 @@ public sealed class DispatchBoardWebTests
             }));
 
         Assert.Equal(expected, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Confirm_rejects_missing_version_token_without_throwing()
+    {
+        var vehicleId = Guid.NewGuid();
+        var deliveryId = Guid.NewGuid();
+        var model = new DispatchReviewViewModel
+        {
+            Vehicles =
+            [
+                new()
+                {
+                    VehicleId = vehicleId,
+                    StartLatitude = 14.6,
+                    StartLongitude = 121.0
+                }
+            ],
+            Stops =
+            [
+                new() { DeliveryId = deliveryId, VehicleId = vehicleId, Kind = "Pickup", Order = 0 },
+                new() { DeliveryId = deliveryId, VehicleId = vehicleId, Kind = "Dropoff", Order = 1 }
+            ],
+            Versions =
+            [
+                new() { DeliveryId = deliveryId, RowVersion = null! }
+            ]
+        };
+
+        var controller = CreateController();
+        var result = await controller.Confirm(model, CancellationToken.None);
+
+        var view = Assert.IsType<ViewResult>(result);
+        Assert.Equal("Review", view.ViewName);
+        Assert.Contains("incomplete", model.Error!);
+    }
+
+    [Fact]
+    public async Task Confirm_rejects_null_form_entries_without_throwing()
+    {
+        var model = new DispatchReviewViewModel
+        {
+            Vehicles = [null!],
+            Stops = [null!, null!],
+            Versions = [null!]
+        };
+
+        var controller = CreateController();
+        var result = await controller.Confirm(model, CancellationToken.None);
+
+        var view = Assert.IsType<ViewResult>(result);
+        Assert.Equal("Review", view.ViewName);
+        Assert.Empty(model.Vehicles);
+        Assert.Empty(model.Stops);
+        Assert.Empty(model.Versions);
+    }
+
+    private static DispatchBoardController CreateController()
+        => new(
+            new FakeDeliveryService(),
+            new FakeDriverService(),
+            new FakeVehicleService(),
+            new FakeDispatchPlanReader(),
+            new ServiceCollection().BuildServiceProvider());
+
+    private sealed class FakeDispatchPlanReader : IDispatchPlanReader
+    {
+        public Task<DispatchPlan?> GetByIdAsync(
+            Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult<DispatchPlan?>(null);
     }
 
     private static WebApplicationFactory<WebAssemblyMarker> CreateFactory()
