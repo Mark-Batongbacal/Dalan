@@ -1,0 +1,56 @@
+﻿@model IReadOnlyList<Dalan.Application.Deliveries.DeliveryDetails>
+@{
+    ViewData["Title"] = "Delivery queue";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 page-heading">
+    <div>
+        <span class="page-kicker">Dispatch operations</span>
+        <h1>Delivery queue</h1>
+        <p>Review delivery status and assignments.</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary">Create delivery</a>
+</div>
+
+<div class="content-card">
+    @if (Model.Count == 0)
+    {
+        <div class="alert alert-info mb-0" role="status">
+            No deliveries have been created yet.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Recipient</th>
+                        <th scope="col">Pickup</th>
+                        <th scope="col">Drop-off</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var delivery in Model)
+                    {
+                        <tr>
+                            <td>@delivery.RecipientName</td>
+                            <td>@delivery.PickupAddress</td>
+                            <td>@delivery.DropoffAddress</td>
+                            <td><span class="status-chip">@delivery.Status</span></td>
+                            <td>@delivery.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</td>
+                            <td>
+                                <a asp-action="Details" asp-route-id="@delivery.Id">
+                                    View details
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

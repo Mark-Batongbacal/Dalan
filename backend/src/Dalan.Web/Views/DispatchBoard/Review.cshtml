@@ -1,0 +1,91 @@
+﻿@model DispatchReviewViewModel
+@{
+    ViewData["Title"] = "Review dispatch";
+}
+
+<div class="page-heading">
+    <span class="page-kicker">Dispatch operations</span>
+    <h1>Review dispatch</h1>
+    <p>
+        Set a vehicle and order for each stop. A delivery's pickup and drop-off
+        must stay on the same route, with pickup first.
+    </p>
+</div>
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.Error</div>
+}
+
+<div class="content-card">
+    <form asp-action="Confirm" method="post">
+        @for (var i = 0; i < Model.Vehicles.Count; i++)
+        {
+            <input asp-for="Vehicles[i].VehicleId" type="hidden" />
+            <input asp-for="Vehicles[i].StartLatitude" type="hidden" />
+            <input asp-for="Vehicles[i].StartLongitude" type="hidden" />
+        }
+
+        @for (var i = 0; i < Model.Versions.Count; i++)
+        {
+            <input asp-for="Versions[i].DeliveryId" type="hidden" />
+            <input asp-for="Versions[i].RowVersion" type="hidden" />
+        }
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Delivery</th>
+                        <th scope="col">Stop</th>
+                        <th scope="col">Vehicle</th>
+                        <th scope="col">Order on vehicle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @for (var i = 0; i < Model.Stops.Count; i++)
+                {
+                    <tr>
+                        <td>
+                            @(Model.DeliveryNames.GetValueOrDefault(
+                                Model.Stops[i].DeliveryId)
+                                ?? Model.Stops[i].DeliveryId.ToString())
+                            <input asp-for="Stops[i].DeliveryId" type="hidden" />
+                        </td>
+                        <td>
+                            @Model.Stops[i].Kind
+                            <input asp-for="Stops[i].Kind" type="hidden" />
+                        </td>
+                        <td>
+                            <select asp-for="Stops[i].VehicleId"
+                                    class="form-select"
+                                    aria-label="Vehicle for stop">
+                                @foreach (var vehicle in Model.Vehicles)
+                                {
+                                    <option value="@vehicle.VehicleId">
+                                        @(Model.VehicleNames.GetValueOrDefault(
+                                            vehicle.VehicleId)
+                                            ?? vehicle.VehicleId.ToString())
+                                    </option>
+                                }
+                            </select>
+                        </td>
+                        <td>
+                            <input asp-for="Stops[i].Order"
+                                   class="form-control" type="number"
+                                   min="0" aria-label="Stop order" />
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            Confirm dispatch
+        </button>
+        <a asp-action="Index" class="btn btn-link">
+            Start a new preview
+        </a>
+    </form>
+</div>

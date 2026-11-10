@@ -1,0 +1,171 @@
+﻿@model DispatchBoardViewModel
+@{
+    ViewData["Title"] = "Dispatch board";
+    var deliveryNames = Model.Deliveries.ToDictionary(
+        x => x.Id, x => x.RecipientName);
+    var vehicleNames = Model.Vehicles.ToDictionary(
+        x => x.Id, x => x.RegistrationNumber);
+}
+
+<div class="page-heading">
+    <span class="page-kicker">Dispatch operations</span>
+    <h1>Dispatch board</h1>
+    <p>Select deliveries and vehicles to preview a route plan.</p>
+</div>
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.Error</div>
+}
+
+<form asp-action="Index" method="post">
+    <div class="content-card mb-4">
+        <h2 class="h5">Available vehicles</h2>
+        @if (Model.Vehicles.Count == 0)
+        {
+            <div class="alert alert-info mb-0" role="status">
+                No vehicles are available for dispatch.
+            </div>
+        }
+        else
+        {
+            @for (var i = 0; i < Model.Vehicles.Count; i++)
+            {
+                <div class="row g-3 align-items-end mb-3">
+                    <div class="col-md-4">
+                        <input asp-for="Vehicles[i].Id" type="hidden" />
+                        <div class="form-check">
+                            <input asp-for="Vehicles[i].Selected"
+                                   class="form-check-input" />
+                            <label asp-for="Vehicles[i].Selected"
+                                   class="form-check-label">
+                                @Model.Vehicles[i].RegistrationNumber
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="Vehicles[i].StartLatitude"
+                               class="form-label">Start latitude</label>
+                        <input asp-for="Vehicles[i].StartLatitude"
+                               class="form-control" type="number" step="any" />
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="Vehicles[i].StartLongitude"
+                               class="form-label">Start longitude</label>
+                        <input asp-for="Vehicles[i].StartLongitude"
+                               class="form-control" type="number" step="any" />
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="content-card mb-4">
+        <h2 class="h5">Eligible deliveries</h2>
+        @if (Model.Deliveries.Count == 0)
+        {
+            <div class="alert alert-info mb-0" role="status">
+                No pending or assigned deliveries are available.
+            </div>
+        }
+        else
+        {
+            @for (var i = 0; i < Model.Deliveries.Count; i++)
+            {
+                <div class="form-check mb-3">
+                    <input asp-for="Deliveries[i].Id" type="hidden" />
+                    <input asp-for="Deliveries[i].Selected"
+                           class="form-check-input" />
+                    <label asp-for="Deliveries[i].Selected"
+                           class="form-check-label">
+                        <strong>@Model.Deliveries[i].RecipientName</strong>
+                        (@Model.Deliveries[i].Status):
+                        @Model.Deliveries[i].PickupAddress
+                        → @Model.Deliveries[i].DropoffAddress
+                    </label>
+                </div>
+            }
+        }
+    </div>
+
+    <button type="submit" class="btn btn-primary">Preview routes</button>
+</form>
+
+@if (Model.Preview is not null)
+{
+    <div class="content-card mt-4">
+        <h2 class="h5">Proposed routes</h2>
+        <p>This preview does not reserve deliveries or save a dispatch plan.</p>
+
+        @foreach (var route in Model.Preview.Routes)
+        {
+            <section class="mb-4">
+                <h3 class="h6">
+                    @(vehicleNames.GetValueOrDefault(route.VehicleId)
+                        ?? route.VehicleId.ToString())
+                </h3>
+                <p>
+                    Start: @route.Start.Latitude, @route.Start.Longitude<br />
+                    Estimated distance: @(route.DistanceMeters / 1000).ToString("N1") km;
+                    time: @(route.DurationSeconds / 60).ToString("N0") minutes
+                </p>
+                @if (route.Stops.Count == 0)
+                {
+                    <p>No stops assigned to this vehicle.</p>
+                }
+                else
+                {
+                    <ol>
+                        @foreach (var stop in route.Stops)
+                        {
+                            <li>
+                                @stop.Kind:
+                                @(deliveryNames.GetValueOrDefault(stop.DeliveryId)
+                                    ?? stop.DeliveryId.ToString())
+                            </li>
+                        }
+                    </ol>
+                }
+            </section>
+        }
+
+        @if (Model.Preview.UnassignedDeliveryIds.Count > 0)
+        {
+            <div class="alert alert-warning" role="status">
+                <strong>Unassigned deliveries:</strong>
+                @string.Join(", ", Model.Preview.UnassignedDeliveryIds.Select(
+                    id => deliveryNames.GetValueOrDefault(id) ?? id.ToString()))
+            </div>
+        }
+        @if (Model.Preview.UnassignedDeliveryIds.Count > 0)
+        {
+            <p>Deselect unassigned deliveries and preview again before reviewing a plan.</p>
+        }
+        else if (Model.Preview.Routes.Any(route => route.Stops.Count > 0))
+        {
+            <form asp-action="Review" method="post">
+                @for (var i = 0; i < Model.Vehicles.Count; i++)
+                {
+                    <input name="Vehicles[@i].Id"
+                           type="hidden" value="@Model.Vehicles[i].Id" />
+                    <input name="Vehicles[@i].Selected"
+                           type="hidden" value="@Model.Vehicles[i].Selected.ToString().ToLowerInvariant()" />
+                    <input name="Vehicles[@i].StartLatitude"
+                           type="hidden" value="@Model.Vehicles[i].StartLatitude" />
+                    <input name="Vehicles[@i].StartLongitude"
+                           type="hidden" value="@Model.Vehicles[i].StartLongitude" />
+                }
+                @for (var i = 0; i < Model.Deliveries.Count; i++)
+                {
+                    <input name="Deliveries[@i].Id"
+                           type="hidden" value="@Model.Deliveries[i].Id" />
+                    <input name="Deliveries[@i].Selected"
+                           type="hidden" value="@Model.Deliveries[i].Selected.ToString().ToLowerInvariant()" />
+                }
+                <button type="submit" class="btn btn-primary">
+                    Review this plan
+                </button>
+            </form>
+        }
+    </div>
+}

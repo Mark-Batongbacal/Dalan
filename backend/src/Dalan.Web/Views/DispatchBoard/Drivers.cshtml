@@ -1,0 +1,45 @@
+﻿@model DispatchDriverRosterViewModel
+@{
+    ViewData["Title"] = "Dispatch drivers";
+}
+
+<div class="page-heading">
+    <span class="page-kicker">Dispatch operations</span>
+    <h1>Drivers</h1>
+    <p>Check driver availability and assigned vehicles before planning.</p>
+</div>
+
+<div class="content-card">
+    @if (Model.Drivers.Count == 0)
+    {
+        <div class="alert alert-info mb-0" role="status">
+            No drivers have been registered yet.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Driver</th>
+                        <th scope="col">Availability</th>
+                        <th scope="col">License expires</th>
+                        <th scope="col">Assigned vehicle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var driver in Model.Drivers)
+                {
+                    <tr>
+                        <td>@driver.Name</td>
+                        <td><span class="status-chip">@driver.Availability</span></td>
+                        <td>@driver.LicenseExpiry.ToString("yyyy-MM-dd")</td>
+                        <td>@(driver.VehicleRegistration ?? "Unassigned")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

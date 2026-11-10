@@ -30,6 +30,16 @@
                     <a class="@(controller == "Vehicles" ? "active" : "")" asp-controller="Vehicles" asp-action="Index">Fleet registry</a>
                     @if (User.IsInRole("Dispatcher"))
                     {
+                        <a class="@(controller == "Deliveries" ? "active" : "")"
+                           asp-controller="Deliveries" asp-action="Index">Delivery queue</a>
+                        <a class="@(controller == "DispatchBoard" &&
+                                     ViewContext.RouteData.Values["action"]?.ToString() == "Drivers"
+                                     ? "active" : "")"
+                           asp-controller="DispatchBoard" asp-action="Drivers">Drivers</a>
+                        <a class="@(controller == "DispatchBoard" &&
+                                 ViewContext.RouteData.Values["action"]?.ToString() != "Drivers"
+                                 ? "active" : "")"
+                           asp-controller="DispatchBoard" asp-action="Index">Dispatch board</a>
                         <a class="@(controller == "FleetPlanner" ? "active" : "")" asp-controller="FleetPlanner" asp-action="Index">Fleet planner</a>
                     }
                     @if (User.IsInRole("Admin"))
