@@ -190,6 +190,14 @@ public sealed class DispatchBoardController(
     {
         async Task<IActionResult> ReviewError(string message)
         {
+            // Model binding can leave lists or entries null for malformed posts.
+            // Normalize them before returning the review form.
+            model.Vehicles ??= [];
+            model.Stops ??= [];
+            model.Versions ??= [];
+            model.Vehicles.RemoveAll(vehicle => vehicle is null);
+            model.Stops.RemoveAll(stop => stop is null);
+            model.Versions.RemoveAll(version => version is null);
             model.Error = message;
             await PopulateReviewNames(model, cancellationToken);
             return View("Review", model);
@@ -199,7 +207,13 @@ public sealed class DispatchBoardController(
             model.Versions is null ||
             model.Vehicles.Count is < 1 or > 8 ||
             model.Stops.Count is < 2 or > 30 ||
-            model.Versions.Count is < 1 or > 15)
+            model.Versions.Count is < 1 or > 15 ||
+            model.Vehicles.Any(vehicle => vehicle is null) ||
+            model.Stops.Any(stop => stop is null) ||
+            model.Versions.Any(version =>
+                version is null ||
+                version.DeliveryId == Guid.Empty ||
+                string.IsNullOrWhiteSpace(version.RowVersion)))
         {
             return await ReviewError("The reviewed plan is incomplete.");
         }
