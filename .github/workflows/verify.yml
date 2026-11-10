@@ -41,3 +41,6 @@ jobs:
       - name: Run delivery API tests
         working-directory: backend
         run: dotnet test tests/Dalan.IntegrationTests --no-build --no-restore --filter FullyQualifiedName~DeliveryApiTests
+      - name: Run Dispatcher MVC tests
+        working-directory: backend
+        run: dotnet test tests/Dalan.IntegrationTests --no-build --no-restore --filter FullyQualifiedName~DispatchBoardWebTests
