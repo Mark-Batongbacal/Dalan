@@ -89,15 +89,18 @@ public sealed class DispatchPlansController(
             return Invalid("Vehicles, routes, stops, and delivery versions are required.");
         }
 
+        if (request.Routes.Sum(route => route.Stops!.Count) is < 2 or > 30)
+            return Invalid("Provide 1 to 15 deliveries in the reviewed routes.");
+
         var reviewedRoutes = new List<DispatchReviewedRoute>();
         foreach (var route in request.Routes)
         {
             var stops = new List<DispatchReviewedStop>();
             foreach (var stop in route.Stops!)
             {
-                if (!Enum.TryParse<DispatchStopKind>(
-                        stop.Kind, true, out var kind) ||
-                    !Enum.IsDefined(kind))
+                if (stop.Kind is null ||
+                    !Enum.TryParse<DispatchStopKind>(stop.Kind, true, out var kind) ||
+                    !string.Equals(stop.Kind, kind.ToString(), StringComparison.OrdinalIgnoreCase))
                     return Invalid("Stop kind must be Pickup or Dropoff.");
 
                 stops.Add(new DispatchReviewedStop(stop.DeliveryId, kind));

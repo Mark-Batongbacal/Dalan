@@ -81,6 +81,26 @@ public sealed class DispatchRoute
         if (!double.IsFinite(distanceMeters) || distanceMeters < 0 ||
             !double.IsFinite(durationSeconds) || durationSeconds < 0)
             throw new ArgumentException("Route estimates must be finite and nonnegative.");
+        ValidateStops(stops);
+
+        return new DispatchRoute
+        {
+            Id = Guid.NewGuid(),
+            VehicleId = vehicleId,
+            DriverId = driverId,
+            StartLatitude = startLatitude,
+            StartLongitude = startLongitude,
+            DistanceMeters = distanceMeters,
+            DurationSeconds = durationSeconds,
+            Stops = stops.ToList()
+        };
+    }
+
+    public static void ValidateStops(IReadOnlyList<DispatchStop> stops)
+    {
+        ArgumentNullException.ThrowIfNull(stops);
+        if (stops.Count > 30)
+            throw new ArgumentException("A route may contain at most 30 stops.", nameof(stops));
         if (stops.Any(stop => stop is null))
             throw new ArgumentException("Stops cannot be null.", nameof(stops));
         if (stops.Select(stop => stop.Position)
@@ -103,17 +123,6 @@ public sealed class DispatchRoute
             }
         }
 
-        return new DispatchRoute
-        {
-            Id = Guid.NewGuid(),
-            VehicleId = vehicleId,
-            DriverId = driverId,
-            StartLatitude = startLatitude,
-            StartLongitude = startLongitude,
-            DistanceMeters = distanceMeters,
-            DurationSeconds = durationSeconds,
-            Stops = stops.ToList()
-        };
     }
 
     private static bool ValidCoordinates(double latitude, double longitude)

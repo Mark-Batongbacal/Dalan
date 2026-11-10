@@ -192,10 +192,13 @@ public sealed class DispatchRepositoryTests(SqlServerFixture fixture)
         private sealed class LineMatrix(bool unreachable = false)
         : ITravelMatrixService
         {
+            public int Calls { get; private set; }
+
             public Task<TravelMetric?[,]> GetMatrixAsync(
                 IReadOnlyList<GeoPoint> points,
                 CancellationToken cancellationToken = default)
             {
+                Calls++;
                 var result = new TravelMetric?[points.Count, points.Count];
 
                 for (var from = 0; from < points.Count; from++)
@@ -323,6 +326,27 @@ public sealed class DispatchRepositoryTests(SqlServerFixture fixture)
         Assert.Equal(
             SaveDeliveryOutcome.Conflict,
             await deliveryRepository.UpdateAsync(stale));
+    }
+
+    [Fact]
+    public async Task Invalid_reviewed_order_is_rejected_before_routing()
+    {
+        var (vehicle, _, delivery, version) = await SeedAsync();
+        await using var context = fixture.CreateContext();
+        var matrix = new LineMatrix();
+        var dispatch = new DispatchService(
+            new DispatchRepository(context), new FleetOptimizer(matrix),
+            matrix, TimeProvider.System);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => dispatch.ConfirmAsync(
+            new DispatchConfirmRequest(
+                [new DispatchVehicleStart(vehicle.Id, new GeoPoint(7.0, 125.6))],
+                [new DispatchReviewedRoute(vehicle.Id,
+                    [new(delivery.Id, DispatchStopKind.Dropoff),
+                     new(delivery.Id, DispatchStopKind.Pickup)])],
+                [version])));
+
+        Assert.Equal(0, matrix.Calls);
     }
 
     private async Task<(Vehicle Vehicle, Driver Driver, Delivery Delivery,

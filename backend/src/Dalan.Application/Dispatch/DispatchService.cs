@@ -164,6 +164,9 @@ public sealed class DispatchService(
             throw new ArgumentException("The reviewed dispatch plan is invalid.");
         }
 
+        if (request.Routes.Sum(route => route.Stops.Count) is < 2 or > 30)
+            throw new ArgumentException("Provide 1 to 15 deliveries in the reviewed routes.");
+
         if (request.Vehicles.Select(vehicle => vehicle.VehicleId).Distinct().Count()
                 != request.Vehicles.Count ||
             request.Routes.Select(route => route.VehicleId).Distinct().Count()
@@ -273,6 +276,8 @@ public sealed class DispatchService(
                 stops.Add(DispatchStop.Create(
                     delivery.Id, choice.Kind, position, latitude, longitude));
             }
+
+            DispatchRoute.ValidateStops(stops);
 
             var points = new List<GeoPoint>
         {

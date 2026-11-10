@@ -126,6 +126,43 @@ public sealed class DispatchPlansApiTests
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("1")]
+    public async Task Numeric_stop_kind_is_rejected(string kind)
+    {
+        var service = new FakeDispatchService();
+        using var factory = CreateFactory(service);
+        using var client = CreateClient(factory, "Dispatcher");
+        var request = ConfirmBody() with
+        {
+            Routes = [new DispatchReviewedRouteRequest(VehicleId,
+                [new(DeliveryId, kind), new(DeliveryId, "Dropoff")])]
+        };
+
+        using var response = await client.PostAsJsonAsync("/api/dispatch-plans", request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(service.LastConfirm);
+    }
+
+    [Fact]
+    public async Task Oversized_route_is_rejected_before_dispatch_service()
+    {
+        var service = new FakeDispatchService();
+        using var factory = CreateFactory(service);
+        using var client = CreateClient(factory, "Dispatcher");
+        var request = ConfirmBody() with
+        {
+            Routes = [new DispatchReviewedRouteRequest(VehicleId,
+                Enumerable.Repeat(new DispatchReviewedStopRequest(DeliveryId, "Pickup"), 31)
+                    .ToArray())]
+        };
+
+        using var response = await client.PostAsJsonAsync("/api/dispatch-plans", request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(service.LastConfirm);
+    }
+
     private static PreviewDispatchRequest PreviewBody() => new(
         [new(VehicleId, new CoordinateRequest(7.0, 125.6))],
         [DeliveryId, UnassignedId]);
