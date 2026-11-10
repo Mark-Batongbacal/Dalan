@@ -1,8 +1,46 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@{
+    ViewData["Title"] = "Overview";
 }
-
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="page-heading">
+    <span class="page-kicker">Operations workspace</span>
+    <h1>Keep your fleet moving.</h1>
+    <p>Manage vehicles and drivers, then preview an optimized delivery route.</p>
+</div>
+<div class="overview-grid">
+    @if (User.Identity?.IsAuthenticated != true)
+    {
+        <section class="content-card feature-card">
+            <span class="feature-number">STAFF ACCESS</span>
+            <h2>Sign in to continue</h2>
+            <p>Use your staff account to open the fleet workspace.</p>
+            <a asp-controller="Account" asp-action="Login" class="btn btn-primary">Sign in</a>
+        </section>
+    }
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <section class="content-card feature-card">
+            <span class="feature-number">01 / FLEET</span>
+            <h2>Fleet registry</h2>
+            <p>Review registered vehicles and their availability for planning.</p>
+            <a asp-controller="Vehicles" asp-action="Index" class="btn btn-outline-primary">View vehicles</a>
+        </section>
+    }
+    @if (User.IsInRole("Admin"))
+    {
+        <section class="content-card feature-card">
+            <span class="feature-number">02 / PEOPLE</span>
+            <h2>Driver registry</h2>
+            <p>Keep license details and active vehicle assignments current.</p>
+            <a asp-controller="Drivers" asp-action="Index" class="btn btn-outline-primary">View drivers</a>
+        </section>
+    }
+    @if (User.IsInRole("Dispatcher"))
+    {
+        <section class="content-card feature-card">
+            <span class="feature-number">02 / PLANNING</span>
+            <h2>Fleet planner</h2>
+            <p>Preview a pickup and drop-off plan using entered coordinates. Plans are not saved or dispatched.</p>
+            <a asp-controller="FleetPlanner" asp-action="Index" class="btn btn-primary">Open planner</a>
+        </section>
+    }
 </div>

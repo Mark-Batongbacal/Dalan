@@ -1,0 +1,106 @@
+﻿@model DeliveryDetailsViewModel
+@{
+    ViewData["Title"] = "Delivery details";
+    var delivery = Model.Delivery;
+}
+
+<div class="page-heading">
+    <span class="page-kicker">Dispatch operations</span>
+    <h1>Delivery details</h1>
+    <p><span class="status-chip">@delivery.Status</span></p>
+</div>
+
+@if (TempData["DeliveryError"] is string error)
+{
+    <div class="alert alert-danger" role="alert">@error</div>
+}
+
+<div class="content-card mb-4">
+    <dl class="row mb-0">
+        <dt class="col-sm-3">Recipient</dt>
+        <dd class="col-sm-9">@delivery.RecipientName</dd>
+        <dt class="col-sm-3">Pickup</dt>
+        <dd class="col-sm-9">
+            @delivery.PickupAddress
+            (@delivery.PickupLatitude, @delivery.PickupLongitude)
+        </dd>
+        <dt class="col-sm-3">Drop-off</dt>
+        <dd class="col-sm-9">
+            @delivery.DropoffAddress
+            (@delivery.DropoffLatitude, @delivery.DropoffLongitude)
+        </dd>
+        <dt class="col-sm-3">Payload</dt>
+        <dd class="col-sm-9">@(delivery.PayloadWeightKg?.ToString("N2") ?? "—") kg</dd>
+        <dt class="col-sm-3">Expected delivery</dt>
+        <dd class="col-sm-9">
+            @(delivery.ExpectedDeliveryAtUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "—")
+        </dd>
+        <dt class="col-sm-3">Driver</dt>
+        <dd class="col-sm-9">
+            @(Model.Drivers.FirstOrDefault(x => x.Id == delivery.DriverId)?.Name ?? "Unassigned")
+        </dd>
+        <dt class="col-sm-3">Vehicle</dt>
+        <dd class="col-sm-9">
+            @(Model.Vehicles.FirstOrDefault(x => x.Id == delivery.VehicleId)?.RegistrationNumber ?? "Unassigned")
+        </dd>
+    </dl>
+</div>
+
+@if (delivery.Status.ToString() is "Pending" or "Assigned")
+{
+    <div class="content-card">
+        <h2 class="h5">Assign driver and vehicle</h2>
+        <p>Select a current driver and their assigned vehicle. The service checks eligibility when you save.</p>
+
+        @if (Model.Drivers.Count == 0 || Model.Vehicles.Count == 0)
+        {
+            <div class="alert alert-info mb-0" role="status">
+                A registered driver and vehicle are required before assignment.
+            </div>
+        }
+        else
+        {
+            <form asp-action="Assign" asp-route-id="@delivery.Id" method="post">
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <label for="driverId" class="form-label">Driver</label>
+                        <select id="driverId" name="driverId" class="form-select" required>
+                            <option value="">Choose a driver</option>
+                            @foreach (var driver in Model.Drivers)
+                            {
+                                <option value="@driver.Id" selected="@(driver.Id == delivery.DriverId)">
+                                    @driver.Name (@driver.Availability)
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-6">
+                        <label for="vehicleId" class="form-label">Vehicle</label>
+                        <select id="vehicleId" name="vehicleId" class="form-select" required>
+                            <option value="">Choose a vehicle</option>
+                            @foreach (var vehicle in Model.Vehicles)
+                            {
+                                <option value="@vehicle.Id" selected="@(vehicle.Id == delivery.VehicleId)">
+                                    @vehicle.RegistrationNumber (@vehicle.Availability)
+                                </option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save assignment</button>
+            </form>
+        }
+    </div>
+
+    <div class="content-card mt-4">
+        <h2 class="h5">Cancel delivery</h2>
+        <p>Cancellation is available until the delivery is picked up.</p>
+        <form asp-action="Cancel" asp-route-id="@delivery.Id" method="post">
+            <button type="submit" class="btn btn-outline-danger">
+                Cancel delivery
+            </button>
+        </form>
+    </div>
+}
+
+<a asp-action="Index" class="btn btn-link mt-3">Back to queue</a>

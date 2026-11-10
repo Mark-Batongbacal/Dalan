@@ -3,11 +3,16 @@
     ViewData["Title"] = "Create staff account";
 }
 
-<h1>Create staff account</h1>
+<div class="page-heading">
+    <span class="page-kicker">Team administration</span>
+    <h1>Create staff account</h1>
+    <p>Grant a teammate access as an Admin or Dispatcher.</p>
+</div>
 @if (TempData["AccountCreated"] is string message)
 {
     <div class="alert alert-success" role="status">@message</div>
 }
+<div class="content-card form-panel">
 <form asp-action="Create" method="post">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="mb-3">
@@ -30,4 +35,5 @@
     </div>
     <button type="submit" class="btn btn-primary">Create account</button>
 </form>
+</div>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

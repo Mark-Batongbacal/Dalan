@@ -1,5 +1,8 @@
 using Dalan.Application.Vehicles;
+using Dalan.Application.Drivers;
+using Dalan.Application.Deliveries;
 using Dalan.Application.FleetOptimization;
+using Dalan.Application.Dispatch;
 using Dalan.Infrastructure;
 using Dalan.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -10,9 +13,16 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
+builder.Services.AddScoped<IDriverService, DriverService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IDeliveryService, DeliveryService>();
 builder.Services.AddDalanInfrastructure(builder.Configuration);
+builder.Services.AddScoped<IDispatchPlanReader, DispatchPlanReader>();
 if (!string.IsNullOrWhiteSpace(builder.Configuration["Valhalla:BaseUrl"]))
+{
     builder.Services.AddScoped<IFleetOptimizer, FleetOptimizer>();
+    builder.Services.AddScoped<IDispatchService, DispatchService>();
+}
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
     {
         options.Password.RequiredLength = 12;
@@ -80,6 +90,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseRouting();
 
 app.UseAuthentication();

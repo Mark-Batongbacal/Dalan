@@ -3,8 +3,11 @@
     ViewData["Title"] = "Fleet Planner";
 }
 
-<h1>Fleet Planner</h1>
-<p class="text-muted">Assign pickup and drop-off jobs to vehicles, or keep a job on a selected vehicle and improve its stop order. Enter confirmed coordinates. This preview does not save or dispatch jobs.</p>
+<div class="page-heading">
+    <span class="page-kicker">Dispatch planning</span>
+    <h1>Fleet Planner</h1>
+    <p>Assign pickup and drop-off jobs to vehicles, or keep a job on a selected vehicle and improve its stop order. Enter confirmed coordinates. This preview does not save or dispatch jobs.</p>
+</div>
 
 @if (Model.Error is not null)
 {
@@ -12,7 +15,8 @@
 }
 
 <form asp-action="Index" method="post">
-    <h2 class="h4 mt-4">Vehicles and starting points</h2>
+    <div class="content-card mb-3">
+    <h2 class="h4 mb-3">Vehicles and starting points</h2>
     @if (Model.Vehicles.Count == 0)
     {
         <p>No vehicles are registered. Ask an Admin to register vehicles first.</p>
@@ -36,8 +40,10 @@
             </table>
         </div>
     }
+    </div>
 
-    <div class="d-flex justify-content-between align-items-center mt-4">
+    <div class="content-card">
+    <div class="d-flex justify-content-between align-items-center">
         <h2 class="h4">Jobs</h2>
         <button type="button" id="add-job" class="btn btn-outline-secondary btn-sm">Add job</button>
     </div>
@@ -67,15 +73,16 @@
         </table>
     </div>
     <button type="submit" class="btn btn-primary" disabled="@(Model.Vehicles.Count == 0)">Optimize plan</button>
+    </div>
 </form>
 
 @if (Model.Result is not null)
 {
-    <h2 class="h4 mt-5">Proposed plan</h2>
+    <div class="page-heading mt-5"><span class="page-kicker">Planner output</span><h2 class="h4">Proposed plan</h2></div>
     @foreach (var route in Model.Result.Routes)
     {
         var registration = Model.Vehicles.First(vehicle => vehicle.Id == route.VehicleId).RegistrationNumber;
-        <section class="mb-4">
+        <section class="content-card mb-3">
             <h3 class="h5">@registration</h3>
             <p>@((route.DistanceMeters / 1000.0).ToString("N2")) km · @((route.DurationSeconds / 60.0).ToString("N0")) min estimated driving</p>
             @if (route.Stops.Count == 0)

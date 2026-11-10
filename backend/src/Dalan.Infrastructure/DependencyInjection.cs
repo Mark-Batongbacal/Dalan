@@ -1,7 +1,10 @@
+using Dalan.Application.Deliveries;
+using Dalan.Application.Dispatch;
+using Dalan.Application.Drivers;
+using Dalan.Application.Routing;
 using Dalan.Application.Vehicles;
 using Dalan.Infrastructure.Persistence;
 using Dalan.Infrastructure.Repositories;
-using Dalan.Application.Routing;
 using Dalan.Infrastructure.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -23,6 +26,9 @@ public static class DependencyInjection
 
         services.AddDbContext<DalanDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<IVehicleRepository, VehicleRepository>();
+        services.AddScoped<IDriverRepository, DriverRepository>();
+        services.AddScoped<IDeliveryRepository, DeliveryRepository>();
+        services.AddScoped<IDispatchRepository, DispatchRepository>();
         var valhallaUrl = configuration["Valhalla:BaseUrl"];
         if (!string.IsNullOrWhiteSpace(valhallaUrl))
         {

@@ -65,6 +65,23 @@ public sealed class FleetOptimizerTests
             new FleetOptimizer(new LineMatrix()).OptimizeAsync(request));
     }
 
+    [Fact]
+    public async Task Pending_job_skips_vehicle_below_payload_capacity()
+    {
+        var small = Guid.NewGuid();
+        var large = Guid.NewGuid();
+        var request = new FleetOptimizationRequest(
+            [new(small, Point(0), 5m), new(large, Point(10), 20m)],
+            [new("A", Point(1), Point(2), PayloadWeightKg: 10m)]);
+
+        var result = await new FleetOptimizer(new LineMatrix()).OptimizeAsync(request);
+
+        Assert.Empty(result.UnassignedJobIds);
+        Assert.Empty(result.Routes[0].Stops);
+        Assert.Equal(["A", "A"],
+            result.Routes[1].Stops.Select(stop => stop.JobId));
+    }
+
     private static GeoPoint Point(double latitude) => new(latitude, 0);
 
     private sealed class LineMatrix(bool unreachable = false) : ITravelMatrixService

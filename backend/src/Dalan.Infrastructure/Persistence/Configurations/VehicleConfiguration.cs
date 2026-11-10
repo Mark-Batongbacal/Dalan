@@ -16,5 +16,17 @@ public sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
             .UseCollation("Latin1_General_100_BIN2")
             .IsRequired();
         builder.HasIndex(vehicle => vehicle.RegistrationNumber).IsUnique();
+        builder.Property(vehicle => vehicle.Type)
+            .HasMaxLength(Vehicle.MaxTypeLength);
+        builder.Property(vehicle => vehicle.PayloadCapacityKg)
+            .HasPrecision(12, 2);
+        builder.Property(vehicle => vehicle.SeatCapacity);
+        builder.Property(vehicle => vehicle.Availability)
+            .HasConversion<string>()
+            .HasMaxLength(16)
+            .HasDefaultValue(VehicleAvailability.Available)
+            .IsRequired();
+        builder.Property(vehicle => vehicle.NextMaintenanceDate)
+            .HasColumnType("date");
     }
 }

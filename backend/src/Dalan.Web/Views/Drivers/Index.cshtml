@@ -1,0 +1,41 @@
+@model DriverRegistryViewModel
+@{
+    ViewData["Title"] = "Driver registry";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 page-heading">
+    <div>
+        <span class="page-kicker">Fleet administration</span>
+        <h1>Driver registry</h1>
+        <p>Maintain license details and one active vehicle assignment per driver.</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary">Add driver</a>
+</div>
+<div class="content-card">
+    @if (Model.Drivers.Count == 0)
+    {
+        <div class="alert alert-info mb-0" role="status">No drivers have been registered yet.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead><tr><th>Name</th><th>Phone</th><th>License</th><th>Expires</th><th>Availability</th><th>Vehicle</th><th>Actions</th></tr></thead>
+                <tbody>
+                @foreach (var driver in Model.Drivers)
+                {
+                    <tr>
+                        <td>@driver.Name</td>
+                        <td>@driver.Phone</td>
+                        <td>@driver.LicenseNumber</td>
+                        <td>@driver.LicenseExpiry.ToString("yyyy-MM-dd")</td>
+                        <td><span class="status-chip">@driver.Availability</span></td>
+                        <td>@(driver.VehicleRegistration ?? "—")</td>
+                        <td><a asp-action="Edit" asp-route-id="@driver.Id">Edit</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

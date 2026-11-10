@@ -1,0 +1,55 @@
+@model DispatchPlanPageViewModel
+@{
+    ViewData["Title"] = "Confirmed dispatch";
+}
+
+<div class="page-heading">
+    <span class="page-kicker">Dispatch operations</span>
+    <h1>Confirmed dispatch</h1>
+    <p>Confirmed @Model.Plan.ConfirmedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</p>
+</div>
+
+<div class="alert alert-info" role="status">
+    This is the approved route. Delivery statuses below reflect their current state.
+</div>
+
+@foreach (var route in Model.Plan.Routes)
+{
+    <div class="content-card mb-4">
+        <h2 class="h5">@(Model.VehicleRegistrations.GetValueOrDefault(route.VehicleId) ?? route.VehicleId.ToString())</h2>
+        <p>Driver: @(Model.DriverNames.GetValueOrDefault(route.DriverId) ?? route.DriverId.ToString())</p>
+        <p>
+            Start: @route.StartLatitude, @route.StartLongitude<br />
+            Distance: @(route.DistanceMeters / 1000).ToString("N1") km;
+            duration: @(route.DurationSeconds / 60).ToString("N0") minutes
+        </p>
+        @if (route.Stops.Count == 0)
+        {
+            <p>No stops on this route.</p>
+        }
+        else
+        {
+            <ol>
+                @foreach (var stop in route.Stops.OrderBy(x => x.Position))
+                {
+                    Model.Deliveries.TryGetValue(stop.DeliveryId, out var delivery);
+                    <li>
+                        @stop.Kind:
+                        @if (delivery is null)
+                        {
+                            <span>@stop.DeliveryId</span>
+                        }
+                        else
+                        {
+                            <a asp-controller="Deliveries" asp-action="Details" asp-route-id="@stop.DeliveryId">@delivery.RecipientName</a>
+                        }
+                        <span class="status-chip">@(delivery?.Status.ToString() ?? "Record unavailable")</span>
+                        (@stop.Latitude, @stop.Longitude)
+                    </li>
+                }
+            </ol>
+        }
+    </div>
+}
+
+<a asp-action="Index" class="btn btn-link">Back to dispatch board</a>

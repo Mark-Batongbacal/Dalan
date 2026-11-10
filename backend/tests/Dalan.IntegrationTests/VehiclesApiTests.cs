@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Dalan.Contracts.Vehicles;
+using Dalan.Contracts.Drivers;
 using Dalan.Contracts.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Hosting;
@@ -179,5 +180,98 @@ public sealed class VehiclesApiTests(SqlServerFixture fixture)
         using var post = await client.PostAsJsonAsync("/api/vehicles", new RegisterVehicleRequest("TEST-123"));
         Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, post.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_can_update_and_deactivate_vehicle_metadata()
+    {
+        using var factory = CreateFactory();
+        using var admin = await CreateAuthorizedClientAsync(factory);
+        var registration = "V-" + Guid.NewGuid().ToString("N")[..12];
+        using var create = await admin.PostAsJsonAsync("/api/vehicles",
+            new RegisterVehicleRequest(registration, "Van", 500, 3,
+                new DateOnly(2027, 3, 1)));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var vehicle = await create.Content.ReadFromJsonAsync<VehicleResponse>();
+        Assert.Equal("Van", vehicle!.Type);
+
+        using var invalid = await admin.PutAsJsonAsync($"/api/vehicles/{vehicle.Id}",
+            new UpdateVehicleRequest("Van", -1, 3, "Available", null));
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using var update = await admin.PutAsJsonAsync($"/api/vehicles/{vehicle.Id}",
+            new UpdateVehicleRequest("Box truck", 1200, 2, "Maintenance",
+                new DateOnly(2027, 4, 1)));
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var changed = await update.Content.ReadFromJsonAsync<VehicleResponse>();
+        Assert.Equal("Box truck", changed!.Type);
+        Assert.Equal("Maintenance", changed.Availability);
+
+        using var deactivate = await admin.PostAsync($"/api/vehicles/{vehicle.Id}/deactivate", null);
+        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+        var inactive = await deactivate.Content.ReadFromJsonAsync<VehicleResponse>();
+        Assert.Equal("Inactive", inactive!.Availability);
+    }
+
+    [Fact]
+    public async Task Dispatcher_cannot_update_or_deactivate_vehicles()
+    {
+        using var factory = CreateFactory();
+        using var dispatcher = await CreateAuthorizedClientAsync(factory, "Dispatcher");
+        var id = Guid.NewGuid();
+        using var update = await dispatcher.PutAsJsonAsync($"/api/vehicles/{id}",
+            new UpdateVehicleRequest(null, null, null, "Available", null));
+        using var deactivate = await dispatcher.PostAsync($"/api/vehicles/{id}/deactivate", null);
+        Assert.Equal(HttpStatusCode.Forbidden, update.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, deactivate.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_driver_api_enforces_unique_assignments_and_staff_roles()
+    {
+        using var factory = CreateFactory();
+        using var admin = await CreateAuthorizedClientAsync(factory);
+        using var dispatcher = await CreateAuthorizedClientAsync(factory, "Dispatcher");
+        using var anonymous = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var forbidden = await dispatcher.GetAsync("/api/drivers");
+        using var unauthorized = await anonymous.GetAsync("/api/drivers");
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+
+        using var vehicleCreate = await admin.PostAsJsonAsync("/api/vehicles",
+            new RegisterVehicleRequest("D-" + Guid.NewGuid().ToString("N")[..12]));
+        var vehicle = await vehicleCreate.Content.ReadFromJsonAsync<VehicleResponse>();
+        Assert.NotNull(vehicle);
+
+        var license = "L-" + Guid.NewGuid().ToString("N")[..12];
+        using var create = await admin.PostAsJsonAsync("/api/drivers",
+            new RegisterDriverRequest("Ada Driver", "09170000000", license,
+                new DateOnly(2028, 1, 1)));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var driver = await create.Content.ReadFromJsonAsync<DriverResponse>();
+        Assert.NotNull(driver);
+        Assert.EndsWith($"/api/drivers/{driver.Id}", create.Headers.Location!.ToString());
+
+        using var assign = await admin.PutAsJsonAsync($"/api/drivers/{driver.Id}",
+            new UpdateDriverRequest("Ada Driver", "09170000000", license,
+                new DateOnly(2028, 1, 1), "Available", vehicle.Id));
+        Assert.Equal(HttpStatusCode.OK, assign.StatusCode);
+        Assert.Equal(vehicle.Id, (await assign.Content.ReadFromJsonAsync<DriverResponse>())!.AssignedVehicleId);
+
+        using var secondCreate = await admin.PostAsJsonAsync("/api/drivers",
+            new RegisterDriverRequest("Bob Driver", "09170000001",
+                "L-" + Guid.NewGuid().ToString("N")[..12], new DateOnly(2028, 1, 1)));
+        var second = await secondCreate.Content.ReadFromJsonAsync<DriverResponse>();
+        Assert.NotNull(second);
+        using var conflict = await admin.PutAsJsonAsync($"/api/drivers/{second.Id}",
+            new UpdateDriverRequest(second.Name, second.Phone, second.LicenseNumber,
+                second.LicenseExpiry, "Available", vehicle.Id));
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+
+        using var deactivate = await admin.PostAsync($"/api/drivers/{driver.Id}/deactivate", null);
+        Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode);
+        var inactive = await deactivate.Content.ReadFromJsonAsync<DriverResponse>();
+        Assert.Equal("Inactive", inactive!.Availability);
+        Assert.Null(inactive.AssignedVehicleId);
     }
 }

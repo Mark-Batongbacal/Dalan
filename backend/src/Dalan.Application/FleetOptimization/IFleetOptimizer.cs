@@ -2,8 +2,15 @@ using Dalan.Application.Routing;
 
 namespace Dalan.Application.FleetOptimization;
 
-public sealed record FleetVehicle(Guid Id, GeoPoint Start);
-public sealed record FleetJob(string Id, GeoPoint Pickup, GeoPoint Dropoff, Guid? AssignedVehicleId = null);
+public sealed record FleetVehicle(
+    Guid Id, GeoPoint Start, decimal? PayloadCapacityKg = null);
+
+public sealed record FleetJob(
+    string Id,
+    GeoPoint Pickup,
+    GeoPoint Dropoff,
+    Guid? AssignedVehicleId = null,
+    decimal? PayloadWeightKg = null);
 public sealed record FleetOptimizationRequest(
     IReadOnlyList<FleetVehicle> Vehicles, IReadOnlyList<FleetJob> Jobs);
 

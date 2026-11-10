@@ -5,7 +5,7 @@ namespace Dalan.Application.FleetOptimization;
 /// <summary>
 /// Greedy pickup/drop-off insertion followed by local reinsertion. Minimizes estimated
 /// total travel time while honoring fixed vehicle assignments and pickup precedence.
-/// This heuristic does not claim a global optimum or enforce capacity/time windows.
+/// This heuristic does not claim a global optimum or enforce cumulative capacity/time windows.
 /// </summary>
 public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOptimizer
 {
@@ -32,6 +32,12 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
             var fixedVehicle = jobs[jobIndex].AssignedVehicleId;
             if (fixedVehicle is null) continue;
             var vehicleIndex = Array.FindIndex(vehicles.ToArray(), vehicle => vehicle.Id == fixedVehicle.Value);
+            if (!CanCarry(vehicles[vehicleIndex], jobs[jobIndex]))
+            {
+                unassigned.Add(jobs[jobIndex].Id);
+                remaining.Remove(jobIndex);
+                continue;
+            }
             var inserted = BestInsertion(routes[vehicleIndex], vehicleIndex, jobIndex, vehicles.Count, matrix);
             if (inserted is null) unassigned.Add(jobs[jobIndex].Id);
             else routes[vehicleIndex] = inserted.Value.Stops;
@@ -46,6 +52,9 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
             {
                 for (var vehicleIndex = 0; vehicleIndex < vehicles.Count; vehicleIndex++)
                 {
+                    if (!CanCarry(vehicles[vehicleIndex], jobs[jobIndex]))
+                        continue;
+
                     var insertion = BestInsertion(routes[vehicleIndex], vehicleIndex,
                         jobIndex, vehicles.Count, matrix);
                     if (insertion is null) continue;
@@ -106,6 +115,8 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
                 for (var targetIndex = 0; targetIndex < routes.Length; targetIndex++)
                 {
                     if (targetIndex == sourceIndex) continue;
+                    if (!CanCarry(vehicles[targetIndex], jobs[jobIndex]))
+                        continue;
                     var insertion = BestInsertion(routes[targetIndex], targetIndex,
                         jobIndex, vehicles.Count, matrix);
                     if (insertion is null) continue;
@@ -137,6 +148,15 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
                 score.Distance, score.Duration);
         }
         return new FleetOptimizationResult(output, unassigned);
+    }
+
+    private static bool CanCarry(FleetVehicle vehicle, FleetJob job)
+    {
+        if (job.PayloadWeightKg is decimal weight &&
+            vehicle.PayloadCapacityKg is decimal capacity)
+            return weight <= capacity;
+
+        return true;
     }
 
     private static (List<IndexedStop> Stops, RouteScore Score)? BestInsertion(
