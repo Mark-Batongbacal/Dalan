@@ -59,6 +59,18 @@ public sealed class ValhallaRoutingServiceTests
             CreateService(handler).GetRouteAsync(new(14.6, 121.0), new(14.7, 121.1)));
     }
 
+    [Fact]
+    public async Task Successful_response_without_route_legs_is_rejected()
+    {
+        using var handler = new StubHandler(_ => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"trip":{"summary":{"length":2.5,"time":180},"legs":[]}}""")
+        });
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            CreateService(handler).GetRouteAsync(new(14.6, 121.0), new(14.7, 121.1)));
+    }
+
     private static ValhallaRoutingService CreateService(HttpMessageHandler handler)
         => new(new HttpClient(handler) { BaseAddress = new Uri("https://valhalla.example/") });
 

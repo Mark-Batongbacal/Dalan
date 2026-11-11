@@ -312,6 +312,67 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                     b.ToTable("Vehicles", (string)null);
                 });
 
+            modelBuilder.Entity("Dalan.Infrastructure.Persistence.DriverAccount", b =>
+                {
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("DriverId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("DriverAccounts");
+                });
+
+            modelBuilder.Entity("Dalan.Infrastructure.Persistence.DriverEventReceipt", b =>
+                {
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<byte[]>("Photo")
+                        .HasColumnType("varbinary(max)");
+
+                    b.HasKey("DriverId", "EventId");
+
+                    b.HasIndex("DeliveryId");
+
+                    b.ToTable("DriverEventReceipts");
+                });
+
+            modelBuilder.Entity("Dalan.Infrastructure.Persistence.OperationsSnapshot", b =>
+                {
+                    b.Property<DateOnly>("DayUtc")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Kind")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Data")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("DayUtc", "Kind");
+
+                    b.ToTable("OperationsSnapshots");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -574,6 +635,36 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AssignedVehicleId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Dalan.Infrastructure.Persistence.DriverAccount", b =>
+                {
+                    b.HasOne("Dalan.Domain.Drivers.Driver", null)
+                        .WithOne()
+                        .HasForeignKey("Dalan.Infrastructure.Persistence.DriverAccount", "DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", null)
+                        .WithOne()
+                        .HasForeignKey("Dalan.Infrastructure.Persistence.DriverAccount", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dalan.Infrastructure.Persistence.DriverEventReceipt", b =>
+                {
+                    b.HasOne("Dalan.Domain.Deliveries.Delivery", null)
+                        .WithMany()
+                        .HasForeignKey("DeliveryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Dalan.Domain.Drivers.Driver", null)
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

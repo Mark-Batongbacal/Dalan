@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Dalan.Web.Controllers;
 
-public sealed class AccountController(SignInManager<IdentityUser> signInManager) : Controller
+public sealed class AccountController(SignInManager<IdentityUser> signInManager, UserManager<IdentityUser> users) : Controller
 {
     [AllowAnonymous]
     [HttpGet]
@@ -19,8 +19,16 @@ public sealed class AccountController(SignInManager<IdentityUser> signInManager)
     {
         if (!ModelState.IsValid) return View(model);
 
+        var user = await users.FindByNameAsync(model.Email);
+        if (user is null || (!await users.IsInRoleAsync(user, "Admin")
+            && !await users.IsInRoleAsync(user, "Dispatcher")))
+        {
+            ModelState.AddModelError(string.Empty, "Invalid sign-in attempt.");
+            return View(model);
+        }
+
         var result = await signInManager.PasswordSignInAsync(
-            model.Email, model.Password, isPersistent: false, lockoutOnFailure: true);
+            user, model.Password, isPersistent: false, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, "Invalid sign-in attempt.");

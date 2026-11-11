@@ -1,3 +1,4 @@
+using Dalan.Application.DriverExecution;
 using Dalan.Application.Deliveries;
 using Dalan.Application.Dispatch;
 using Dalan.Application.Drivers;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddDbContext<DalanDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
+        services.AddScoped<IDriverTasks, DriverTasksRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
         var valhallaUrl = configuration["Valhalla:BaseUrl"];
