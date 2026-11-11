@@ -1,7 +1,16 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val driverApiUrl = providers.gradleProperty("dalanDriverApiUrl")
+val debugDriverApiUrl = providers.gradleProperty("dalanDriverDebugApiUrl")
+
+fun buildConfigUrl(url: String): String {
+    require('"' !in url && '\\' !in url && '\n' !in url && '\r' !in url)
+    return "\"$url\""
 }
 
 android {
@@ -25,7 +34,7 @@ android {
             buildConfigField(
                 "String",
                 "API_BASE_URL",
-                "\"http://10.0.2.2:5072/\""
+                buildConfigUrl(debugDriverApiUrl.orElse(driverApiUrl).getOrElse("http://10.0.2.2:5072/"))
             )
         }
 
@@ -36,7 +45,9 @@ android {
             buildConfigField(
                 "String",
                 "API_BASE_URL",
-                "\"https://replace-before-release.invalid/\""
+                buildConfigUrl(driverApiUrl.getOrElse("https://replace-before-release.invalid/").also {
+                    require(it.startsWith("https://")) { "dalanDriverApiUrl must use HTTPS for release builds." }
+                })
             )
         }
     }
@@ -55,6 +66,9 @@ android {
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.room.runtime)
+    implementation(libs.maplibre.android)
+    ksp(libs.room.compiler)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -73,4 +87,7 @@ dependencies {
     implementation(libs.ktor.client.android)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+}
+ksp {
+    arg("room.schemaLocation", file("schemas").path)
 }

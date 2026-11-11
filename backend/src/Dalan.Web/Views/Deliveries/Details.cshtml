@@ -104,3 +104,19 @@
 }
 
 <a asp-action="Index" class="btn btn-link mt-3">Back to queue</a>
+
+@if (delivery.Proof is { } proof)
+{
+    <section class="content-card mt-3" aria-labelledby="proof-heading">
+        <h2 id="proof-heading" class="h5">Proof of delivery</h2>
+        <dl>
+            <dt>Recipient confirmation</dt><dd>@proof.RecipientConfirmation</dd>
+            <dt>Captured at (UTC)</dt><dd>@proof.CapturedAtUtc.ToUniversalTime().ToString("u")</dd>
+            <dt>Location</dt><dd>@proof.Latitude, @proof.Longitude</dd>
+        </dl>
+        @if (proof.PhotoReference.StartsWith("driver-upload:", StringComparison.Ordinal))
+        {
+            <a asp-action="ProofPhoto" asp-route-id="@delivery.Id">View proof photo</a>
+        }
+    </section>
+}

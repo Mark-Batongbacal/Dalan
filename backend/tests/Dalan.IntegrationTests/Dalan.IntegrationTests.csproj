@@ -15,5 +15,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.0" />
     <ProjectReference Include="../../src/Dalan.InternalApi/Dalan.InternalApi.csproj" />
     <ProjectReference Include="../../src/Dalan.Web/Dalan.Web.csproj" />
+    <ProjectReference Include="../../src/Dalan.Worker/Dalan.Worker.csproj" />
   </ItemGroup>
 </Project>
