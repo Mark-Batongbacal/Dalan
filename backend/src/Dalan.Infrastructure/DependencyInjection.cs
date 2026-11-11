@@ -1,3 +1,4 @@
+using Dalan.Application.DriverExecution;
 using Dalan.Application.Deliveries;
 using Dalan.Application.Dispatch;
 using Dalan.Application.Drivers;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddDbContext<DalanDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
+        services.AddScoped<IDriverTasks, DriverTasksRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
         var valhallaUrl = configuration["Valhalla:BaseUrl"];
@@ -35,6 +37,12 @@ public static class DependencyInjection
             if (!Uri.TryCreate(valhallaUrl, UriKind.Absolute, out var endpoint)
                 || endpoint.Scheme is not ("http" or "https"))
                 throw new InvalidOperationException("Valhalla:BaseUrl must be an absolute HTTP(S) URL.");
+
+            var maxCellsValue = configuration["Valhalla:MaxMatrixCells"];
+            var maxCells = 100;
+            if (maxCellsValue is not null && (!int.TryParse(maxCellsValue, out maxCells) || maxCells is < 1 or > 10000))
+                throw new InvalidOperationException("Valhalla:MaxMatrixCells must be 1–10000.");
+            services.AddSingleton(new ValhallaMatrixLimits(maxCells));
 
             services.AddHttpClient<IRoutingService, ValhallaRoutingService>(client =>
             {

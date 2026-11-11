@@ -7,6 +7,8 @@
     <span class="page-kicker">Dispatch operations</span>
     <h1>Confirmed dispatch</h1>
     <p>Confirmed @Model.Plan.ConfirmedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</p>
+    <p>Strategy: @DispatchStrategyInput.Label(Enum.Parse<Dalan.Contracts.Dispatch.DispatchStrategy>(Model.Plan.Strategy)).
+        Handling estimate: @Model.Plan.ServiceSecondsPerStop seconds per stop.</p>
 </div>
 
 <div class="alert alert-info" role="status">

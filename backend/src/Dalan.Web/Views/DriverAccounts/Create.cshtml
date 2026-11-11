@@ -1,0 +1,17 @@
+@model Dalan.Web.Controllers.DriverAccountForm
+@{ ViewData["Title"] = "Create driver account"; }
+<h1>Create an account for @Model.DriverName</h1>
+<form method="post" asp-action="Create" class="content-card form-panel">
+    <input asp-for="DriverId" type="hidden" />
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="Email" class="form-label"></label>
+        <input asp-for="Email" class="form-control" autocomplete="off" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Password" class="form-label"></label>
+        <input asp-for="Password" class="form-control" autocomplete="new-password" />
+    </div>
+    <button type="submit" class="btn btn-primary">Create account</button>
+    <a asp-controller="Drivers" asp-action="Index" class="btn btn-outline-secondary">Back to drivers</a>
+</form>

@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="../Dalan.Contracts/Dalan.Contracts.csproj" />
     <ProjectReference Include="..\Dalan.Domain\Dalan.Domain.csproj" />
   </ItemGroup>
 

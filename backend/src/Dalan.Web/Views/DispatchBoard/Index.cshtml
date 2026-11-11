@@ -20,6 +20,55 @@
 
 <form asp-action="Index" method="post">
     <div class="content-card mb-4">
+        <label asp-for="Strategy" class="form-label">Optimization strategy</label>
+        <select asp-for="Strategy" class="form-select" aria-describedby="strategy-help">
+            <option value="MinimumTotalTravelTime">Minimum total fleet travel time (default policy)</option>
+            <option value="WorkloadEquity">Workload equity</option>
+            <option value="WarehouseClusterRotation">Warehouse proximity clusters with rider rotation</option>
+            <option value="EarliestFleetCompletion">Earliest fleet completion</option>
+        </select>
+        <p id="strategy-help" class="text-muted mt-2 mb-0">
+            Travel time minimizes total driving; equity reduces the spread of rider work;
+            warehouse mode groups nearby destinations and rotates rider priority after confirmation;
+            earliest completion minimizes the longest rider workload.
+            Only the selected heuristic runs when you preview. The default policy does not guarantee an optimal plan.
+        </p>
+        @if (Model.Advice is { } advice)
+        {
+            <div class="alert alert-info mt-3" role="status">
+                <strong>Suggestion: @DispatchStrategyInput.Label(advice.Strategy)</strong>
+                <p class="mb-1">@advice.Basis</p>
+                <p class="mb-0">@advice.Confidence Select it above to use it for your preview.</p>
+            </div>
+        }
+        <div class="row g-3 mt-1">
+            <div class="col-md-6">
+                <label asp-for="Settings.ServiceSecondsPerStop" class="form-label">Handling seconds per stop</label>
+                <input asp-for="Settings.ServiceSecondsPerStop" type="number" min="0" max="3600" step="any" class="form-control" aria-describedby="handling-help" />
+                <p id="handling-help" class="text-muted">Applied to each pickup and drop-off. Zero estimates driving time only.</p>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Settings.MaxFleetTravelSeconds" class="form-label">Optional fleet travel budget (seconds)</label>
+                <input asp-for="Settings.MaxFleetTravelSeconds" type="number" min="0" step="any" class="form-control" aria-describedby="budget-help" />
+                <p id="budget-help" class="text-muted">For the three new strategies. Leave blank for no cap; exceeding it may leave deliveries unassigned.</p>
+            </div>
+        </div>
+        <fieldset>
+            <legend class="h6">Common warehouse (warehouse strategy only)</legend>
+            <p class="text-muted">All selected starts and pickups must match this origin. New strategies require known weights and vehicle capacities.</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Settings.WarehouseLatitude" class="form-label">Warehouse latitude</label>
+                    <input asp-for="Settings.WarehouseLatitude" type="number" min="-90" max="90" step="any" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Settings.WarehouseLongitude" class="form-label">Warehouse longitude</label>
+                    <input asp-for="Settings.WarehouseLongitude" type="number" min="-180" max="180" step="any" class="form-control" />
+                </div>
+            </div>
+        </fieldset>
+    </div>
+    <div class="content-card mb-4">
         <h2 class="h5">Available vehicles</h2>
         @if (Model.Vehicles.Count == 0)
         {
@@ -89,6 +138,7 @@
     </div>
 
     <button type="submit" class="btn btn-primary">Preview routes</button>
+    <button type="submit" asp-action="SuggestStrategy" class="btn btn-outline-secondary">Suggest strategy without routing</button>
 </form>
 
 @if (Model.Preview is not null)
@@ -96,6 +146,16 @@
     <div class="content-card mt-4">
         <h2 class="h5">Proposed routes</h2>
         <p>This preview does not reserve deliveries or save a dispatch plan.</p>
+        <p><strong>@DispatchStrategyInput.Label(Model.Preview.Strategy)</strong></p>
+        @if (Model.Preview.Metrics is { } metrics)
+        {
+            <p>Total travel: @((metrics.TotalTravelSeconds / 60).ToString("N1")) min;
+                longest workload: @((metrics.LongestWorkloadSeconds / 60).ToString("N1")) min;
+                workload spread: @((metrics.WorkloadSpreadSeconds / 60).ToString("N1")) min.</p>
+            <ul class="text-muted">
+                @foreach (var warning in metrics.Warnings) { <li>@warning</li> }
+            </ul>
+        }
 
         @foreach (var route in Model.Preview.Routes)
         {
@@ -108,6 +168,7 @@
                     Start: @route.Start.Latitude, @route.Start.Longitude<br />
                     Estimated distance: @(route.DistanceMeters / 1000).ToString("N1") km;
                     time: @(route.DurationSeconds / 60).ToString("N0") minutes
+                    <br />Deliveries: @(route.Stops.Count / 2)
                 </p>
                 @if (route.Stops.Count == 0)
                 {
@@ -144,6 +205,11 @@
         else if (Model.Preview.Routes.Any(route => route.Stops.Count > 0))
         {
             <form asp-action="Review" method="post">
+                <input name="Strategy" type="hidden" value="@Model.Preview.Strategy" />
+                <input name="Settings.ServiceSecondsPerStop" type="hidden" value="@Model.Settings.ServiceSecondsPerStop" />
+                <input name="Settings.MaxFleetTravelSeconds" type="hidden" value="@Model.Settings.MaxFleetTravelSeconds" />
+                <input name="Settings.WarehouseLatitude" type="hidden" value="@Model.Settings.WarehouseLatitude" />
+                <input name="Settings.WarehouseLongitude" type="hidden" value="@Model.Settings.WarehouseLongitude" />
                 @for (var i = 0; i < Model.Vehicles.Count; i++)
                 {
                     <input name="Vehicles[@i].Id"

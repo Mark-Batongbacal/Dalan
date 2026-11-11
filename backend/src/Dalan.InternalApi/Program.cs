@@ -25,7 +25,8 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["Valhalla:BaseUrl"]))
     builder.Services.AddScoped<IDispatchService, DispatchService>();
 }
 builder.Services.AddAuthentication(IdentityConstants.BearerScheme)
-    .AddBearerToken(IdentityConstants.BearerScheme);
+    .AddBearerToken(IdentityConstants.BearerScheme)
+    .AddBearerToken("DriverBearer", options => options.BearerTokenExpiration = TimeSpan.FromHours(1));
 builder.Services.AddIdentityCore<IdentityUser>(options =>
     {
         options.Password.RequiredLength = 12;

@@ -53,7 +53,8 @@ public sealed class ValhallaRoutingService(HttpClient client) : IRoutingService
         var summary = trip.GetProperty("summary");
         var distanceKilometers = summary.GetProperty("length").GetDouble();
         var durationSeconds = summary.GetProperty("time").GetDouble();
-        var shape = trip.GetProperty("legs")[0].GetProperty("shape").GetString();
+        var legs = trip.GetProperty("legs");
+        var shape = legs.GetArrayLength() == 0 ? null : legs[0].GetProperty("shape").GetString();
         if (!double.IsFinite(distanceKilometers) || distanceKilometers < 0
             || !double.IsFinite(durationSeconds) || durationSeconds < 0
             || string.IsNullOrWhiteSpace(shape))

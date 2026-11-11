@@ -11,7 +11,9 @@
     <title>@pageTitle · Dalan</title>
     <script>
         (function () {
-            var choice = localStorage.getItem('dalan-theme') || 'system';
+            var choice = 'system';
+            try { choice = localStorage.getItem('dalan-theme') || choice; } catch {}
+            if (!['system', 'light', 'dark'].includes(choice)) choice = 'system';
             document.documentElement.dataset.theme = choice;
         })();
     </script>
@@ -20,6 +22,7 @@
     <link rel="stylesheet" href="~/Dalan.Web.styles.css" asp-append-version="true" />
 </head>
 <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="app-shell">
         @if (signedIn)
         {
@@ -68,8 +71,8 @@
                     <span class="topbar-title">Fleet workspace</span>
                 }
             </header>
-            <main class="main-content" id="main-content" role="main">@RenderBody()</main>
-            <footer class="app-footer"><span>Dalan · Internal fleet operations · <a asp-controller="Home" asp-action="Privacy">Privacy</a></span><label for="theme-select">Appearance <select id="theme-select" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></footer>
+            <main class="main-content" id="main-content" tabindex="-1">@RenderBody()</main>
+            <footer class="app-footer"><span>Dalan · Internal fleet operations · <a asp-controller="Home" asp-action="Privacy">Privacy</a></span><label for="theme-select">Appearance <select id="theme-select" aria-label="Appearance"><option value="system">System default</option><option value="light">Light</option><option value="dark">Dark</option></select></label></footer>
         </div>
     </div>
     <script>
@@ -78,7 +81,7 @@
             select.value = document.documentElement.dataset.theme;
             select.addEventListener('change', function () {
                 document.documentElement.dataset.theme = select.value;
-                localStorage.setItem('dalan-theme', select.value);
+                try { localStorage.setItem('dalan-theme', select.value); } catch {}
             });
         })();
     </script>

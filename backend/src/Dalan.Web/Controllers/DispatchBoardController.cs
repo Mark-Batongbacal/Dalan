@@ -28,10 +28,43 @@ public sealed class DispatchBoardController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SuggestStrategy(DispatchBoardViewModel model, CancellationToken cancellationToken)
+    {
+        await PopulateChoices(model, cancellationToken);
+        if (!ModelState.IsValid || model.Settings is null || !Enum.IsDefined(model.Strategy)
+            || !double.IsFinite(model.Settings.ServiceSecondsPerStop) || model.Settings.ServiceSecondsPerStop is < 0 or > 3600)
+        {
+            model.Error = "Select a supported strategy and a handling estimate from 0 to 3600 seconds.";
+            return View("Index", model);
+        }
+        var selectedVehicles = model.Vehicles.Where(x => x.Selected).Select(x => x.Id).ToHashSet();
+        var selectedDeliveries = model.Deliveries.Where(x => x.Selected).Select(x => x.Id).ToHashSet();
+        if (selectedVehicles.Count is < 1 or > 8 || selectedDeliveries.Count is < 1 or > 15)
+        {
+            model.Error = "Select 1–8 vehicles and 1–15 deliveries before requesting a suggestion.";
+            return View("Index", model);
+        }
+        var currentVehicles = await vehicles.ListAsync(cancellationToken);
+        var currentDeliveries = await deliveries.ListAsync(cancellationToken);
+        var known = currentVehicles.Where(x => selectedVehicles.Contains(x.Id)).All(x => x.PayloadCapacityKg.HasValue)
+            && currentDeliveries.Where(x => selectedDeliveries.Contains(x.Id)).All(x => x.PayloadWeightKg.HasValue);
+        model.Advice = DispatchStrategyAdvice.Suggest(selectedVehicles.Count, selectedDeliveries.Count,
+            known, model.Settings.ServiceSecondsPerStop);
+        return View("Index", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Index(
         DispatchBoardViewModel model, CancellationToken cancellationToken)
     {
         await PopulateChoices(model, cancellationToken);
+
+        if (!ModelState.IsValid || !Enum.IsDefined(model.Strategy) || model.Settings is null)
+        {
+            model.Error = "Select a supported strategy and enter valid coordinates.";
+            return View(model);
+        }
 
         var selectedVehicles = model.Vehicles.Where(x => x.Selected).ToArray();
         var selectedDeliveries = model.Deliveries.Where(x => x.Selected).ToArray();
@@ -66,7 +99,7 @@ public sealed class DispatchBoardController(
                         new GeoPoint(
                             x.StartLatitude!.Value,
                             x.StartLongitude!.Value))).ToArray(),
-                    selectedDeliveries.Select(x => x.Id).ToArray()),
+                    selectedDeliveries.Select(x => x.Id).ToArray(), model.Strategy, model.Settings.ToContract()),
                 cancellationToken);
         }
         catch (ArgumentException error) { model.Error = error.Message; }
@@ -89,6 +122,12 @@ public sealed class DispatchBoardController(
     {
         // Re-preview from current records. Do not trust a posted preview result.
         await PopulateChoices(board, cancellationToken);
+
+        if (!ModelState.IsValid || !Enum.IsDefined(board.Strategy) || board.Settings is null)
+        {
+            board.Error = "Select a supported strategy and enter valid coordinates.";
+            return View("Index", board);
+        }
 
         var selectedVehicles = board.Vehicles.Where(x => x.Selected).ToArray();
         var selectedDeliveries = board.Deliveries.Where(x => x.Selected).ToArray();
@@ -118,7 +157,7 @@ public sealed class DispatchBoardController(
                         new GeoPoint(
                             x.StartLatitude!.Value,
                             x.StartLongitude!.Value))).ToArray(),
-                    selectedDeliveries.Select(x => x.Id).ToArray()),
+                    selectedDeliveries.Select(x => x.Id).ToArray(), board.Strategy, board.Settings.ToContract()),
                 cancellationToken);
 
             if (preview.UnassignedDeliveryIds.Count > 0)
@@ -143,6 +182,10 @@ public sealed class DispatchBoardController(
 
             var review = new DispatchReviewViewModel
             {
+                Strategy = preview.Strategy,
+                Settings = board.Settings,
+                RotationVersion = preview.RotationVersion,
+                Metrics = preview.Metrics,
                 Vehicles = selectedVehicles.Select(x => new DispatchReviewVehicle
                 {
                     VehicleId = x.Id,
@@ -203,6 +246,9 @@ public sealed class DispatchBoardController(
             return View("Review", model);
         }
 
+        if (!ModelState.IsValid || !Enum.IsDefined(model.Strategy) || model.Settings is null)
+            return await ReviewError("Select a supported strategy and enter valid review values.");
+
         if (model.Vehicles is null || model.Stops is null ||
             model.Versions is null ||
             model.Vehicles.Count is < 1 or > 8 ||
@@ -259,7 +305,8 @@ public sealed class DispatchBoardController(
                 Convert.FromBase64String(x.RowVersion))).ToArray();
 
             var plan = await dispatch.ConfirmAsync(
-                new DispatchConfirmRequest(starts, routes, versions),
+                new DispatchConfirmRequest(starts, routes, versions, model.Strategy,
+                    model.Settings.ToContract(), model.RotationVersion),
                 cancellationToken);
 
             if (plan is null)

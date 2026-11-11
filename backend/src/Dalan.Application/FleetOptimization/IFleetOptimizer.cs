@@ -1,4 +1,5 @@
 using Dalan.Application.Routing;
+using Dalan.Contracts.Dispatch;
 
 namespace Dalan.Application.FleetOptimization;
 
@@ -12,7 +13,15 @@ public sealed record FleetJob(
     Guid? AssignedVehicleId = null,
     decimal? PayloadWeightKg = null);
 public sealed record FleetOptimizationRequest(
-    IReadOnlyList<FleetVehicle> Vehicles, IReadOnlyList<FleetJob> Jobs);
+    IReadOnlyList<FleetVehicle> Vehicles, IReadOnlyList<FleetJob> Jobs,
+    DispatchStrategy Strategy = DispatchStrategy.MinimumTotalTravelTime,
+    FleetOptimizationOptions? Options = null);
+
+public sealed record FleetOptimizationOptions(
+    GeoPoint? Warehouse = null,
+    double ServiceSecondsPerStop = 0,
+    double? MaxFleetTravelSeconds = null,
+    IReadOnlyList<Guid>? VehiclePriority = null);
 
 public enum FleetStopKind { Pickup, Dropoff }
 public sealed record FleetStop(string JobId, FleetStopKind Kind, GeoPoint Point);

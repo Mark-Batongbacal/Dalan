@@ -1,4 +1,5 @@
-﻿using Dalan.Application.Deliveries;
+﻿using Dalan.Application.DriverExecution;
+using Dalan.Application.Deliveries;
 using Dalan.Application.Drivers;
 using Dalan.Application.Vehicles;
 using Dalan.Web.Models;
@@ -13,6 +14,17 @@ public sealed class DeliveriesController(
     IDriverService drivers,
     IVehicleService vehicles) : Controller
 {
+    [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> ProofPhoto(Guid id, [FromServices] IDriverTasks tasks,
+        CancellationToken cancellationToken)
+    {
+        var photo = await tasks.GetProofPhotoAsync(id, cancellationToken);
+        if (photo is null) return NotFound();
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return File(photo, "image/jpeg");
+    }
+
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
         => View(await deliveries.ListAsync(cancellationToken));

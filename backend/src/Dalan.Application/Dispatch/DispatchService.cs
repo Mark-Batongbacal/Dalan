@@ -4,6 +4,7 @@ using Dalan.Domain.Deliveries;
 using Dalan.Domain.Dispatch;
 using Dalan.Domain.Drivers;
 using Dalan.Domain.Vehicles;
+using Dalan.Contracts.Dispatch;
 
 namespace Dalan.Application.Dispatch;
 
@@ -18,6 +19,9 @@ public sealed class DispatchService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (!Enum.IsDefined(request.Strategy))
+            throw new ArgumentException("Select a supported dispatch strategy.", nameof(request));
 
         if (request.Vehicles is null ||
             request.Vehicles.Count is < 1 or > 8 ||
@@ -103,13 +107,19 @@ public sealed class DispatchService(
                 delivery.Status == DeliveryStatus.Assigned ? delivery.VehicleId: null, delivery.PayloadWeightKg); 
         }).ToArray();
 
-        var optimized = await optimizer.OptimizeAsync(
-            new FleetOptimizationRequest(
-                request.Vehicles.Select(vehicle =>
-                    new FleetVehicle( vehicle.VehicleId, vehicle.Start, vehiclesById[vehicle.VehicleId].PayloadCapacityKg)
-                ).ToArray(), 
-                jobs),
-            cancellationToken);
+        var options = Options(request.Settings);
+        var fleetRequest = new FleetOptimizationRequest(
+            request.Vehicles.Select(vehicle => new FleetVehicle(vehicle.VehicleId, vehicle.Start,
+                vehiclesById[vehicle.VehicleId].PayloadCapacityKg)).ToArray(), jobs, request.Strategy, options);
+        FleetOptimizer.ValidateOptions(fleetRequest);
+        DispatchRotation? rotation = null;
+        if (request.Strategy == DispatchStrategy.WarehouseClusterRotation)
+        {
+            rotation = await repository.ReadRotationAsync(FleetOptimizer.WarehouseKey(options.Warehouse!), cancellationToken);
+            var byDriver = driversByVehicle.ToDictionary(pair => pair.Value.Id, pair => pair.Key);
+            options = options with { VehiclePriority = rotation.OrderRiders(byDriver.Keys).Select(id => byDriver[id]).ToArray() };
+        }
+        var optimized = await optimizer.OptimizeAsync(fleetRequest with { Options = options }, cancellationToken);
 
         var startsByVehicle = request.Vehicles.ToDictionary(
             vehicle => vehicle.VehicleId,
@@ -131,7 +141,8 @@ public sealed class DispatchService(
             optimized.UnassignedJobIds.Select(Guid.Parse).ToArray(),
             candidates.Deliveries.Select(delivery =>
                 new DispatchDeliveryVersion(
-                    delivery.Id, delivery.RowVersion.ToArray())).ToArray());
+                    delivery.Id, delivery.RowVersion.ToArray())).ToArray(), request.Strategy,
+            Metrics(optimized, request.Strategy, options), rotation?.Version);
     }
 
     public async Task<DispatchPlan?> ConfirmAsync(
@@ -139,6 +150,9 @@ public sealed class DispatchService(
     CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (!Enum.IsDefined(request.Strategy))
+            throw new ArgumentException("Select a supported dispatch strategy.", nameof(request));
 
         if (request.Vehicles is null ||
             request.Routes is null ||
@@ -227,6 +241,21 @@ public sealed class DispatchService(
 
         var deliveries = candidates.Deliveries.ToDictionary(delivery => delivery.Id);
         var vehicles = candidates.Vehicles.ToDictionary(vehicle => vehicle.Id);
+        var options = Options(request.Settings);
+        FleetOptimizer.ValidateOptions(new FleetOptimizationRequest(
+            request.Vehicles.Select(x => new FleetVehicle(x.VehicleId, x.Start, vehicles[x.VehicleId].PayloadCapacityKg)).ToArray(),
+            candidates.Deliveries.Select(x => new FleetJob(x.Id.ToString("N"),
+                new GeoPoint(x.PickupLatitude, x.PickupLongitude), new GeoPoint(x.DropoffLatitude, x.DropoffLongitude))).ToArray(),
+            request.Strategy, options));
+        DispatchRotation? rotation = null;
+        Guid? firstRider = null;
+        if (request.Strategy == DispatchStrategy.WarehouseClusterRotation)
+        {
+            if (request.RotationVersion is not >= 0)
+                throw new ArgumentException("A warehouse preview rotation version is required.");
+            rotation = await repository.ReadRotationAsync(FleetOptimizer.WarehouseKey(options.Warehouse!), cancellationToken);
+            if (rotation.Version != request.RotationVersion) return null;
+        }
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         var confirmedRoutes = new List<DispatchRoute>();
 
@@ -278,6 +307,23 @@ public sealed class DispatchService(
             }
 
             DispatchRoute.ValidateStops(stops);
+            if (request.Strategy != DispatchStrategy.MinimumTotalTravelTime)
+            {
+                if (stops.Count > 0 && vehicle.PayloadCapacityKg is null) return null;
+                var load = 0m;
+                var departed = false;
+                foreach (var stop in stops)
+                {
+                    if (deliveries[stop.DeliveryId].PayloadWeightKg is not decimal weight) return null;
+                    if (request.Strategy == DispatchStrategy.WarehouseClusterRotation)
+                    {
+                        if (stop.Kind == DispatchStopKind.Pickup && departed) return null;
+                        if (stop.Kind == DispatchStopKind.Dropoff) departed = true;
+                    }
+                    load += stop.Kind == DispatchStopKind.Pickup ? weight : -weight;
+                    if (load < 0 || load > vehicle.PayloadCapacityKg) return null;
+                }
+            }
 
             var points = new List<GeoPoint>
         {
@@ -304,6 +350,9 @@ public sealed class DispatchService(
                     if (leg is null)
                         throw new InvalidOperationException(
                             "The reviewed route has an unreachable leg.");
+                    if (!double.IsFinite(leg.DistanceMeters) || leg.DistanceMeters < 0
+                        || !double.IsFinite(leg.DurationSeconds) || leg.DurationSeconds < 0)
+                        throw new InvalidDataException("Routing matrix contains invalid estimates.");
 
                     distance += leg.DistanceMeters;
                     duration += leg.DurationSeconds;
@@ -320,8 +369,12 @@ public sealed class DispatchService(
                 stops));
         }
 
-        var plan = DispatchPlan.Create(
-            confirmedRoutes, timeProvider.GetUtcNow());
+        if (options.MaxFleetTravelSeconds is double budget && confirmedRoutes.Sum(x => x.DurationSeconds) > budget + 0.001)
+            return null;
+        if (rotation is not null) firstRider = rotation.OrderRiders(confirmedRoutes.Select(x => x.DriverId))[0];
+        var plan = DispatchPlan.Create(confirmedRoutes, timeProvider.GetUtcNow(),
+            new DispatchOptimizationInfo(request.Strategy.ToString(), options.ServiceSecondsPerStop, options.MaxFleetTravelSeconds,
+                rotation is null ? null : FleetOptimizer.WarehouseKey(options.Warehouse!), rotation?.Version, firstRider));
 
         return await repository.ConfirmAsync(
             plan,
@@ -331,5 +384,32 @@ public sealed class DispatchService(
             : null;
     }
 
+    private static FleetOptimizationOptions Options(DispatchStrategySettings? settings)
+        => settings is null ? new() : new(
+            settings.Warehouse is null ? null : new GeoPoint(settings.Warehouse.Latitude, settings.Warehouse.Longitude),
+            settings.ServiceSecondsPerStop, settings.MaxFleetTravelSeconds);
+
+    private static DispatchPlanMetrics Metrics(FleetOptimizationResult result, DispatchStrategy strategy, FleetOptimizationOptions options)
+    {
+        var routes = result.Routes.Select(x => new DispatchRouteMetrics(x.VehicleId,
+            x.Stops.Count / 2, x.DurationSeconds, x.DurationSeconds + x.Stops.Count * options.ServiceSecondsPerStop)).ToArray();
+        var warnings = new List<string>
+        {
+            "Estimates exclude existing work outside this batch, shift availability, traffic changes and deadlines.",
+            options.ServiceSecondsPerStop == 0 ? "Handling time is set to zero: workload estimates include driving only."
+                : $"Workload assumes {options.ServiceSecondsPerStop} seconds of handling at each pickup and drop-off."
+        };
+        if (strategy == DispatchStrategy.MinimumTotalTravelTime)
+            warnings.Add("The legacy strategy checks individual weights only; cumulative capacity is not guaranteed.");
+        else
+            warnings.Add("The selected strategy requires known delivery weights and vehicle capacities; unknown loads are unassigned.");
+        if (strategy == DispatchStrategy.WorkloadEquity && options.MaxFleetTravelSeconds is null)
+            warnings.Add("Equity minimizes workload spread before total travel; no fleet travel budget is set.");
+        if (strategy == DispatchStrategy.WarehouseClusterRotation)
+            warnings.Add("Clusters contain at most 3 destinations with all pairwise road times at most 10 minutes in both directions. Rotation advances only after confirmation.");
+        return new(routes.Sum(x => x.TravelSeconds), routes.Max(x => x.EstimatedWorkloadSeconds),
+            routes.Max(x => x.EstimatedWorkloadSeconds) - routes.Min(x => x.EstimatedWorkloadSeconds),
+            options.ServiceSecondsPerStop, routes, warnings);
+    }
 
 }

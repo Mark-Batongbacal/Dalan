@@ -21,6 +21,74 @@ namespace Dalan.IntegrationTests;
 
 public sealed class DispatchPlansApiTests
 {
+    [Fact]
+    public async Task Omitted_strategy_keeps_legacy_default_and_explicit_selection_is_returned()
+    {
+        var service = new FakeDispatchService();
+        using var factory = CreateFactory(service);
+        using var client = CreateClient(factory, "Dispatcher");
+        var legacy = new { PreviewBody().Vehicles, PreviewBody().DeliveryIds };
+        using var response = await client.PostAsJsonAsync("/api/dispatch-plans/preview", legacy);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(DispatchStrategy.MinimumTotalTravelTime, service.LastPreview!.Strategy);
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"strategy\":\"MinimumTotalTravelTime\"", json);
+
+        using var selected = await client.PostAsJsonAsync("/api/dispatch-plans/preview", PreviewBody());
+        Assert.Equal(HttpStatusCode.OK, selected.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("\"Unknown\"")]
+    [InlineData("\"WorkloadEquity, EarliestFleetCompletion\"")]
+    [InlineData("\"0\"")]
+    [InlineData("0")]
+    [InlineData("99")]
+    [InlineData("null")]
+    public async Task Invalid_strategy_never_reaches_preview_or_confirmation(string value)
+    {
+        var service = new FakeDispatchService();
+        using var factory = CreateFactory(service);
+        using var client = CreateClient(factory, "Dispatcher");
+        var json = System.Text.Json.JsonSerializer.Serialize(PreviewBody());
+        json = json.Replace("\"Strategy\":\"MinimumTotalTravelTime\"", "\"Strategy\":" + value);
+        using var response = await client.PostAsync("/api/dispatch-plans/preview",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(service.LastPreview);
+
+        json = System.Text.Json.JsonSerializer.Serialize(ConfirmBody());
+        json = json.Replace("\"Strategy\":\"MinimumTotalTravelTime\"", "\"Strategy\":" + value);
+        using var confirm = await client.PostAsync("/api/dispatch-plans",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, confirm.StatusCode);
+        Assert.Null(service.LastConfirm);
+    }
+
+    [Theory]
+    [InlineData(DispatchStrategy.WorkloadEquity)]
+    [InlineData(DispatchStrategy.WarehouseClusterRotation)]
+    [InlineData(DispatchStrategy.EarliestFleetCompletion)]
+    public async Task Selected_strategy_and_settings_reach_preview_and_reviewed_confirmation(DispatchStrategy strategy)
+    {
+        var service = new FakeDispatchService();
+        using var factory = CreateFactory(service);
+        using var client = CreateClient(factory, "Dispatcher");
+        var settings = new DispatchStrategySettings(new(7, 125.6), 120, 7200);
+        using var response = await client.PostAsJsonAsync("/api/dispatch-plans/preview",
+            PreviewBody() with { Strategy = strategy, Settings = settings });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var preview = await response.Content.ReadFromJsonAsync<DispatchPreviewResponse>();
+        Assert.Equal(strategy, preview!.Strategy);
+        Assert.Equal(settings, service.LastPreview!.Settings);
+        using var confirm = await client.PostAsJsonAsync("/api/dispatch-plans",
+            ConfirmBody() with { Strategy = strategy, Settings = settings, RotationVersion = 12 });
+        Assert.Equal(HttpStatusCode.Created, confirm.StatusCode);
+        Assert.Equal(strategy, service.LastConfirm!.Strategy);
+        Assert.Equal(settings, service.LastConfirm.Settings);
+        Assert.Equal(12, service.LastConfirm.RotationVersion);
+    }
+
     private static readonly Guid VehicleId = Guid.NewGuid();
     private static readonly Guid DriverId = Guid.NewGuid();
     private static readonly Guid DeliveryId = Guid.NewGuid();
@@ -262,7 +330,7 @@ public sealed class DispatchPlansApiTests
                 [
                     new(DeliveryId, new byte[] { 1, 2, 3 }),
                     new(UnassignedId, new byte[] { 4, 5, 6 })
-                ]));
+                ], request.Strategy));
         }
 
         public Task<DispatchPlan?> ConfirmAsync(

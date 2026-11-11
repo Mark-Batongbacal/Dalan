@@ -1,11 +1,55 @@
 using Dalan.Application.FleetOptimization;
 using Dalan.Application.Routing;
+using Dalan.Contracts.Dispatch;
 using Xunit;
 
 namespace Dalan.UnitTests;
 
 public sealed class FleetOptimizerTests
 {
+    [Fact]
+    public async Task Explicit_default_matches_legacy_and_uses_one_matrix_per_plan()
+    {
+        var request = new FleetOptimizationRequest(
+            [new(Guid.NewGuid(), Point(0)), new(Guid.NewGuid(), Point(10))],
+            [new("A", Point(1), Point(2)), new("B", Point(9), Point(8))]);
+        var matrix = new CountingMatrix();
+        var optimizer = new FleetOptimizer(matrix);
+
+        var legacy = await optimizer.OptimizeAsync(request);
+        var selected = await optimizer.OptimizeAsync(request with
+        {
+            Strategy = DispatchStrategy.MinimumTotalTravelTime
+        });
+
+        Assert.Equal(2, matrix.Calls);
+        Assert.Equal(legacy.Routes.SelectMany(x => x.Stops), selected.Routes.SelectMany(x => x.Stops));
+        Assert.Equal(legacy.Routes.Select(x => x.DurationSeconds), selected.Routes.Select(x => x.DurationSeconds));
+    }
+
+    [Fact]
+    public async Task Invalid_strategy_is_rejected_before_matrix_computation()
+    {
+        var matrix = new CountingMatrix();
+        var request = new FleetOptimizationRequest(
+            [new(Guid.NewGuid(), Point(0))], [new("A", Point(1), Point(2))],
+            (DispatchStrategy)99);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => new FleetOptimizer(matrix).OptimizeAsync(request));
+        Assert.Equal(0, matrix.Calls);
+    }
+
+    private sealed class CountingMatrix : ITravelMatrixService
+    {
+        public int Calls { get; private set; }
+        public Task<TravelMetric?[,]> GetMatrixAsync(
+            IReadOnlyList<GeoPoint> points, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return new LineMatrix().GetMatrixAsync(points, cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task Assigns_each_job_to_the_nearer_vehicle_and_preserves_precedence()
     {

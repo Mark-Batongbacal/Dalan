@@ -1,5 +1,7 @@
 ﻿using System.Data;
 using Dalan.Application.Dispatch;
+using Dalan.Application.FleetOptimization;
+using Dalan.Application.Routing;
 using Dalan.Domain.Deliveries;
 using Dalan.Domain.Dispatch;
 using Dalan.Domain.Drivers;
@@ -12,6 +14,13 @@ namespace Dalan.Infrastructure.Repositories;
 
 public sealed class DispatchRepository(DalanDbContext db) : IDispatchRepository
 {
+    public async Task<DispatchRotation> ReadRotationAsync(string warehouseKey, CancellationToken cancellationToken = default)
+    {
+        var state = await db.DispatchRotations.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.WarehouseKey == warehouseKey, cancellationToken);
+        return new(state?.Version ?? 0, state?.LastFirstDriverId);
+    }
+
     public async Task<DispatchCandidates> ReadCandidatesAsync(
         IReadOnlyList<Guid> deliveryIds,
         IReadOnlyList<Guid> vehicleIds,
@@ -68,6 +77,23 @@ public sealed class DispatchRepository(DalanDbContext db) : IDispatchRepository
             await using var transaction = await db.Database.BeginTransactionAsync(
                 IsolationLevel.Serializable, cancellationToken);
 
+            DispatchRotationState? rotation = null;
+            if (plan.Strategy == "WarehouseClusterRotation")
+            {
+                rotation = await db.DispatchRotations.FromSqlInterpolated(
+                    $"SELECT [WarehouseKey], [Version], [LastFirstDriverId] FROM [DispatchRotations] WITH (UPDLOCK, HOLDLOCK) WHERE [WarehouseKey] = {plan.WarehouseKey}")
+                    .SingleOrDefaultAsync(cancellationToken);
+                if ((rotation?.Version ?? 0) != plan.RotationVersion) return false;
+                var order = new DispatchRotation(rotation?.Version ?? 0, rotation?.LastFirstDriverId)
+                    .OrderRiders(plan.Routes.Select(x => x.DriverId));
+                if (order[0] != plan.RotationFirstDriverId) return false;
+                if (rotation is null)
+                {
+                    rotation = new DispatchRotationState { WarehouseKey = plan.WarehouseKey! };
+                    db.DispatchRotations.Add(rotation);
+                }
+            }
+
             var deliveries = await db.Deliveries
                 .Where(delivery => deliveryIds.Contains(delivery.Id))
                 .ToDictionaryAsync(delivery => delivery.Id, cancellationToken);
@@ -105,6 +131,29 @@ public sealed class DispatchRepository(DalanDbContext db) : IDispatchRepository
                     driver.AssignedVehicleId != vehicle.Id)
                     return false;
 
+                if (plan.Strategy != "MinimumTotalTravelTime")
+                {
+                    if (route.Stops.Count > 0 && vehicle.PayloadCapacityKg is null) return false;
+                    if (plan.Strategy == "WarehouseClusterRotation"
+                        && FleetOptimizer.WarehouseKey(new GeoPoint(route.StartLatitude, route.StartLongitude)) != plan.WarehouseKey)
+                        return false;
+                    var load = 0m;
+                    var departed = false;
+                    foreach (var stop in route.Stops.OrderBy(x => x.Position))
+                    {
+                        if (!deliveries.TryGetValue(stop.DeliveryId, out var item)
+                            || item.PayloadWeightKg is not decimal weight) return false;
+                        if (plan.Strategy == "WarehouseClusterRotation")
+                        {
+                            if (FleetOptimizer.WarehouseKey(new GeoPoint(item.PickupLatitude, item.PickupLongitude)) != plan.WarehouseKey
+                                || stop.Kind == DispatchStopKind.Pickup && departed) return false;
+                            if (stop.Kind == DispatchStopKind.Dropoff) departed = true;
+                        }
+                        load += stop.Kind == DispatchStopKind.Pickup ? weight : -weight;
+                        if (load < 0 || load > vehicle.PayloadCapacityKg) return false;
+                    }
+                }
+
                 foreach (var deliveryId in route.Stops
                     .Select(stop => stop.DeliveryId).Distinct())
                 {
@@ -132,7 +181,14 @@ public sealed class DispatchRepository(DalanDbContext db) : IDispatchRepository
             foreach (var delivery in previouslyAssigned)
                 db.Entry(delivery).Property(item => item.AssignedAtUtc).IsModified = true;
 
+            if (plan.MaxFleetTravelSeconds is double budget && plan.Routes.Sum(x => x.DurationSeconds) > budget + 0.001)
+                return false;
             db.DispatchPlans.Add(plan);
+            if (rotation is not null)
+            {
+                rotation.Version++;
+                rotation.LastFirstDriverId = plan.RotationFirstDriverId;
+            }
 
             try
             {
@@ -152,12 +208,18 @@ public sealed class DispatchRepository(DalanDbContext db) : IDispatchRepository
             }
 
         }
-        catch (Exception error) when ( error is SqlException { Number: 1205 } || error is DbUpdateException { 
-            InnerException: SqlException { Number: 1205 }
-            })
+        catch (Exception error) when (IsSerializationConflict(error))
         {
             return false;
         }
 
+    }
+
+    private static bool IsSerializationConflict(Exception error)
+    {
+        // EF's execution strategy can wrap the SQL deadlock in InvalidOperationException.
+        for (Exception? current = error; current is not null; current = current.InnerException)
+            if (current is SqlException { Number: 1205 }) return true;
+        return false;
     }
 }

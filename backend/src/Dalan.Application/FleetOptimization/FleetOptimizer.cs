@@ -7,12 +7,13 @@ namespace Dalan.Application.FleetOptimization;
 /// total travel time while honoring fixed vehicle assignments and pickup precedence.
 /// This heuristic does not claim a global optimum or enforce cumulative capacity/time windows.
 /// </summary>
-public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOptimizer
+public sealed partial class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOptimizer
 {
     public async Task<FleetOptimizationResult> OptimizeAsync(
         FleetOptimizationRequest request, CancellationToken cancellationToken = default)
     {
         Validate(request);
+        ValidateOptions(request);
         var vehicles = request.Vehicles;
         var jobs = request.Jobs;
         var points = vehicles.Select(vehicle => vehicle.Start)
@@ -21,6 +22,13 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
         var matrix = await travelMatrix.GetMatrixAsync(points, cancellationToken);
         if (matrix.GetLength(0) != points.Length || matrix.GetLength(1) != points.Length)
             throw new InvalidDataException("Travel matrix dimensions do not match fleet points.");
+        foreach (var leg in matrix)
+            if (leg is not null && (!double.IsFinite(leg.DurationSeconds) || leg.DurationSeconds < 0
+                || !double.IsFinite(leg.DistanceMeters) || leg.DistanceMeters < 0))
+                throw new InvalidDataException("Travel matrix contains invalid estimates.");
+
+        if (request.Strategy != Dalan.Contracts.Dispatch.DispatchStrategy.MinimumTotalTravelTime)
+            return OptimizeSelected(request, points, matrix, cancellationToken);
 
         var routes = vehicles.Select(_ => new List<IndexedStop>()).ToArray();
         var unassigned = new List<string>();
@@ -161,7 +169,7 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
 
     private static (List<IndexedStop> Stops, RouteScore Score)? BestInsertion(
         List<IndexedStop> route, int vehicleIndex, int jobIndex, int vehicleCount,
-        TravelMetric?[,] matrix)
+        TravelMetric?[,] matrix, Func<List<IndexedStop>, bool>? feasible = null)
     {
         (List<IndexedStop> Stops, RouteScore Score)? best = null;
         for (var pickupIndex = 0; pickupIndex <= route.Count; pickupIndex++)
@@ -171,6 +179,7 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
                 var candidate = new List<IndexedStop>(route);
                 candidate.Insert(pickupIndex, new(jobIndex, true, vehicleCount + 2 * jobIndex));
                 candidate.Insert(dropoffIndex, new(jobIndex, false, vehicleCount + 2 * jobIndex + 1));
+                if (feasible is not null && !feasible(candidate)) continue;
                 var score = Score(candidate, vehicleIndex, matrix);
                 if (double.IsPositiveInfinity(score.Duration)) continue;
                 if (best is null || score.Duration < best.Value.Score.Duration - 0.001)
@@ -200,6 +209,8 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
     private static void Validate(FleetOptimizationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (!Enum.IsDefined(request.Strategy))
+            throw new ArgumentException("Select a supported dispatch strategy.", nameof(request));
         if (request.Vehicles is null || request.Jobs is null
             || request.Vehicles.Count is < 1 or > 8 || request.Jobs.Count is < 1 or > 15)
             throw new ArgumentException("Provide 1-8 vehicles and 1-15 jobs.", nameof(request));
@@ -214,6 +225,10 @@ public sealed class FleetOptimizer(ITravelMatrixService travelMatrix) : IFleetOp
                 && request.Vehicles.All(vehicle => vehicle.Id != assigned))
             || request.Jobs.Select(job => job.Id).Distinct(StringComparer.Ordinal).Count() != request.Jobs.Count)
             throw new ArgumentException("Job IDs, coordinates, and fixed vehicle IDs must be valid and unique.", nameof(request));
+        if (request.Strategy != Dalan.Contracts.Dispatch.DispatchStrategy.MinimumTotalTravelTime
+            && (request.Vehicles.Any(vehicle => vehicle.PayloadCapacityKg is <= 0)
+                || request.Jobs.Any(job => job.PayloadWeightKg is <= 0)))
+            throw new ArgumentException("Known vehicle capacities and delivery weights must be positive.", nameof(request));
     }
 
     private sealed record IndexedStop(int JobIndex, bool IsPickup, int PointIndex);
