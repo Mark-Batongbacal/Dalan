@@ -7,6 +7,7 @@ plugins {
 
 val driverApiUrl = providers.gradleProperty("dalanDriverApiUrl")
 val debugDriverApiUrl = providers.gradleProperty("dalanDriverDebugApiUrl")
+val isolatedE2e = providers.gradleProperty("dalanE2E").map(String::toBoolean).getOrElse(false)
 
 fun buildConfigUrl(url: String): String {
     require('"' !in url && '\\' !in url && '\n' !in url && '\r' !in url)
@@ -31,6 +32,7 @@ android {
 
     buildTypes {
         debug {
+            if (isolatedE2e) applicationIdSuffix = ".e2e"
             buildConfigField(
                 "String",
                 "API_BASE_URL",

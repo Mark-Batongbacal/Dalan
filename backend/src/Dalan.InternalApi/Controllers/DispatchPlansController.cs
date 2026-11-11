@@ -41,7 +41,7 @@ public sealed class DispatchPlansController(
                             new GeoPoint(
                                 vehicle.Start!.Latitude,
                                 vehicle.Start.Longitude))).ToArray(),
-                    request.DeliveryIds),
+                    request.DeliveryIds, request.Strategy, request.Settings),
                 cancellationToken);
 
             return Ok(new DispatchPreviewResponse(
@@ -61,7 +61,7 @@ public sealed class DispatchPlansController(
                 result.DeliveryVersions.Select(version =>
                     new DispatchDeliveryVersionRequest(
                         version.DeliveryId,
-                        version.RowVersion)).ToArray()));
+                        version.RowVersion)).ToArray(), result.Strategy, result.Metrics, result.RotationVersion));
         }
         catch (Exception error) when (IsExpected(error, cancellationToken))
         {
@@ -128,7 +128,7 @@ public sealed class DispatchPlansController(
                     request.DeliveryVersions.Select(version =>
                         new DispatchDeliveryVersion(
                             version.DeliveryId,
-                            version.RowVersion!)).ToArray()),
+                            version.RowVersion!)).ToArray(), request.Strategy, request.Settings, request.RotationVersion),
                 cancellationToken);
 
             if (plan is null)
@@ -222,5 +222,5 @@ public sealed class DispatchPlansController(
                             stop.Latitude,
                             stop.Longitude))).ToArray(),
                 route.DistanceMeters,
-                route.DurationSeconds)).ToArray());
+                route.DurationSeconds)).ToArray(), plan.Strategy, plan.ServiceSecondsPerStop);
 }

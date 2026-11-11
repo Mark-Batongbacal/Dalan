@@ -2,6 +2,11 @@
 
 public sealed class DispatchReviewViewModel
 {
+    public Dalan.Contracts.Dispatch.DispatchStrategy Strategy { get; set; }
+        = Dalan.Contracts.Dispatch.DispatchStrategy.MinimumTotalTravelTime;
+    public DispatchStrategyInput Settings { get; set; } = new();
+    public long? RotationVersion { get; set; }
+    public Dalan.Contracts.Dispatch.DispatchPlanMetrics? Metrics { get; set; }
     public List<DispatchReviewVehicle> Vehicles { get; set; } = [];
     public List<DispatchReviewStop> Stops { get; set; } = [];
     public List<DispatchReviewVersion> Versions { get; set; } = [];

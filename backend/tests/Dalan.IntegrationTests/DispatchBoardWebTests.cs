@@ -3,6 +3,8 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Dalan.Application.Deliveries;
 using Dalan.Application.Dispatch;
+using Dalan.Application.Routing;
+using Dalan.Contracts.Dispatch;
 using Dalan.Domain.Dispatch;
 using Dalan.Web.Controllers;
 using Dalan.Web.Models;
@@ -24,6 +26,110 @@ namespace Dalan.IntegrationTests;
 
 public sealed class DispatchBoardWebTests
 {
+    [Fact]
+    public async Task Opening_selector_does_not_calculate_a_preview()
+    {
+        var service = new RecordingDispatchService();
+        using var factory = CreateFactory(service);
+        using var client = CreateClient(factory, "Dispatcher");
+        using var response = await client.GetAsync("/DispatchBoard");
+
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Optimization strategy", html);
+        Assert.Contains("default policy", html);
+        Assert.Null(service.LastPreview);
+    }
+
+    [Theory]
+    [InlineData(DispatchStrategy.MinimumTotalTravelTime)]
+    [InlineData(DispatchStrategy.WorkloadEquity)]
+    [InlineData(DispatchStrategy.WarehouseClusterRotation)]
+    [InlineData(DispatchStrategy.EarliestFleetCompletion)]
+    public async Task Preview_review_and_confirm_carry_strategy_and_review_recomputes(DispatchStrategy strategy)
+    {
+        var service = new RecordingDispatchService();
+        var controller = CreateController(service);
+        var board = new DispatchBoardViewModel
+        {
+            Strategy = strategy,
+            Settings = new() { ServiceSecondsPerStop = 75, WarehouseLatitude = 14.6, WarehouseLongitude = 121 },
+            Vehicles = [new() { Id = service.VehicleId, Selected = true, StartLatitude = 14.6, StartLongitude = 121 }],
+            Deliveries = [new() { Id = service.DeliveryId, Selected = true }]
+        };
+
+        await controller.Index(board, CancellationToken.None);
+        Assert.NotNull(board.Preview);
+        Assert.Equal(board.Strategy, service.LastPreview!.Strategy);
+        var result = Assert.IsType<ViewResult>(await controller.Review(board, CancellationToken.None));
+        var review = Assert.IsType<DispatchReviewViewModel>(result.Model);
+        Assert.Equal(2, service.PreviewCalls);
+        Assert.Equal(board.Strategy, review.Strategy);
+        Assert.Equal(75, review.Settings.ServiceSecondsPerStop);
+        Assert.Equal(17, review.RotationVersion);
+        await controller.Confirm(review, CancellationToken.None);
+        Assert.Equal(review.Strategy, service.LastConfirm!.Strategy);
+        Assert.Equal(75, service.LastConfirm.Settings!.ServiceSecondsPerStop);
+        Assert.Equal(17, service.LastConfirm.RotationVersion);
+    }
+
+    [Fact]
+    public async Task Invalid_bound_strategy_cannot_fall_back_to_default()
+    {
+        var service = new RecordingDispatchService();
+        var controller = CreateController(service);
+        controller.ModelState.AddModelError("Strategy", "Invalid value");
+        var board = new DispatchBoardViewModel();
+        await controller.Index(board, CancellationToken.None);
+        await controller.Review(board, CancellationToken.None);
+        await controller.Confirm(new DispatchReviewViewModel(), CancellationToken.None);
+        Assert.Null(service.LastPreview);
+        Assert.Null(service.LastConfirm);
+    }
+
+    [Fact]
+    public async Task Metadata_suggestion_does_not_execute_preview_or_change_selection()
+    {
+        var service = new RecordingDispatchService();
+        var controller = CreateController(service);
+        var board = new DispatchBoardViewModel
+        {
+            Strategy = DispatchStrategy.WorkloadEquity,
+            Vehicles = [new() { Id = service.VehicleId, Selected = true }],
+            Deliveries = [new() { Id = service.DeliveryId, Selected = true }]
+        };
+        var view = Assert.IsType<ViewResult>(await controller.SuggestStrategy(board, CancellationToken.None));
+        Assert.Equal("Index", view.ViewName);
+        Assert.NotNull(board.Advice);
+        Assert.Equal(DispatchStrategy.WorkloadEquity, board.Strategy);
+        Assert.Null(service.LastPreview);
+        Assert.Null(service.LastConfirm);
+    }
+
+    private sealed class RecordingDispatchService : IDispatchService
+    {
+        public Guid VehicleId { get; } = Guid.NewGuid();
+        public Guid DeliveryId { get; } = Guid.NewGuid();
+        public DispatchPreviewRequest? LastPreview { get; private set; }
+        public DispatchConfirmRequest? LastConfirm { get; private set; }
+        public int PreviewCalls { get; private set; }
+        public Task<DispatchPreviewResult> PreviewAsync(DispatchPreviewRequest request, CancellationToken cancellationToken = default)
+        {
+            LastPreview = request;
+            PreviewCalls++;
+            return Task.FromResult(new DispatchPreviewResult(
+                [new(VehicleId, Guid.NewGuid(), new GeoPoint(14.6, 121),
+                    [new(DeliveryId, DispatchStopKind.Pickup, new GeoPoint(14.6, 121)),
+                     new(DeliveryId, DispatchStopKind.Dropoff, new GeoPoint(14.7, 121))], 1000, 120)],
+                [], [new(DeliveryId, [1, 2, 3])], request.Strategy, RotationVersion: 17));
+        }
+        public Task<DispatchPlan?> ConfirmAsync(DispatchConfirmRequest request, CancellationToken cancellationToken = default)
+        {
+            LastConfirm = request;
+            return Task.FromResult<DispatchPlan?>(null);
+        }
+    }
+
     [Theory]
     [InlineData("/Deliveries/Create", null, HttpStatusCode.Unauthorized)]
     [InlineData("/Deliveries/Create", "Admin", HttpStatusCode.Forbidden)]
@@ -125,13 +231,17 @@ public sealed class DispatchBoardWebTests
         Assert.Empty(model.Versions);
     }
 
-    private static DispatchBoardController CreateController()
+    private static DispatchBoardController CreateController(RecordingDispatchService? dispatch = null)
         => new(
-            new FakeDeliveryService(),
+            new FakeDeliveryService { Items = dispatch is null ? [] :
+                [new(dispatch.DeliveryId, "Recipient", "Warehouse", 14.6, 121, "Dropoff", 14.7, 121,
+                    null, null, null, null, Dalan.Domain.Deliveries.DeliveryStatus.Pending,
+                    DateTimeOffset.UtcNow, null, null, null, null, null)] },
             new FakeDriverService(),
-            new FakeVehicleService(),
+            new FakeVehicleService { Items = dispatch is null ? [] : [new(dispatch.VehicleId, "TEST")] },
             new FakeDispatchPlanReader(),
-            new ServiceCollection().BuildServiceProvider());
+            dispatch is null ? new ServiceCollection().BuildServiceProvider()
+                : new ServiceCollection().AddSingleton<IDispatchService>(dispatch).BuildServiceProvider());
 
     private sealed class FakeDispatchPlanReader : IDispatchPlanReader
     {
@@ -140,7 +250,7 @@ public sealed class DispatchBoardWebTests
             => Task.FromResult<DispatchPlan?>(null);
     }
 
-    private static WebApplicationFactory<WebAssemblyMarker> CreateFactory()
+    private static WebApplicationFactory<WebAssemblyMarker> CreateFactory(IDispatchService? dispatch = null)
         => new WebApplicationFactory<WebAssemblyMarker>()
             .WithWebHostBuilder(builder =>
             {
@@ -151,6 +261,11 @@ public sealed class DispatchBoardWebTests
 
                 builder.ConfigureTestServices(services =>
                 {
+                    if (dispatch is not null)
+                    {
+                        services.RemoveAll<IDispatchService>();
+                        services.AddSingleton(dispatch);
+                    }
                     services.RemoveAll<IDeliveryService>();
                     services.RemoveAll<IVehicleService>();
                     services.RemoveAll<IDriverService>();
@@ -183,9 +298,10 @@ public sealed class DispatchBoardWebTests
 
     private sealed class FakeDeliveryService : IDeliveryService
     {
+        public IReadOnlyList<DeliveryDetails> Items { get; init; } = [];
         public Task<IReadOnlyList<DeliveryDetails>> ListAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<DeliveryDetails>>([]);
+            => Task.FromResult(Items);
 
         public Task<DeliveryDetails?> GetByIdAsync(
             Guid id, CancellationToken cancellationToken = default)
@@ -243,9 +359,10 @@ public sealed class DispatchBoardWebTests
 
     private sealed class FakeVehicleService : IVehicleService
     {
+        public IReadOnlyList<VehicleDetails> Items { get; init; } = [];
         public Task<IReadOnlyList<VehicleDetails>> ListAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<VehicleDetails>>([]);
+            => Task.FromResult(Items);
 
         public Task<VehicleDetails?> GetByIdAsync(
             Guid id, CancellationToken cancellationToken = default)

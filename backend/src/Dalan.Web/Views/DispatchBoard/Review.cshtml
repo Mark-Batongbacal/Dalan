@@ -19,6 +19,15 @@
 
 <div class="content-card">
     <form asp-action="Confirm" method="post">
+        <input asp-for="Strategy" type="hidden" />
+        <input asp-for="Settings.ServiceSecondsPerStop" type="hidden" />
+        <input asp-for="Settings.MaxFleetTravelSeconds" type="hidden" />
+        <input asp-for="Settings.WarehouseLatitude" type="hidden" />
+        <input asp-for="Settings.WarehouseLongitude" type="hidden" />
+        <input asp-for="RotationVersion" type="hidden" />
+        <p>Strategy: @DispatchStrategyInput.Label(Model.Strategy). Reviewed stops are validated again on confirmation.</p>
+        <p>Handling assumption: @Model.Settings.ServiceSecondsPerStop seconds per stop.
+            Editing routes may change equity and completion estimates.</p>
         @for (var i = 0; i < Model.Vehicles.Count; i++)
         {
             <input asp-for="Vehicles[i].VehicleId" type="hidden" />
