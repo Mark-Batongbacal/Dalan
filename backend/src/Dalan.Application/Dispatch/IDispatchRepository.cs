@@ -13,6 +13,7 @@ public sealed record DispatchCandidates(
 
 public interface IDispatchRepository
 {
+    Task<DispatchRotation> ReadRotationAsync(string warehouseKey, CancellationToken cancellationToken = default);
     Task<DispatchCandidates> ReadCandidatesAsync(
         IReadOnlyList<Guid> deliveryIds,
         IReadOnlyList<Guid> vehicleIds,
@@ -26,4 +27,17 @@ public interface IDispatchRepository
     Task<DispatchPlan?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default);
+}
+
+public sealed record DispatchRotation(long Version, Guid? LastFirstDriverId)
+{
+    // Stable identity order: skip absent riders; newcomers join by ID. A removed cursor
+    // remains an ordering boundary so absence never resets the priority to the first rider.
+    public Guid[] OrderRiders(IEnumerable<Guid> available)
+    {
+        var ordered = available.Distinct().Order().ToArray();
+        if (LastFirstDriverId is not Guid last) return ordered;
+        return ordered.Where(id => id.CompareTo(last) > 0)
+            .Concat(ordered.Where(id => id.CompareTo(last) <= 0)).ToArray();
+    }
 }

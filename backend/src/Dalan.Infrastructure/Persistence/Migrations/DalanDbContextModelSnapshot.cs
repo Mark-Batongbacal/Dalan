@@ -149,6 +149,29 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("ConfirmedAtUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<double?>("MaxFleetTravelSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<Guid?>("RotationFirstDriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("RotationVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<double>("ServiceSecondsPerStop")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Strategy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("MinimumTotalTravelTime");
+
+                    b.Property<string>("WarehouseKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.HasKey("Id");
 
                     b.ToTable("DispatchPlans", (string)null);
@@ -310,6 +333,24 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Vehicles", (string)null);
+                });
+
+            modelBuilder.Entity("Dalan.Infrastructure.Persistence.DispatchRotationState", b =>
+                {
+                    b.Property<string>("WarehouseKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid?>("LastFirstDriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.HasKey("WarehouseKey");
+
+                    b.ToTable("DispatchRotations");
                 });
 
             modelBuilder.Entity("Dalan.Infrastructure.Persistence.DriverAccount", b =>

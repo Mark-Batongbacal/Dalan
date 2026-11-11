@@ -8,7 +8,9 @@ public sealed record DispatchVehicleStartRequest(
 
 public sealed record PreviewDispatchRequest(
     IReadOnlyList<DispatchVehicleStartRequest>? Vehicles,
-    IReadOnlyList<Guid>? DeliveryIds);
+    IReadOnlyList<Guid>? DeliveryIds,
+    DispatchStrategy Strategy = DispatchStrategy.MinimumTotalTravelTime,
+    DispatchStrategySettings? Settings = null);
 
 public sealed record DispatchReviewedStopRequest(
     Guid DeliveryId,
@@ -25,7 +27,10 @@ public sealed record DispatchDeliveryVersionRequest(
 public sealed record ConfirmDispatchRequest(
     IReadOnlyList<DispatchVehicleStartRequest>? Vehicles,
     IReadOnlyList<DispatchReviewedRouteRequest>? Routes,
-    IReadOnlyList<DispatchDeliveryVersionRequest>? DeliveryVersions);
+    IReadOnlyList<DispatchDeliveryVersionRequest>? DeliveryVersions,
+    DispatchStrategy Strategy = DispatchStrategy.MinimumTotalTravelTime,
+    DispatchStrategySettings? Settings = null,
+    long? RotationVersion = null);
 
 public sealed record DispatchStopResponse(
     Guid DeliveryId,
@@ -44,9 +49,14 @@ public sealed record DispatchRouteResponse(
 public sealed record DispatchPreviewResponse(
     IReadOnlyList<DispatchRouteResponse> Routes,
     IReadOnlyList<Guid> UnassignedDeliveryIds,
-    IReadOnlyList<DispatchDeliveryVersionRequest> DeliveryVersions);
+    IReadOnlyList<DispatchDeliveryVersionRequest> DeliveryVersions,
+    DispatchStrategy Strategy = DispatchStrategy.MinimumTotalTravelTime,
+    DispatchPlanMetrics? Metrics = null,
+    long? RotationVersion = null);
 
 public sealed record DispatchPlanResponse(
     Guid Id,
     DateTimeOffset ConfirmedAtUtc,
-    IReadOnlyList<DispatchRouteResponse> Routes);
+    IReadOnlyList<DispatchRouteResponse> Routes,
+    string Strategy = "MinimumTotalTravelTime",
+    double ServiceSecondsPerStop = 0);

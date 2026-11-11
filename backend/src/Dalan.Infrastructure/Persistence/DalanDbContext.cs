@@ -17,6 +17,7 @@ public sealed class DalanDbContext(DbContextOptions<DalanDbContext> options) : I
     public DbSet<DispatchPlan> DispatchPlans => Set<DispatchPlan>();
     public DbSet<DispatchRoute> DispatchRoutes => Set<DispatchRoute>();
     public DbSet<DispatchStop> DispatchStops => Set<DispatchStop>();
+    public DbSet<DispatchRotationState> DispatchRotations => Set<DispatchRotationState>();
 
     public DbSet<DriverAccount> DriverAccounts => Set<DriverAccount>();
     public DbSet<DriverEventReceipt> DriverEventReceipts => Set<DriverEventReceipt>();
@@ -25,6 +26,12 @@ public sealed class DalanDbContext(DbContextOptions<DalanDbContext> options) : I
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<DispatchRotationState>(rotation =>
+        {
+            rotation.HasKey(x => x.WarehouseKey);
+            rotation.Property(x => x.WarehouseKey).HasMaxLength(64);
+            rotation.Property(x => x.Version).IsConcurrencyToken();
+        });
         modelBuilder.Entity<DriverAccount>(account =>
         {
             account.HasKey(x => x.DriverId);

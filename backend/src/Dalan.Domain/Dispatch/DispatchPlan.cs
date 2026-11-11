@@ -8,11 +8,18 @@ public sealed class DispatchPlan
 
     public Guid Id { get; private set; }
     public DateTimeOffset ConfirmedAtUtc { get; private set; }
+    public string Strategy { get; private set; } = "MinimumTotalTravelTime";
+    public double ServiceSecondsPerStop { get; private set; }
+    public double? MaxFleetTravelSeconds { get; private set; }
+    public string? WarehouseKey { get; private set; }
+    public long? RotationVersion { get; private set; }
+    public Guid? RotationFirstDriverId { get; private set; }
     public List<DispatchRoute> Routes { get; private set; } = [];
 
     public static DispatchPlan Create(
         IReadOnlyList<DispatchRoute> routes,
-        DateTimeOffset confirmedAtUtc)
+        DateTimeOffset confirmedAtUtc,
+        DispatchOptimizationInfo? optimization = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
 
@@ -41,14 +48,35 @@ public sealed class DispatchPlan
         if (confirmedAtUtc == default)
             throw new ArgumentException("Confirmation time is required.", nameof(confirmedAtUtc));
 
+        optimization ??= new("MinimumTotalTravelTime");
+        if (optimization.Strategy is not ("MinimumTotalTravelTime" or "WorkloadEquity" or "WarehouseClusterRotation" or "EarliestFleetCompletion")
+            || !double.IsFinite(optimization.ServiceSecondsPerStop) || optimization.ServiceSecondsPerStop is < 0 or > 3600
+            || optimization.MaxFleetTravelSeconds is double budget && (!double.IsFinite(budget) || budget < 0))
+            throw new ArgumentException("Dispatch optimization settings are invalid.");
+        if (optimization.Strategy == "WarehouseClusterRotation"
+            && (string.IsNullOrWhiteSpace(optimization.WarehouseKey) || optimization.WarehouseKey.Length > 64
+                || optimization.RotationVersion is not >= 0 || optimization.RotationFirstDriverId is not Guid first
+                || first == Guid.Empty || routes.All(route => route.DriverId != first)))
+            throw new ArgumentException("Warehouse rotation requires its reviewed version and eligible first rider.");
+
         return new DispatchPlan
         {
             Id = Guid.NewGuid(),
             ConfirmedAtUtc = confirmedAtUtc.ToUniversalTime(),
+            Strategy = optimization.Strategy,
+            ServiceSecondsPerStop = optimization.ServiceSecondsPerStop,
+            MaxFleetTravelSeconds = optimization.MaxFleetTravelSeconds,
+            WarehouseKey = optimization.WarehouseKey,
+            RotationVersion = optimization.RotationVersion,
+            RotationFirstDriverId = optimization.RotationFirstDriverId,
             Routes = routes.ToList()
         };
     }
 }
+
+public sealed record DispatchOptimizationInfo(
+    string Strategy, double ServiceSecondsPerStop = 0, double? MaxFleetTravelSeconds = null,
+    string? WarehouseKey = null, long? RotationVersion = null, Guid? RotationFirstDriverId = null);
 
 public sealed class DispatchRoute
 {

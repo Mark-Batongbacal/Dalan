@@ -15,6 +15,8 @@ public sealed class DispatchPlanConfiguration
         builder.ToTable("DispatchPlans");
         builder.HasKey(plan => plan.Id);
         builder.Property(plan => plan.Id).ValueGeneratedNever();
+        builder.Property(plan => plan.Strategy).HasMaxLength(32).HasDefaultValue("MinimumTotalTravelTime");
+        builder.Property(plan => plan.WarehouseKey).HasMaxLength(64);
 
         builder.HasMany(plan => plan.Routes)
             .WithOne()

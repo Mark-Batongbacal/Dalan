@@ -180,6 +180,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
 
     override fun onCleared() {
         api.close()
+        database.close()
         super.onCleared()
     }
 }

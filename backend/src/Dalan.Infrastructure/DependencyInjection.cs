@@ -38,6 +38,12 @@ public static class DependencyInjection
                 || endpoint.Scheme is not ("http" or "https"))
                 throw new InvalidOperationException("Valhalla:BaseUrl must be an absolute HTTP(S) URL.");
 
+            var maxCellsValue = configuration["Valhalla:MaxMatrixCells"];
+            var maxCells = 100;
+            if (maxCellsValue is not null && (!int.TryParse(maxCellsValue, out maxCells) || maxCells is < 1 or > 10000))
+                throw new InvalidOperationException("Valhalla:MaxMatrixCells must be 1–10000.");
+            services.AddSingleton(new ValhallaMatrixLimits(maxCells));
+
             services.AddHttpClient<IRoutingService, ValhallaRoutingService>(client =>
             {
                 client.BaseAddress = new Uri(endpoint.ToString().TrimEnd('/') + "/");
