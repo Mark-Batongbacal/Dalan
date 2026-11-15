@@ -386,8 +386,11 @@ public sealed class DispatchBoardController(
         model.VehicleNames = (await vehicles.ListAsync(cancellationToken))
             .ToDictionary(x => x.Id, x => x.RegistrationNumber);
 
-        model.DeliveryNames = (await deliveries.ListAsync(cancellationToken))
-            .ToDictionary(x => x.Id, x => x.RecipientName);
+        var currentDeliveries = await deliveries.ListAsync(cancellationToken);
+        model.DeliveryNames = currentDeliveries.ToDictionary(x => x.Id, x => x.RecipientName);
+        model.DeliveryLocations = currentDeliveries.ToDictionary(x => x.Id,
+            x => new PlanningMapDelivery(new GeoPoint(x.PickupLatitude, x.PickupLongitude),
+                new GeoPoint(x.DropoffLatitude, x.DropoffLongitude)));
     }
 
     private async Task PopulateChoices(
@@ -427,6 +430,10 @@ public sealed class DispatchBoardController(
                 RecipientName = x.RecipientName,
                 PickupAddress = x.PickupAddress,
                 DropoffAddress = x.DropoffAddress,
+                PickupLatitude = x.PickupLatitude,
+                PickupLongitude = x.PickupLongitude,
+                DropoffLatitude = x.DropoffLatitude,
+                DropoffLongitude = x.DropoffLongitude,
                 Status = x.Status.ToString(),
                 Selected = submittedDeliveries.Contains(x.Id)
             }).ToList();

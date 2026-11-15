@@ -7,6 +7,7 @@
         x => x.Id, x => x.RegistrationNumber);
 }
 
+@section Scripts { <partial name="_PlanningMapAssets" /> }
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
     <h1>Dispatch board</h1>
@@ -19,6 +20,7 @@
 }
 
 <form asp-action="Index" method="post">
+    <partial name="_PlanningMap" model="PlanningMapViewModel.ForBoard(Model)" />
     <div class="content-card mb-4">
         <label asp-for="Strategy" class="form-label">Optimization strategy</label>
         <select asp-for="Strategy" class="form-select" aria-describedby="strategy-help">

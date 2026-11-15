@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.Configure<Dalan.Web.Models.PlanningMapOptions>(builder.Configuration.GetSection("PlanningMap"));
 builder.Services.AddScoped<IVehicleService, VehicleService>();
 builder.Services.AddScoped<IDriverService, DriverService>();
 builder.Services.AddSingleton(TimeProvider.System);
