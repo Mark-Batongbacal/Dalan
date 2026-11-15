@@ -3,6 +3,7 @@
     ViewData["Title"] = "Review dispatch";
 }
 
+@section Scripts { <partial name="_PlanningMapAssets" /> }
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
     <h1>Review dispatch</h1>
@@ -18,6 +19,7 @@
 }
 
 <div class="content-card">
+    <partial name="_PlanningMap" model="PlanningMapViewModel.ForReview(Model)" />
     <form asp-action="Confirm" method="post">
         <input asp-for="Strategy" type="hidden" />
         <input asp-for="Settings.ServiceSecondsPerStop" type="hidden" />

@@ -31,6 +31,10 @@ public sealed class DispatchDeliveryInput
     public string RecipientName { get; set; } = string.Empty;
     public string PickupAddress { get; set; } = string.Empty;
     public string DropoffAddress { get; set; } = string.Empty;
+    public double PickupLatitude { get; set; }
+    public double PickupLongitude { get; set; }
+    public double DropoffLatitude { get; set; }
+    public double DropoffLongitude { get; set; }
     public string Status { get; set; } = string.Empty;
     public bool Selected { get; set; }
 }

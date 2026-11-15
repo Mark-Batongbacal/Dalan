@@ -31,6 +31,18 @@ public static class DependencyInjection
         services.AddScoped<IDriverTasks, DriverTasksRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
+        var photonUrl = configuration["Geocoding:PhotonBaseUrl"];
+        if (!string.IsNullOrWhiteSpace(photonUrl))
+        {
+            if (!Uri.TryCreate(photonUrl, UriKind.Absolute, out var endpoint)
+                || endpoint.Scheme is not ("http" or "https"))
+                throw new InvalidOperationException("Geocoding:PhotonBaseUrl must be an absolute HTTP(S) URL.");
+            services.AddHttpClient<IPlaceSearchService, PhotonPlaceSearchService>(client =>
+            {
+                client.BaseAddress = new Uri(endpoint.ToString().TrimEnd('/') + "/");
+                client.Timeout = TimeSpan.FromSeconds(8);
+            });
+        }
         var valhallaUrl = configuration["Valhalla:BaseUrl"];
         if (!string.IsNullOrWhiteSpace(valhallaUrl))
         {
