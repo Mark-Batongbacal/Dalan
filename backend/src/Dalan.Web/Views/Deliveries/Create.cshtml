@@ -9,9 +9,10 @@
     <p>Enter the recipient and pickup and drop-off locations.</p>
 </div>
 
-<div class="content-card form-panel">
+<div class="content-card form-panel-wide">
     <form asp-action="Create" method="post">
         <div asp-validation-summary="All" class="text-danger"></div>
+        <partial name="_PlanningMap" model="PlanningMapViewModel.ForDelivery()" />
 
         <div class="mb-3">
             <label asp-for="RecipientName" class="form-label"></label>
@@ -74,5 +75,6 @@
 </div>
 
 @section Scripts {
+    <partial name="_PlanningMapAssets" />
     <partial name="_ValidationScriptsPartial" />
 }

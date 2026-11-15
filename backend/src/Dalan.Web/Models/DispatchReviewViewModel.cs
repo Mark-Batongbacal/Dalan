@@ -14,6 +14,7 @@ public sealed class DispatchReviewViewModel
     // Filled from current records for display, never trusted from the form.
     public Dictionary<Guid, string> VehicleNames { get; set; } = [];
     public Dictionary<Guid, string> DeliveryNames { get; set; } = [];
+    public Dictionary<Guid, PlanningMapDelivery> DeliveryLocations { get; set; } = [];
 
     public string? Error { get; set; }
 }

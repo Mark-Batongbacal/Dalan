@@ -15,6 +15,8 @@
     This is the approved route. Delivery statuses below reflect their current state.
 </div>
 
+<partial name="_PlanningMap" model="PlanningMapViewModel.ForPlan(Model)" />
+@section Scripts { <partial name="_PlanningMapAssets" /> }
 @foreach (var route in Model.Plan.Routes)
 {
     <div class="content-card mb-4">
