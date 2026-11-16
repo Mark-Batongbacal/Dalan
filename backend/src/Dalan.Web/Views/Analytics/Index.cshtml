@@ -1,0 +1,141 @@
+@using System.Globalization
+@model AnalyticsViewModel
+@{
+    ViewData["Title"] = "Delivery & fleet analytics";
+}
+<link rel="stylesheet" href="~/css/analytics.css" asp-append-version="true" />
+<div class="page-heading">
+    <span class="page-kicker">Operational reporting</span>
+    <h1>Delivery &amp; fleet analytics</h1>
+    <p>Explore delivery outcomes and confirmed fleet activity with a clear reporting period.</p>
+</div>
+
+<section class="content-card analytics-filter mb-4" aria-label="Reporting period">
+    <form method="get" asp-action="Index">
+        <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        <div class="analytics-filter-fields">
+            <div>
+                <label asp-for="From" class="form-label">From date (UTC)</label>
+                <input asp-for="From" asp-format="{0:yyyy-MM-dd}" class="form-control" type="date" required />
+            </div>
+            <div>
+                <label asp-for="To" class="form-label">Through date (UTC)</label>
+                <input asp-for="To" asp-format="{0:yyyy-MM-dd}" class="form-control" type="date" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Apply period</button>
+        </div>
+        <p class="analytics-help mb-0 mt-2">Both dates are inclusive, in UTC. Select up to 366 days. The default is the last 30 UTC calendar days.</p>
+    </form>
+</section>
+
+@if (Model.Error is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.Error</div>
+}
+@if (Model.Report is { } report)
+{
+    var delivery = report.Deliveries;
+    var fleet = report.Fleet;
+    var peak = Math.Max(1, report.DailyIntake.Max(day => day.Count));
+    <section aria-labelledby="delivery-outcomes" data-analytics-report>
+        <div class="analytics-section-heading">
+            <div><h2 class="h5" id="delivery-outcomes">Delivery outcomes</h2>
+                <p class="analytics-help">Current status of deliveries created in the selected period, through the report generation time.</p></div>
+            <span class="analytics-help">Generated @report.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</span>
+        </div>
+        <div class="analytics-metrics mb-4">
+            <div class="content-card"><span class="analytics-label">Open deliveries</span><strong data-metric="open">@delivery.Open.ToString("N0")</strong><span class="analytics-help">Pending, assigned, or picked up</span></div>
+            <div class="content-card"><span class="analytics-label">Completed</span><strong data-metric="completed">@delivery.Delivered.ToString("N0")</strong><span class="analytics-help">Of @delivery.Total.ToString("N0") deliveries created</span></div>
+            <div class="content-card"><span class="analytics-label">Overdue now</span><strong data-metric="overdue">@delivery.Overdue.ToString("N0")</strong><span class="analytics-help">Open with a deadline before generation time</span></div>
+            <div class="content-card"><span class="analytics-label">Average fulfilment</span><strong data-metric="duration">@Duration(delivery.AverageFulfilmentSeconds)</strong><span class="analytics-help">Created to delivered; completed cohort only</span></div>
+        </div>
+        @if (delivery.Total == 0)
+        {
+            <div class="alert alert-info" role="status">No deliveries were created in this period through the report generation time. Fleet activity is shown separately below.</div>
+        }
+        <div class="analytics-grid mb-4">
+            <div class="content-card">
+                <h3 class="h6">Current status breakdown</h3>
+                <table class="table" aria-label="Current delivery status">
+                    <thead><tr><th scope="col">Status</th><th scope="col" class="text-end">Deliveries</th></tr></thead>
+                    <tbody>
+                        <tr><th scope="row">Pending</th><td class="text-end">@delivery.Pending.ToString("N0")</td></tr>
+                        <tr><th scope="row">Assigned</th><td class="text-end">@delivery.Assigned.ToString("N0")</td></tr>
+                        <tr><th scope="row">Picked up</th><td class="text-end">@delivery.PickedUp.ToString("N0")</td></tr>
+                        <tr><th scope="row">Delivered</th><td class="text-end">@delivery.Delivered.ToString("N0")</td></tr>
+                        <tr><th scope="row">Cancelled</th><td class="text-end">@delivery.Cancelled.ToString("N0")</td></tr>
+                    </tbody>
+                </table>
+                <p class="mt-3 mb-1"><strong>On time: <span data-metric="on-time">@Percent(report.OnTimePercent)</span></strong></p>
+                <p class="analytics-help mb-0">@delivery.LateDelivered.ToString("N0") late of @delivery.DeliveredWithDeadline.ToString("N0") completed deliveries with a deadline. Completions exactly at the deadline are on time. Missing deadlines are excluded.</p>
+            </div>
+            <div class="content-card">
+                <h3 class="h6">Daily delivery intake</h3>
+                <p class="analytics-help">Deliveries created per UTC day, including days with no intake.</p>
+                <div class="analytics-chart-scroll" tabindex="0" aria-label="Scrollable delivery intake chart; exact values follow in the daily counts table">
+                    <div class="analytics-chart" aria-hidden="true">
+                        @foreach (var day in report.DailyIntake)
+                        {
+                            var height = (100d * day.Count / peak).ToString("0.##", CultureInfo.InvariantCulture);
+                            <div class="analytics-chart-column" title="@day.Day.ToString("yyyy-MM-dd"): @day.Count">
+                                <span style="height: @(height)%"></span>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="analytics-chart-labels analytics-help"><span>@report.Period.From.ToString("yyyy-MM-dd")</span><span>@report.Period.To.ToString("yyyy-MM-dd")</span></div>
+                <details class="mt-3">
+                    <summary>View daily counts</summary>
+                    <div class="analytics-daily-table" tabindex="0" aria-label="Daily counts">
+                        <table class="table">
+                            <thead><tr><th scope="col">UTC date</th><th scope="col" class="text-end">Created</th></tr></thead>
+                            <tbody>
+                                @foreach (var day in report.DailyIntake)
+                                { <tr><th scope="row">@day.Day.ToString("yyyy-MM-dd")</th><td class="text-end">@day.Count.ToString("N0")</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-card" aria-labelledby="fleet-activity">
+        <h2 class="h5" id="fleet-activity">Confirmed fleet activity</h2>
+        <p class="analytics-help">Plans confirmed in the selected period, through generation time. Participation uses today's registered fleet as its denominator; it is not historical availability or time-based utilization.</p>
+        <dl class="analytics-fleet-summary">
+            <div><dt>Fleet participation</dt><dd data-metric="participation">@Percent(report.FleetParticipationPercent)</dd><span class="analytics-help">@fleet.DispatchedVehicles of @fleet.TotalVehicles current vehicles</span></div>
+            <div><dt>Available now</dt><dd>@fleet.AvailableVehicles.ToString("N0")</dd><span class="analytics-help">Current availability, independent of the period</span></div>
+            <div><dt>Confirmed plans / routes</dt><dd>@fleet.ConfirmedPlans.ToString("N0") / @fleet.ConfirmedRoutes.ToString("N0")</dd></div>
+            <div><dt>Planned road distance</dt><dd>@((fleet.PlannedDistanceMeters / 1000).ToString("N1")) km</dd><span class="analytics-help">@Duration(fleet.PlannedDrivingSeconds) estimated driving</span></div>
+        </dl>
+        @if (fleet.TotalVehicles == 0)
+        {
+            <p class="analytics-help" role="status">No vehicles are registered. Fleet participation has no denominator yet.</p>
+        }
+        else
+        {
+            @if (fleet.ConfirmedRoutes == 0)
+            { <p class="analytics-help" role="status">No confirmed routes in this period. Registered vehicles are still shown.</p> }
+            <p class="analytics-help">Up to 50 current vehicles, ranked by confirmed route count. Distances and times are saved planning estimates, not measured driving. Scroll the table horizontally on smaller screens.</p>
+            <div class="table-responsive analytics-vehicle-table" tabindex="0" role="region" aria-label="Scrollable vehicle activity table">
+                <table class="table align-middle" aria-label="Vehicle dispatch participation">
+                    <thead><tr><th scope="col">Vehicle</th><th scope="col">Availability now</th><th scope="col" class="text-end">Confirmed routes</th><th scope="col" class="text-end">Planned distance</th><th scope="col" class="text-end">Planned driving</th></tr></thead>
+                    <tbody>
+                        @foreach (var vehicle in report.Vehicles)
+                        {
+                            <tr><th scope="row">@vehicle.RegistrationNumber</th><td>@vehicle.Availability</td><td class="text-end">@vehicle.ConfirmedRoutes.ToString("N0")</td><td class="text-end">@((vehicle.PlannedDistanceMeters / 1000).ToString("N1")) km</td><td class="text-end">@Duration(vehicle.PlannedDrivingSeconds)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+@functions {
+    private static string Percent(double? value) => value is null ? "—" : value.Value.ToString("N1") + "%";
+    private static string Duration(double? seconds) => seconds is null ? "—" :
+        seconds >= 86400 ? (seconds.Value / 86400).ToString("N1") + " days" :
+        seconds >= 3600 ? (seconds.Value / 3600).ToString("N1") + " hr" :
+        (seconds.Value / 60).ToString("N1") + " min";
+}

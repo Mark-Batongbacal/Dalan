@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<IDriverTasks, DriverTasksRepository>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
+        services.AddScoped<Dalan.Application.Analytics.IAnalyticsRepository, AnalyticsRepository>();
         var photonUrl = configuration["Geocoding:PhotonBaseUrl"];
         if (!string.IsNullOrWhiteSpace(photonUrl))
         {
