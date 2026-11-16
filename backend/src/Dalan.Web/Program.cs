@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.EnvironmentName, builder.Environment.ContentRootPath);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
@@ -42,7 +43,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
-var initialAdminPassword = Environment.GetEnvironmentVariable("DALAN_ADMIN_PASSWORD");
+var initialAdminPassword = builder.Configuration["DALAN_ADMIN_PASSWORD"];
 if (!string.IsNullOrWhiteSpace(initialAdminPassword))
 {
     const string email = "admin@dalan.local";
@@ -76,7 +77,7 @@ if (!string.IsNullOrWhiteSpace(initialAdminPassword))
         if (!assignment.Succeeded)
             throw new InvalidOperationException(string.Join("; ", assignment.Errors.Select(error => error.Description)));
 
-        app.Logger.LogInformation("Initial Admin account created. Remove DALAN_ADMIN_PASSWORD from the runtime environment.");
+        app.Logger.LogInformation("Initial Admin account created. Remove DALAN_ADMIN_PASSWORD from bootstrap configuration when no longer needed.");
     }
     else if (!await users.IsInRoleAsync(existing, "Admin"))
     {
