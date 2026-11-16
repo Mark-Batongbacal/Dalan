@@ -27,7 +27,10 @@ PHASES = [
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", required=True, help="Authorized adb serial")
-    parser.add_argument("--adb", default=shutil.which("adb") or str(Path.home() / "Android/Sdk/platform-tools/adb"))
+    sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    if not sdk:
+        sdk = str(Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Android/Sdk") if os.name == "nt" else str(Path.home() / "Android/Sdk")
+    parser.add_argument("--adb", default=shutil.which("adb") or str(Path(sdk) / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")))
     parser.add_argument("--skip-build", action="store_true", help="Requires existing isolated E2E APKs and built backend tools")
     args = parser.parse_args()
     sql = os.environ.get("DALAN_MOBILE_E2E_SQL")
@@ -59,7 +62,8 @@ def main():
         raise RuntimeError("Unlock the device and authorize USB debugging.")
     if not args.skip_build:
         run(["dotnet", "build", "backend/Dalan.sln", "--verbosity", "quiet"])
-        subprocess.run(["./gradlew", ":app:assembleDebug", ":app:assembleDebugAndroidTest",
+        gradle = str(ROOT / "mobile" / "gradlew.bat") if os.name == "nt" else "./gradlew"
+        subprocess.run([gradle, ":app:assembleDebug", ":app:assembleDebugAndroidTest",
             "-PdalanE2E=true", "-PdalanDriverDebugApiUrl=" + API_URL, "--console=plain"],
             check=True, cwd=ROOT / "mobile")
     run(adb + ["install", "--user", "0", "-r", str(ROOT / "mobile/app/build/outputs/apk/debug/app-debug.apk")])
