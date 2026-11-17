@@ -40,7 +40,7 @@ public sealed class DispatchPlansController(
                             vehicle.VehicleId,
                             new GeoPoint(
                                 vehicle.Start!.Latitude,
-                                vehicle.Start.Longitude))).ToArray(),
+                                vehicle.Start.Longitude), vehicle.ExistingWorkloadSeconds)).ToArray(),
                     request.DeliveryIds, request.Strategy, request.Settings),
                 cancellationToken);
 
@@ -56,7 +56,7 @@ public sealed class DispatchPlansController(
                             position,
                             Point(stop.Location))).ToArray(),
                     route.DistanceMeters,
-                    route.DurationSeconds)).ToArray(),
+                    route.DurationSeconds, route.ExistingWorkloadSeconds)).ToArray(),
                 result.UnassignedDeliveryIds,
                 result.DeliveryVersions.Select(version =>
                     new DispatchDeliveryVersionRequest(
@@ -123,7 +123,7 @@ public sealed class DispatchPlansController(
                             vehicle.VehicleId,
                             new GeoPoint(
                                 vehicle.Start!.Latitude,
-                                vehicle.Start.Longitude))).ToArray(),
+                                vehicle.Start.Longitude), vehicle.ExistingWorkloadSeconds)).ToArray(),
                     reviewedRoutes,
                     request.DeliveryVersions.Select(version =>
                         new DispatchDeliveryVersion(
@@ -222,5 +222,5 @@ public sealed class DispatchPlansController(
                             stop.Latitude,
                             stop.Longitude))).ToArray(),
                 route.DistanceMeters,
-                route.DurationSeconds)).ToArray(), plan.Strategy, plan.ServiceSecondsPerStop);
+                route.DurationSeconds, route.ExistingWorkloadSeconds)).ToArray(), plan.Strategy, plan.ServiceSecondsPerStop);
 }

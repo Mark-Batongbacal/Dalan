@@ -35,6 +35,8 @@
             <input asp-for="Vehicles[i].VehicleId" type="hidden" />
             <input asp-for="Vehicles[i].StartLatitude" type="hidden" />
             <input asp-for="Vehicles[i].StartLongitude" type="hidden" />
+            <input asp-for="Vehicles[i].ExistingWorkloadSeconds" type="hidden" />
+            <p>@Model.VehicleNames.GetValueOrDefault(Model.Vehicles[i].VehicleId, "Vehicle"): existing work estimate @Model.Vehicles[i].ExistingWorkloadSeconds.ToString("N0") seconds, outside this batch.</p>
         }
 
         @for (var i = 0; i < Model.Versions.Count; i++)

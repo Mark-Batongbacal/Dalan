@@ -98,7 +98,7 @@ public sealed class DispatchBoardController(
                         x.Id,
                         new GeoPoint(
                             x.StartLatitude!.Value,
-                            x.StartLongitude!.Value))).ToArray(),
+                            x.StartLongitude!.Value), x.ExistingWorkloadSeconds)).ToArray(),
                     selectedDeliveries.Select(x => x.Id).ToArray(), model.Strategy, model.Settings.ToContract()),
                 cancellationToken);
         }
@@ -156,7 +156,7 @@ public sealed class DispatchBoardController(
                         x.Id,
                         new GeoPoint(
                             x.StartLatitude!.Value,
-                            x.StartLongitude!.Value))).ToArray(),
+                            x.StartLongitude!.Value), x.ExistingWorkloadSeconds)).ToArray(),
                     selectedDeliveries.Select(x => x.Id).ToArray(), board.Strategy, board.Settings.ToContract()),
                 cancellationToken);
 
@@ -190,7 +190,8 @@ public sealed class DispatchBoardController(
                 {
                     VehicleId = x.Id,
                     StartLatitude = x.StartLatitude!.Value,
-                    StartLongitude = x.StartLongitude!.Value
+                    StartLongitude = x.StartLongitude!.Value,
+                    ExistingWorkloadSeconds = x.ExistingWorkloadSeconds
                 }).ToList(),
                 Stops = preview.Routes
                     .SelectMany(route => route.Stops.Select((stop, order) =>
@@ -288,7 +289,7 @@ public sealed class DispatchBoardController(
         {
             var starts = model.Vehicles.Select(x => new DispatchVehicleStart(
                 x.VehicleId,
-                new GeoPoint(x.StartLatitude, x.StartLongitude))).ToArray();
+                new GeoPoint(x.StartLatitude, x.StartLongitude), x.ExistingWorkloadSeconds)).ToArray();
 
             var routes = model.Vehicles.Select(vehicle => new DispatchReviewedRoute(
                 vehicle.VehicleId,
@@ -417,7 +418,8 @@ public sealed class DispatchBoardController(
                     RegistrationNumber = x.RegistrationNumber,
                     Selected = submitted?.Selected ?? false,
                     StartLatitude = submitted?.StartLatitude,
-                    StartLongitude = submitted?.StartLongitude
+                    StartLongitude = submitted?.StartLongitude,
+                    ExistingWorkloadSeconds = submitted?.ExistingWorkloadSeconds ?? 0
                 };
             }).ToList();
 

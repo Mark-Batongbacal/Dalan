@@ -24,6 +24,8 @@ public sealed class DispatchReviewVehicle
     public Guid VehicleId { get; set; }
     public double StartLatitude { get; set; }
     public double StartLongitude { get; set; }
+    [System.ComponentModel.DataAnnotations.Range(0, double.MaxValue)]
+    public double ExistingWorkloadSeconds { get; set; }
 }
 
 public sealed class DispatchReviewStop

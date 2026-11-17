@@ -83,7 +83,7 @@
             @for (var i = 0; i < Model.Vehicles.Count; i++)
             {
                 <div class="row g-3 align-items-end mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <input asp-for="Vehicles[i].Id" type="hidden" />
                         <div class="form-check">
                             <input asp-for="Vehicles[i].Selected"
@@ -94,17 +94,22 @@
                             </label>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label asp-for="Vehicles[i].StartLatitude"
                                class="form-label">Start latitude</label>
                         <input asp-for="Vehicles[i].StartLatitude"
                                class="form-control" type="number" step="any" />
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label asp-for="Vehicles[i].StartLongitude"
                                class="form-label">Start longitude</label>
                         <input asp-for="Vehicles[i].StartLongitude"
                                class="form-control" type="number" step="any" />
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="Vehicles[i].ExistingWorkloadSeconds" class="form-label">Existing work (seconds)</label>
+                        <input asp-for="Vehicles[i].ExistingWorkloadSeconds" class="form-control" type="number" min="0" step="any" />
+                        <span asp-validation-for="Vehicles[i].ExistingWorkloadSeconds" class="text-danger"></span>
                     </div>
                 </div>
             }
@@ -168,8 +173,10 @@
                 </h3>
                 <p>
                     Start: @route.Start.Latitude, @route.Start.Longitude<br />
-                    Estimated distance: @(route.DistanceMeters / 1000).ToString("N1") km;
-                    time: @(route.DurationSeconds / 60).ToString("N0") minutes
+                    Estimated distance: @((route.DistanceMeters / 1000).ToString("N1")) km;
+                    new driving time: @((route.DurationSeconds / 60).ToString("N0")) minutes<br />
+                    Existing work: @((route.ExistingWorkloadSeconds / 60).ToString("N1")) minutes;
+                    combined workload: @(((route.ExistingWorkloadSeconds + route.DurationSeconds + route.Stops.Count * Model.Settings.ServiceSecondsPerStop) / 60).ToString("N1")) minutes.
                     <br />Deliveries: @(route.Stops.Count / 2)
                 </p>
                 @if (route.Stops.Count == 0)
@@ -222,6 +229,7 @@
                            type="hidden" value="@Model.Vehicles[i].StartLatitude" />
                     <input name="Vehicles[@i].StartLongitude"
                            type="hidden" value="@Model.Vehicles[i].StartLongitude" />
+                    <input asp-for="Vehicles[i].ExistingWorkloadSeconds" type="hidden" />
                 }
                 @for (var i = 0; i < Model.Deliveries.Count; i++)
                 {
