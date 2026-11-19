@@ -179,6 +179,7 @@ public sealed class DriverExecutionTests(SqlServerFixture fixture)
         var records = await verify.OperationsSnapshots.Where(x => x.DayUtc == day).ToListAsync();
         Assert.Equal(3, records.Count);
         Assert.Contains(delivery.Id.ToString(), records.Single(x => x.Kind == "overdue-12").Data);
+        Assert.Contains(delivery.RecipientName, records.Single(x => x.Kind == "overdue-12").Data);
         Assert.Contains(vehicle.RegistrationNumber, records.Single(x => x.Kind == "maintenance").Data);
         Assert.Equal("[]", records.Single(x => x.Kind == "dispatch").Data);
 

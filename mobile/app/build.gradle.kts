@@ -8,6 +8,9 @@ plugins {
 val driverApiUrl = providers.gradleProperty("dalanDriverApiUrl")
 val debugDriverApiUrl = providers.gradleProperty("dalanDriverDebugApiUrl")
 val isolatedE2e = providers.gradleProperty("dalanE2E").map(String::toBoolean).getOrElse(false)
+val e2eSuffix = providers.gradleProperty("dalanE2EApplicationSuffix").getOrElse(".e2e").also {
+    require(it.matches(Regex("(\\.[a-z][a-z0-9]*)+")) && it.endsWith(".e2e")) { "E2E application suffix must end in .e2e" }
+}
 
 fun buildConfigUrl(url: String): String {
     require('"' !in url && '\\' !in url && '\n' !in url && '\r' !in url)
@@ -32,7 +35,10 @@ android {
 
     buildTypes {
         debug {
-            if (isolatedE2e) applicationIdSuffix = ".e2e"
+            if (isolatedE2e) {
+                applicationIdSuffix = e2eSuffix
+                resValue("string", "app_name", "Dalan E2E")
+            }
             buildConfigField(
                 "String",
                 "API_BASE_URL",
@@ -62,6 +68,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 }
 

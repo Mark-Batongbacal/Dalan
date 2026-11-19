@@ -1,0 +1,11 @@
+@model Dalan.Web.Controllers.NotificationsViewModel
+@{ ViewData["Title"] = "Operations email"; }
+<div class="page-heading"><span class="page-kicker">Operations</span><h1>Operations email</h1><p>Overdue-delivery, dispatch-summary and maintenance emails sent through Resend.</p></div>
+@if (!Model.Enabled) { <div class="alert alert-info">Email notifications are not enabled. Your administrator needs to configure the sender, recipients and Resend access.</div> }
+else
+{
+    <div class="content-card"><p>Latest 50 notifications. Accepted by Resend means the provider accepted the request; delivery to an inbox is not confirmed here. Items needing review are not automatically resent.</p>
+    <div class="table-responsive"><table class="table"><thead><tr><th>Created (UTC)</th><th>Subject</th><th>Status</th><th>Attempts</th></tr></thead><tbody>
+    @foreach (var mail in Model.Deliveries) { <tr><td>@mail.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td><td>@mail.Subject</td><td>@mail.Status</td><td>@mail.Attempts</td></tr> }
+    </tbody></table></div>@if (Model.Deliveries.Count == 0) { <p>No email notifications have been queued.</p> }</div>
+}

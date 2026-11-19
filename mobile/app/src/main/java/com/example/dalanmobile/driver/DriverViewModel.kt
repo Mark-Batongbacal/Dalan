@@ -26,6 +26,7 @@ data class DriverWorkspace(
     val busy: Boolean = false,
     val message: String? = null,
     val needsLogin: Boolean = false,
+    val driverId: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -51,7 +52,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
                             event.deliveryId == it.id && event.assignment == it.assignedAtUtc &&
                                 event.kind == "Pickup" && event.failure == null
                         }) it.dropoffPosition else it.pickupPosition
-                }), events)
+                }), events, driverId = account.driverId)
         }
     }
     val state = combine(workspace, busy, message, needsLogin) { data, working, notice, expired ->
@@ -60,6 +61,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
 
     fun login(email: String, password: String) = runOperation {
         val signedIn = api.login(email, password)
+        if (signedIn.driverId != session.value?.driverId) DriverLocationService.stop(getApplication())
         sessions.save(signedIn)
         session.value = signedIn
         needsLogin.value = false
@@ -67,6 +69,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun logout() = runOperation {
+        DriverLocationService.stop(getApplication())
         sessions.clear()
         session.value = null
         needsLogin.value = false
