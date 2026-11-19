@@ -23,15 +23,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -74,17 +85,35 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
             DriverRouteScreen(task, model) { mapOpen = false }
         }
     }
-    Scaffold { padding ->
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
-                Text("Dalan", Modifier.padding(top = 16.dp), style = MaterialTheme.typography.headlineLarge)
-                Text("Appearance", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("System", "Light", "Dark").forEach { option ->
-                        FilterChip(appearance == option, { onAppearance(option) }, { Text(option) }, modifier = Modifier.heightIn(min = 48.dp))
+                Row(
+                    Modifier.padding(top = 20.dp, bottom = 4.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Dalan",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("System", "Light", "Dark").forEach { option ->
+                            FilterChip(
+                                selected = appearance == option,
+                                onClick = { onAppearance(option) },
+                                label = { Text(option, style = MaterialTheme.typography.labelMedium) },
+                                modifier = Modifier.heightIn(min = 36.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -112,12 +141,49 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                     }
                     items(state.tasks, key = { it.id }) { delivery ->
                         val events = delivery.assignmentEvents(state.events)
-                        Card(onClick = { selected = delivery.id }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(delivery.recipientName, style = MaterialTheme.typography.titleMedium)
-                                Text(if (delivery.status == "PickedUp" || events.any { it.kind == "Pickup" && it.failure == null })
-                                    "Drop-off · ${delivery.dropoffAddress}" else "Pickup · ${delivery.pickupAddress}")
-                                Text(deliveryNextAction(delivery, events))
+                        val nextAction = deliveryNextAction(delivery, events)
+                        val hasFailed = events.any { it.failure != null }
+                        Card(
+                            onClick = { selected = delivery.id },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (hasFailed)
+                                    MaterialTheme.colorScheme.errorContainer
+                                else
+                                    MaterialTheme.colorScheme.surface,
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text(
+                                        delivery.recipientName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                Text(
+                                    if (delivery.status == "PickedUp" || events.any { it.kind == "Pickup" && it.failure == null })
+                                        "Drop-off · ${delivery.dropoffAddress}"
+                                    else
+                                        "Pickup · ${delivery.pickupAddress}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    nextAction,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (hasFailed)
+                                        MaterialTheme.colorScheme.onErrorContainer
+                                    else
+                                        MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
@@ -164,20 +230,40 @@ private fun TrackingControls(workspace: DriverWorkspace) {
     }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { start() }
     val active = tracking.active && tracking.driverId == workspace.driverId
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Delivery location sharing", style = MaterialTheme.typography.titleMedium)
-            Text("Share your vehicle’s location with dispatch during active deliveries, including while minimized. A persistent notification lets you stop sharing. GPS samples are retained for up to 30 days when cleanup is running.")
-            if (active) Button(onClick = { DriverLocationService.stop(context) }) { Text("Stop sharing location") }
-            else Button(onClick = {
-                val requested = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                if (android.os.Build.VERSION.SDK_INT >= 33) requested.add(Manifest.permission.POST_NOTIFICATIONS)
-                permissions.launch(requested.toTypedArray())
-            }, enabled = !tracking.stopping && !workspace.needsLogin && workspace.tasks.any { it.status == "Assigned" || it.status == "PickedUp" }) {
+            Text(
+                "Share your vehicle’s location with dispatch during active deliveries, including while minimized. A persistent notification lets you stop sharing. GPS samples are retained for up to 30 days when cleanup is running.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (active) Button(
+                onClick = { DriverLocationService.stop(context) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) { Text("Stop sharing location") }
+            else Button(
+                onClick = {
+                    val requested = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    if (android.os.Build.VERSION.SDK_INT >= 33) requested.add(Manifest.permission.POST_NOTIFICATIONS)
+                    permissions.launch(requested.toTypedArray())
+                },
+                enabled = !tracking.stopping && !workspace.needsLogin && workspace.tasks.any { it.status == "Assigned" || it.status == "PickedUp" },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
                 Text("Start sharing location")
             }
-            if (tracking.driverId == workspace.driverId) tracking.message?.let { Text(it) }
-            note?.let { Text(it) }
+            if (tracking.driverId == workspace.driverId) tracking.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         }
     }
 }
@@ -186,15 +272,41 @@ private fun TrackingControls(workspace: DriverWorkspace) {
 private fun LoginForm(busy: Boolean, login: (String, String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Driver sign-in", style = MaterialTheme.typography.titleLarge)
-        OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth())
-        Button(onClick = { login(email, password); password = "" },
-            enabled = !busy && email.isNotBlank() && password.isNotEmpty()) { Text("Sign in") }
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Driver sign-in", style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Email address") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
+            )
+            Button(
+                onClick = { login(email, password); password = "" },
+                enabled = !busy && email.isNotBlank() && password.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = MaterialTheme.shapes.extraLarge
+            ) { Text("Sign in to workspace") }
+        }
     }
 }
 
@@ -202,22 +314,70 @@ private fun LoginForm(busy: Boolean, login: (String, String) -> Unit) {
 private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolean,
                         model: DriverViewModel, openMap: () -> Unit) {
     val pickedUp = task.status == "PickedUp" || events.any { it.kind == "Pickup" }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(task.recipientName, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
-        Text(deliveryNextAction(task, events), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        Text("${task.pickupPosition?.let { "Stop $it · " } ?: ""}Pickup\n${task.pickupAddress}")
-        Text("${task.dropoffPosition?.let { "Stop $it · " } ?: ""}Drop-off\n${task.dropoffAddress}")
+
+        // Next action pill
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            shape = MaterialTheme.shapes.extraLarge
+        ) {
+            Text(
+                deliveryNextAction(task, events),
+                Modifier.padding(horizontal = 16.dp, vertical = 10.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+
+        // Stop cards
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${task.pickupPosition?.let { "Stop $it · " } ?: ""}Pickup",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                    Text(task.pickupAddress, style = MaterialTheme.typography.bodyMedium)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${task.dropoffPosition?.let { "Stop $it · " } ?: ""}Drop-off",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary)
+                    Text(task.dropoffAddress, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
         TextButton(onClick = openMap, modifier = Modifier.heightIn(min = 48.dp)) { Text("View route map") }
+
         when {
-            events.any { it.failure != null } -> Text("Resolve the failed update in the sync queue.")
-            events.any { it.kind == "Deliver" } -> Text("Delivery confirmation queued. It will leave your active list after server acceptance. You do not need to submit it again.")
+            events.any { it.failure != null } ->
+                Text("Resolve the failed update in the sync queue.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error)
+            events.any { it.kind == "Deliver" } ->
+                Text("Delivery confirmation queued. It will leave your active list after server acceptance. You do not need to submit it again.",
+                    style = MaterialTheme.typography.bodyMedium)
             pickedUp -> {
-                if (task.status != "PickedUp") Text("Pickup is queued locally. You may capture delivery proof now; the queue sends pickup before delivery.")
+                if (task.status != "PickedUp")
+                    Text("Pickup is queued locally. You may capture delivery proof now; the queue sends pickup before delivery.",
+                        style = MaterialTheme.typography.bodySmall)
                 ProofForm(task, busy, model)
             }
             else -> {
-                Text("Confirm only after collecting the delivery at the pickup address. When offline, this saves an update for later sync.")
-                Button(onClick = { model.record(task, "Pickup") }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Confirm pickup") }
+                Text("Confirm only after collecting the delivery at the pickup address. When offline, this saves an update for later sync.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(
+                    onClick = { model.record(task, "Pickup") },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = MaterialTheme.shapes.extraLarge
+                ) { Text("Confirm pickup") }
             }
         }
     }
@@ -256,29 +416,70 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
         } else note = if (photo == null) "No photo saved. Take a proof photo before confirming." else "Retake cancelled. The previous photo is still selected."
     }
     Text("Proof of delivery", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-    Text("At drop-off, enter the recipient's name, take a proof photo, and capture location. All three are required. Offline confirmation is queued until the server accepts it.")
-    Text("Tap Confirm delivery to save this proof. Leaving this delivery before confirmation clears the unsaved photo, location and name.")
-    OutlinedTextField(name, { name = it.take(120) }, label = { Text("Recipient confirmation") },
-        modifier = Modifier.fillMaxWidth(), singleLine = true)
-    TextButton(onClick = {
-        try {
-            camera.launch(null)
-        } catch (_: ActivityNotFoundException) {
-            note = "No camera app is available."
+    Text(
+        "At drop-off, enter the recipient's name, take a proof photo, and capture location. All three are required. Offline confirmation is queued until the server accepts it.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Text(
+        "Tap Confirm delivery to save this proof. Leaving this delivery before confirmation clears the unsaved photo, location and name.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    OutlinedTextField(
+        value = name,
+        onValueChange = { name = it.take(120) },
+        label = { Text("Recipient confirmation") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        shape = MaterialTheme.shapes.medium
+    )
+    // Proof status summary
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                if (name.isBlank()) "⬜  Recipient name: enter above" else "✓  Recipient name: ready",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (name.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary
+            )
+            Text(
+                if (photo == null) "⬜  Proof photo: required · opens your camera app" else "✓  Photo captured",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (photo == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary
+            )
+            Text(
+                if (location == null) "⬜  Location: required · allow location permission" else "✓  Location captured",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (location == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.tertiary
+            )
         }
-    }, enabled = !busy && !captureBusy, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (photo == null) "Take proof photo" else "Retake proof photo") }
-    TextButton(onClick = {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED) captureLocation()
-        else permissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-    }, enabled = !busy && !captureBusy, modifier = Modifier.heightIn(min = 48.dp)) {
-        Text(if (location == null) "Capture location" else "Recapture location")
     }
-    Text(if (name.isBlank()) "Recipient name: required" else "Recipient name: ready")
-    Text(if (photo == null) "Proof photo: required · opens your camera app" else "Photo captured")
-    Text(if (location == null) "Location: required · allow location permission and turn on device location" else "Location captured")
-    if (captureBusy) Text("Preparing proof…", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-    note?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        TextButton(
+            onClick = {
+                try { camera.launch(null) }
+                catch (_: ActivityNotFoundException) { note = "No camera app is available." }
+            },
+            enabled = !busy && !captureBusy,
+            modifier = Modifier.heightIn(min = 48.dp).weight(1f)
+        ) { Text(if (photo == null) "Take proof photo" else "Retake photo") }
+        TextButton(
+            onClick = {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED) captureLocation()
+                else permissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            },
+            enabled = !busy && !captureBusy,
+            modifier = Modifier.heightIn(min = 48.dp).weight(1f)
+        ) { Text(if (location == null) "Capture location" else "Recapture location") }
+    }
+    if (captureBusy) Text("Preparing proof…", Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        style = MaterialTheme.typography.bodySmall)
+    note?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     Button(onClick = {
         val bitmap = photo ?: return@Button
         val point = location ?: return@Button
@@ -299,7 +500,11 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
                 captureBusy = false
             }
         }
-    }, enabled = !busy && !captureBusy && photo != null && location != null && name.isNotBlank(), modifier = Modifier.heightIn(min = 48.dp)) {
+    }, enabled = !busy && !captureBusy && photo != null && location != null && name.isNotBlank(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
         Text("Confirm delivery")
     }
 }

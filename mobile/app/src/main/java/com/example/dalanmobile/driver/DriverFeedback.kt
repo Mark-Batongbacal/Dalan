@@ -2,12 +2,18 @@ package com.example.dalanmobile.driver
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -15,7 +21,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -48,47 +56,113 @@ internal fun SyncStatusCard(state: DriverWorkspace) {
         state.message == "Up to date" && state.lastSyncedAt != null -> "Synchronized"
         else -> "Saved delivery workspace"
     }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp).semantics { liveRegion = LiveRegionMode.Polite },
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val containerColor = when {
+        state.needsLogin || failed > 0 -> MaterialTheme.colorScheme.errorContainer
+        state.events.isNotEmpty() -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = when {
+        state.needsLogin || failed > 0 -> MaterialTheme.colorScheme.onErrorContainer
+        state.events.isNotEmpty() -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(
+            Modifier
+                .padding(20.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-            if (state.events.isNotEmpty()) Text("${state.events.size} saved updates · $failed rejected. A saved update is not yet accepted by the server.")
-            if (state.needsLogin) Text("Sign in again to sync. Saved updates remain with the Driver account that created them.")
-            else if (failed > 0) Text("Rejected assignments stay blocked. Sync now refreshes other work; review the reason below before discarding anything.")
-            else if (state.events.isNotEmpty()) Text("Keep this app open and use Sync now when connected. Do not clear app storage or uninstall while updates are pending.")
+            if (state.events.isNotEmpty())
+                Text("${state.events.size} saved updates · $failed rejected. A saved update is not yet accepted by the server.",
+                    style = MaterialTheme.typography.bodySmall)
+            if (state.needsLogin)
+                Text("Sign in again to sync. Saved updates remain with the Driver account that created them.",
+                    style = MaterialTheme.typography.bodySmall)
+            else if (failed > 0)
+                Text("Rejected assignments stay blocked. Sync now refreshes other work; review the reason below before discarding anything.",
+                    style = MaterialTheme.typography.bodySmall)
+            else if (state.events.isNotEmpty())
+                Text("Keep this app open and use Sync now when connected. Do not clear app storage or uninstall while updates are pending.",
+                    style = MaterialTheme.typography.bodySmall)
             state.lastSyncedAt?.let {
-                Text("Last server refresh: ${DateTimeFormatter.ofPattern("dd MMM, HH:mm:ss z").withZone(ZoneId.systemDefault()).format(it)}")
+                Text(
+                    "Last refresh: ${DateTimeFormatter.ofPattern("dd MMM, HH:mm:ss z").withZone(ZoneId.systemDefault()).format(it)}",
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
-            state.message?.takeIf { it != "Up to date" }?.let { Text(it) }
+            state.message?.takeIf { it != "Up to date" }?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
 
 @Composable
-internal fun FailedUpdateCard(event: PendingEvent, recipient: String, updateCount: Int,
-                              busy: Boolean, discard: () -> Unit) {
+internal fun FailedUpdateCard(
+    event: PendingEvent,
+    recipient: String,
+    updateCount: Int,
+    busy: Boolean,
+    discard: () -> Unit
+) {
     var confirming by remember(event.owner, event.deliveryId, event.assignment) { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (event.failure == "Assignment or delivery status changed") "Assignment changed" else "Update rejected",
-                Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-            Text(recipient)
-            Text(event.failure.orEmpty())
-            Text("$updateCount saved updates for this assignment are blocked. Contact dispatch if the assignment or proof needs correction; Sync now will not force rejected updates through.")
-            TextButton(onClick = { confirming = true }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        ),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (event.failure == "Assignment or delivery status changed") "Assignment changed" else "Update rejected",
+                Modifier.semantics { heading() },
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(recipient, style = MaterialTheme.typography.bodyMedium)
+            Text(event.failure.orEmpty(), style = MaterialTheme.typography.bodySmall)
+            Text(
+                "$updateCount saved updates for this assignment are blocked. Contact dispatch if the assignment or proof needs correction; Sync now will not force rejected updates through.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            TextButton(
+                onClick = { confirming = true },
+                enabled = !busy,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
                 Text("Review discard options")
             }
         }
     }
+
     if (confirming) AlertDialog(
         onDismissRequest = { if (!busy) confirming = false },
         title = { Text("Discard saved updates?") },
-        text = { Text("Remove all $updateCount saved updates for $recipient on this assignment, including any unsent proof photo. This cannot be undone and does not complete or cancel the server delivery. Keep them if dispatch still needs the proof.") },
+        text = {
+            Text("Remove all $updateCount saved updates for $recipient on this assignment, including any unsent proof photo. This cannot be undone and does not complete or cancel the server delivery. Keep them if dispatch still needs the proof.")
+        },
         confirmButton = {
-            TextButton(onClick = { confirming = false; discard() }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Discard saved updates") }
+            TextButton(
+                onClick = { confirming = false; discard() },
+                enabled = !busy,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) { Text("Discard saved updates") }
         },
         dismissButton = {
-            TextButton(onClick = { confirming = false }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Keep updates") }
+            TextButton(
+                onClick = { confirming = false },
+                enabled = !busy,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) { Text("Keep updates") }
         }
     )
 }
