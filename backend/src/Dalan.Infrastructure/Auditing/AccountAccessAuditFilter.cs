@@ -67,8 +67,8 @@ public sealed class AccountAccessAuditFilter(
 
             // Avoid unauthenticated unknown-address login spam in the SQL table;
             // failed requests for known accounts and authenticated mutations remain auditable.
-            if (targetUserId is null && action is "DriverLogin" or "StaffLogin"
-                && outcome == "Rejected")
+            if (targetUserId is null && (action is "DriverLogin" or "StaffLogin" or "DriverRecoveryRequested")
+                && outcome is "Rejected" or "Requested")
                 return;
 
             db.AccountAccessAudits.Add(new AccountAccessAudit
