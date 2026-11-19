@@ -13,7 +13,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -33,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -57,12 +61,13 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (String) -> Unit) {
     val state by model.state.collectAsState()
-    var selected by remember { mutableStateOf<String?>(null) }
+    var selected by remember(state.driverId) { mutableStateOf<String?>(null) }
     val task = state.tasks.firstOrNull { it.id == selected }
-    var mapOpen by remember(task?.id) { mutableStateOf(false) }
+    var mapOpen by remember(task?.id, task?.assignedAtUtc) { mutableStateOf(false) }
     if (mapOpen && task != null) {
         Dialog(onDismissRequest = { mapOpen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -76,9 +81,10 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
         ) {
             item {
                 Text("Dalan", Modifier.padding(top = 16.dp), style = MaterialTheme.typography.headlineLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Appearance", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("System", "Light", "Dark").forEach { option ->
-                        FilterChip(appearance == option, { onAppearance(option) }, { Text(option) })
+                        FilterChip(appearance == option, { onAppearance(option) }, { Text(option) }, modifier = Modifier.heightIn(min = 48.dp))
                     }
                 }
             }
@@ -86,63 +92,59 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                 item { LoginForm(state.busy, model::login) }
             }
             if (state.signedIn) {
+                item { SyncStatusCard(state) }
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { model.sync() }, enabled = !state.busy && !state.needsLogin) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { model.sync() }, enabled = !state.busy && !state.needsLogin, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text("Sync now")
                         }
                         TextButton(onClick = {
                             selected = null
                             model.logout()
-                        }, enabled = !state.busy) { Text("Sign out") }
+                        }, enabled = !state.busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Sign out") }
                     }
                 }
-                item { TrackingControls(state) }
                 if (task == null) {
                     item {
-                        Text("Assigned deliveries", style = MaterialTheme.typography.titleLarge)
-                        if (state.tasks.isEmpty()) Text("No assigned deliveries saved.")
+                        Text("Assigned deliveries", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
+                        Text("Open a delivery to see its next action. Follow the assigned pickup and drop-off stop order.")
+                        if (state.tasks.isEmpty()) Text("No assigned deliveries saved. Sync now to check the server; this list alone does not confirm there is no new work.")
                     }
                     items(state.tasks, key = { it.id }) { delivery ->
-                        val events = state.events.filter {
-                            it.deliveryId == delivery.id && it.assignment == delivery.assignedAtUtc
-                        }
+                        val events = delivery.assignmentEvents(state.events)
                         Card(onClick = { selected = delivery.id }, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(delivery.recipientName, style = MaterialTheme.typography.titleMedium)
                                 Text(if (delivery.status == "PickedUp" || events.any { it.kind == "Pickup" && it.failure == null })
                                     "Drop-off · ${delivery.dropoffAddress}" else "Pickup · ${delivery.pickupAddress}")
-                                if (events.any { it.failure != null }) Text("Sync failed")
-                                else if (events.isNotEmpty()) Text("Queued")
+                                Text(deliveryNextAction(delivery, events))
                             }
                         }
                     }
                 } else {
                     item {
-                        TextButton(onClick = { selected = null }) { Text("Back to deliveries") }
-                        TaskDetails(task, state.events.filter {
-                            it.deliveryId == task.id && it.assignment == task.assignedAtUtc
-                        }, state.busy, model) { mapOpen = true }
+                        TextButton(onClick = { selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back to deliveries") }
+                        key(task.id, task.assignedAtUtc) {
+                            TaskDetails(task, task.assignmentEvents(state.events), state.busy, model) { mapOpen = true }
+                        }
                     }
                 }
+                item { TrackingControls(state) }
                 if (state.events.isNotEmpty()) {
                     item { Text("Sync queue · ${state.events.size} updates", style = MaterialTheme.typography.titleMedium) }
-                    items(state.events.filter { it.failure != null }, key = { it.sequence }) { failed ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text("${failed.kind} failed · ${failed.failure}")
-                                Text(state.tasks.firstOrNull { it.id == failed.deliveryId }?.recipientName ?: failed.deliveryId)
-                                TextButton(onClick = { model.discard(failed) }, enabled = !state.busy) {
-                                    Text("Discard updates for this assignment")
-                                }
-                            }
+                    items(state.events.filter { it.failure != null }.distinctBy { it.deliveryId to it.assignment }, key = { it.sequence }) { failed ->
+                        key(state.driverId) {
+                            FailedUpdateCard(failed,
+                                state.tasks.firstOrNull { it.id == failed.deliveryId }?.recipientName ?: failed.deliveryId,
+                                state.events.count { it.deliveryId == failed.deliveryId && it.assignment == failed.assignment },
+                                state.busy) { model.discard(failed) }
                         }
                     }
                 }
             }
             item {
                 if (state.busy) CircularProgressIndicator(Modifier.padding(8.dp))
-                state.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+                if (!state.signedIn) state.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             }
         }
     }
@@ -201,15 +203,22 @@ private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolea
                         model: DriverViewModel, openMap: () -> Unit) {
     val pickedUp = task.status == "PickedUp" || events.any { it.kind == "Pickup" }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(task.recipientName, style = MaterialTheme.typography.headlineSmall)
+        Text(task.recipientName, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
+        Text(deliveryNextAction(task, events), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         Text("${task.pickupPosition?.let { "Stop $it · " } ?: ""}Pickup\n${task.pickupAddress}")
         Text("${task.dropoffPosition?.let { "Stop $it · " } ?: ""}Drop-off\n${task.dropoffAddress}")
-        TextButton(onClick = openMap) { Text("View route map") }
+        TextButton(onClick = openMap, modifier = Modifier.heightIn(min = 48.dp)) { Text("View route map") }
         when {
             events.any { it.failure != null } -> Text("Resolve the failed update in the sync queue.")
-            events.any { it.kind == "Deliver" } -> Text("Delivery confirmation queued")
-            pickedUp -> ProofForm(task, busy, model)
-            else -> Button(onClick = { model.record(task, "Pickup") }, enabled = !busy) { Text("Confirm pickup") }
+            events.any { it.kind == "Deliver" } -> Text("Delivery confirmation queued. It will leave your active list after server acceptance. You do not need to submit it again.")
+            pickedUp -> {
+                if (task.status != "PickedUp") Text("Pickup is queued locally. You may capture delivery proof now; the queue sends pickup before delivery.")
+                ProofForm(task, busy, model)
+            }
+            else -> {
+                Text("Confirm only after collecting the delivery at the pickup address. When offline, this saves an update for later sync.")
+                Button(onClick = { model.record(task, "Pickup") }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Confirm pickup") }
+            }
         }
     }
 }
@@ -238,15 +247,17 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
 
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.any { it }) captureLocation()
-        else note = "Location permission is required to confirm delivery."
+        else note = "Location permission is required to confirm delivery. If the prompt no longer appears, allow Location in Android app settings, then capture again."
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { result ->
         if (result != null) {
             photo = result
             note = null
-        }
+        } else note = if (photo == null) "No photo saved. Take a proof photo before confirming." else "Retake cancelled. The previous photo is still selected."
     }
-    Text("Proof of delivery", style = MaterialTheme.typography.titleMedium)
+    Text("Proof of delivery", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+    Text("At drop-off, enter the recipient's name, take a proof photo, and capture location. All three are required. Offline confirmation is queued until the server accepts it.")
+    Text("Tap Confirm delivery to save this proof. Leaving this delivery before confirmation clears the unsaved photo, location and name.")
     OutlinedTextField(name, { name = it.take(120) }, label = { Text("Recipient confirmation") },
         modifier = Modifier.fillMaxWidth(), singleLine = true)
     TextButton(onClick = {
@@ -255,16 +266,18 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
         } catch (_: ActivityNotFoundException) {
             note = "No camera app is available."
         }
-    }, enabled = !busy && !captureBusy) { Text(if (photo == null) "Take proof photo" else "Retake proof photo") }
+    }, enabled = !busy && !captureBusy, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (photo == null) "Take proof photo" else "Retake proof photo") }
     TextButton(onClick = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED) captureLocation()
         else permissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-    }, enabled = !busy && !captureBusy) {
+    }, enabled = !busy && !captureBusy, modifier = Modifier.heightIn(min = 48.dp)) {
         Text(if (location == null) "Capture location" else "Recapture location")
     }
-    if (photo != null) Text("Photo captured")
-    if (location != null) Text("Location captured")
+    Text(if (name.isBlank()) "Recipient name: required" else "Recipient name: ready")
+    Text(if (photo == null) "Proof photo: required · opens your camera app" else "Photo captured")
+    Text(if (location == null) "Location: required · allow location permission and turn on device location" else "Location captured")
+    if (captureBusy) Text("Preparing proof…", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     note?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
     Button(onClick = {
         val bitmap = photo ?: return@Button
@@ -286,7 +299,7 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
                 captureBusy = false
             }
         }
-    }, enabled = !busy && !captureBusy && photo != null && location != null && name.isNotBlank()) {
+    }, enabled = !busy && !captureBusy && photo != null && location != null && name.isNotBlank(), modifier = Modifier.heightIn(min = 48.dp)) {
         Text("Confirm delivery")
     }
 }

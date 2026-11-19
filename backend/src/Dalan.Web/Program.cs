@@ -6,6 +6,7 @@ using Dalan.Application.Dispatch;
 using Dalan.Infrastructure;
 using Dalan.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,18 @@ builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.Environ
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+// Conservative per-instance throttle on the public Driver recovery endpoints.
+// Keep the feature disabled until the recovery UI/email integration is verified.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("driver-recovery", limiter =>
+    {
+        limiter.PermitLimit = 10;
+        limiter.Window = TimeSpan.FromMinutes(15);
+        limiter.QueueLimit = 0;
+    });
+});
 builder.Services.AddScoped<Dalan.Application.Analytics.IAnalyticsService, Dalan.Application.Analytics.AnalyticsService>();
 builder.Services.Configure<Dalan.Web.Models.PlanningMapOptions>(builder.Configuration.GetSection("PlanningMap"));
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -95,6 +108,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Dalan.Application.DriverExecution;
+using Dalan.Infrastructure.Identity;
 using Dalan.Application.Routing;
 using Dalan.Contracts.DriverExecution;
 using Dalan.Contracts.Identity;
@@ -27,6 +28,7 @@ public sealed class DriverTasksController(
     {
         var user = await users.FindByEmailAsync(request.Email!);
         if (user is null || !await users.IsInRoleAsync(user, Role)
+            || DriverMobileAccess.IsSuspended(user)
             || await tasks.FindDriverAsync(user.Id, cancellationToken) is null)
             return Unauthorized();
 
@@ -90,6 +92,7 @@ public sealed class DriverTasksController(
     {
         var user = await signInManager.ValidateSecurityStampAsync(User);
         return user is not null && await users.IsInRoleAsync(user, Role)
+            && !await users.IsLockedOutAsync(user)
             ? await tasks.FindDriverAsync(user.Id, cancellationToken)
             : null;
     }

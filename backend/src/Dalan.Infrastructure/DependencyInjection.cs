@@ -11,6 +11,7 @@ using Dalan.Application.Notifications;
 using Dalan.Infrastructure.Notifications;
 using Dalan.Application.Tracking;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -46,8 +47,20 @@ public static class DependencyInjection
             || recipients.Any(address => !System.Net.Mail.MailAddress.TryCreate(address, out _))))
             throw new InvalidOperationException("Enabled Resend notifications require an API key, a valid sender and 1–50 valid recipient addresses.");
         services.AddSingleton(email);
-        services.AddHttpClient<IEmailSender, ResendEmailSender>(client => { client.BaseAddress = new Uri("https://api.resend.com/"); client.Timeout = TimeSpan.FromSeconds(15); })
+        var credentialEnabled = bool.TryParse(configuration["DriverCredentialEmail:Enabled"], out var credentialsOn) && credentialsOn;
+        var keyRingPath = configuration["DriverCredentialEmail:KeyRingPath"] ?? "";
+        if (credentialEnabled && (!email.Enabled || string.IsNullOrWhiteSpace(keyRingPath)
+            || !Path.IsPathFullyQualified(keyRingPath)))
+            throw new InvalidOperationException(
+                "Driver credential email requires Resend and a shared absolute DriverCredentialEmail:KeyRingPath.");
+        var protection = services.AddDataProtection().SetApplicationName("Dalan.DriverCredentialEmail");
+        if (credentialEnabled)
+            protection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+        services.AddSingleton(new DriverCredentialEmailOptions(credentialEnabled, keyRingPath));
+        services.AddScoped<IDriverCredentialEmailOutbox, DriverCredentialEmailOutbox>();
+        services.AddHttpClient<ResendEmailSender>(client => { client.BaseAddress = new Uri("https://api.resend.com/"); client.Timeout = TimeSpan.FromSeconds(15); })
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<IEmailSender, OutboxRoutedEmailSender>();
         services.AddScoped<IOperationsNotificationRepository, OperationsNotificationRepository>();
         services.AddScoped<IOperationsNotificationService, OperationsNotificationService>();
         var googleKey = configuration["GooglePlaces:ApiKey"];
