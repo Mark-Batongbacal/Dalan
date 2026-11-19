@@ -5,6 +5,7 @@ using Dalan.Application.FleetOptimization;
 using Dalan.Application.Vehicles;
 using Dalan.Infrastructure;
 using Dalan.Infrastructure.Persistence;
+using Dalan.Infrastructure.Auditing;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,7 +13,8 @@ builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.Environ
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.AddService<AccountAccessAuditFilter>());
+builder.Services.AddScoped<AccountAccessAuditFilter>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
 builder.Services.AddScoped<IDriverService, DriverService>();
 builder.Services.AddSingleton(TimeProvider.System);

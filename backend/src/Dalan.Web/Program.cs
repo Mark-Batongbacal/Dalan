@@ -5,6 +5,7 @@ using Dalan.Application.FleetOptimization;
 using Dalan.Application.Dispatch;
 using Dalan.Infrastructure;
 using Dalan.Infrastructure.Persistence;
+using Dalan.Infrastructure.Auditing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.EnvironmentName, builder.Environment.ContentRootPath);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options => options.Filters.AddService<AccountAccessAuditFilter>());
+builder.Services.AddScoped<AccountAccessAuditFilter>();
 // Conservative per-instance throttle on the public Driver recovery endpoints.
 // Keep the feature disabled until the recovery UI/email integration is verified.
 builder.Services.AddRateLimiter(options =>

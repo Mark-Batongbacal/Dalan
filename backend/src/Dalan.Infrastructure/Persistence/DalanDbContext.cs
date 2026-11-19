@@ -20,6 +20,7 @@ public sealed class DalanDbContext(DbContextOptions<DalanDbContext> options) : I
     public DbSet<DispatchStop> DispatchStops => Set<DispatchStop>();
     public DbSet<DispatchRotationState> DispatchRotations => Set<DispatchRotationState>();
 
+    public DbSet<AccountAccessAudit> AccountAccessAudits => Set<AccountAccessAudit>();
     public DbSet<DriverAccount> DriverAccounts => Set<DriverAccount>();
     public DbSet<DriverEventReceipt> DriverEventReceipts => Set<DriverEventReceipt>();
     public DbSet<OperationsSnapshot> OperationsSnapshots => Set<OperationsSnapshot>();
@@ -62,6 +63,20 @@ public sealed class DalanDbContext(DbContextOptions<DalanDbContext> options) : I
             rotation.HasKey(x => x.WarehouseKey);
             rotation.Property(x => x.WarehouseKey).HasMaxLength(64);
             rotation.Property(x => x.Version).IsConcurrencyToken();
+        });
+        modelBuilder.Entity<AccountAccessAudit>(audit =>
+        {
+            audit.ToTable("AccountAccessAudits");
+            audit.HasKey(x => x.Id);
+            audit.Property(x => x.Action).HasMaxLength(64).IsRequired();
+            audit.Property(x => x.Outcome).HasMaxLength(32).IsRequired();
+            audit.Property(x => x.ActorUserId).HasMaxLength(450);
+            audit.Property(x => x.TargetUserId).HasMaxLength(450);
+            audit.Property(x => x.Reason).HasMaxLength(240);
+            audit.Property(x => x.CorrelationId).HasMaxLength(128);
+            audit.HasIndex(x => x.OccurredAtUtc);
+            audit.HasIndex(x => new { x.DriverId, x.OccurredAtUtc });
+            audit.HasIndex(x => new { x.TargetUserId, x.OccurredAtUtc });
         });
         modelBuilder.Entity<DriverAccount>(account =>
         {
