@@ -163,7 +163,8 @@ public sealed class DriverInvitationsController(
             return BadRequest(new { message = "Password does not meet the account requirements.",
                 errors = added.Errors.Select(e => e.Description).ToArray() });
 
-        var confirmed = await users.SetEmailConfirmedAsync(user, true);
+        user.EmailConfirmed = true;
+        var confirmed = await users.UpdateAsync(user);
         if (!confirmed.Succeeded)
             return StatusCode(500, new { message = "Account activation failed. Try again." });
 
