@@ -16,10 +16,15 @@ public sealed record DriverCredentialEmailOptions(bool Enabled, string KeyRingPa
 /// This service is shared by Dalan.Web and Dalan.Worker; both must have the SAME
 /// persistent Data Protection key ring and application discriminator.
 /// </summary>
+public sealed record DriverCredentialEmailStatus(
+    string Id, string Kind, DateTimeOffset CreatedAtUtc,
+    string Status, int Attempts, DateTimeOffset? AcceptedAtUtc);
+
 public interface IDriverCredentialEmailOutbox
 {
     Task<string> QueueAsync(EmailEnvelope message, CancellationToken cancellationToken);
     Task RetryPendingAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<DriverCredentialEmailStatus>> RecentAsync(CancellationToken cancellationToken);
 }
 
 public sealed class DriverCredentialEmailOutbox(
@@ -72,6 +77,20 @@ public sealed class DriverCredentialEmailOutbox(
             .ToListAsync(cancellationToken);
         foreach (var id in pending)
             await TrySendAsync(id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<DriverCredentialEmailStatus>> RecentAsync(CancellationToken cancellationToken)
+    {
+        if (!options.Enabled) return [];
+        return await db.NotificationDeliveries.AsNoTracking()
+            .Where(x => x.Kind == "driver-invite" || x.Kind == "driver-recovery")
+            .OrderByDescending(x => x.CreatedAtUtc).Take(50)
+            .Select(x => new DriverCredentialEmailStatus(
+                x.Id, x.Kind, x.CreatedAtUtc,
+                x.AcceptedAtUtc != null ? "Accepted by Resend" :
+                    x.NeedsReview ? "Needs manual review" : "Pending / retrying",
+                x.Attempts, x.AcceptedAtUtc))
+            .ToListAsync(cancellationToken);
     }
 
     private async Task TrySendAsync(string id, CancellationToken cancellationToken)
