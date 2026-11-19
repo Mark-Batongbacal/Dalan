@@ -31,7 +31,7 @@ public sealed class AccountAccessAuditFilter(
         var result = executed.Result;
         var successful = result is RedirectToActionResult or RedirectResult or LocalRedirectResult
             or SignInResult or OkResult or OkObjectResult or AcceptedResult or AcceptedAtActionResult
-            or AcceptedObjectResult or NoContentResult;
+            or NoContentResult;
         var outcome = executed.Exception is not null && !executed.ExceptionHandled
             ? "Error"
             : successful ? action == "DriverRecoveryRequested" ? "Requested" : "Succeeded" : "Rejected";
