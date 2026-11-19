@@ -83,6 +83,7 @@ public sealed class DriverTasksController(
             DriverEventResult.Applied => NoContent(),
             DriverEventResult.Missing => NotFound(),
             DriverEventResult.Conflict => Conflict(new { message = "The assignment or delivery status changed." }),
+            DriverEventResult.GpsRejected => UnprocessableEntity(new { message = "Delivery GPS is too far from the destination, stale, or inaccurate. Recapture location near the destination or contact the dispatcher." }),
             _ => BadRequest(new { message = "The event time or proof is invalid." })
         };
     }

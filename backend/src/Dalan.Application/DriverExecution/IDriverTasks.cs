@@ -3,7 +3,7 @@ using Dalan.Contracts.DriverExecution;
 
 namespace Dalan.Application.DriverExecution;
 
-public enum DriverEventResult { Applied, Missing, Conflict, Invalid }
+public enum DriverEventResult { Applied, Missing, Conflict, Invalid, GpsRejected }
 
 public sealed record DriverRouteStops(GeoPoint Pickup, GeoPoint Dropoff);
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Dalan.Application.DriverExecution;
@@ -9,11 +10,28 @@ using Dalan.Domain.Drivers;
 using Dalan.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Dalan.Infrastructure.Repositories;
 
-public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock) : IDriverTasks
+public sealed class DriverTasksRepository(
+    DalanDbContext db, TimeProvider clock, IConfiguration configuration) : IDriverTasks
 {
+    private readonly bool verifyGps = bool.TryParse(
+        configuration["DriverGpsProof:Enabled"], out var gpsEnabled) && gpsEnabled;
+    private readonly double radiusMeters = Number(configuration, "DriverGpsProof:RadiusMeters", 100, 10, 500);
+    private readonly double maximumAccuracyMeters = Number(configuration, "DriverGpsProof:MaxAccuracyMeters", 30, 1, 100);
+    private readonly double maximumFixAgeSeconds = Number(configuration, "DriverGpsProof:MaxFixAgeSeconds", 120, 10, 600);
+
+    private static double Number(IConfiguration configuration, string key, double fallback, double min, double max)
+    {
+        var setting = configuration[key];
+        if (string.IsNullOrWhiteSpace(setting)) return fallback;
+        if (!double.TryParse(setting, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            || !double.IsFinite(value) || value < min || value > max)
+            throw new InvalidOperationException($"{key} must be between {min} and {max}.");
+        return value;
+    }
     public Task<Guid?> FindDriverAsync(string userId, CancellationToken cancellationToken) =>
         (from account in db.DriverAccounts
          join driver in db.Drivers on account.DriverId equals driver.Id
@@ -81,6 +99,19 @@ public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock)
         if (delivery.AssignedAtUtc != request.AssignedAtUtc) return DriverEventResult.Conflict;
         if (request.EventId == Guid.Empty || request.CapturedAtUtc > clock.GetUtcNow().AddMinutes(5))
             return DriverEventResult.Invalid;
+
+        // Feature-gated until the Android app submits accurate fix metadata and
+        // dispatcher exception/review UX is available. Validate against the
+        // server-stored destination, not any address or coordinates from the phone.
+        if (verifyGps && request.Kind == "Deliver")
+        {
+            var gps = DeliveryGpsValidator.Check(
+                delivery.DropoffLatitude, delivery.DropoffLongitude,
+                request.Latitude, request.Longitude,
+                request.LocationAccuracyMeters, request.LocationCapturedAtUtc,
+                request.CapturedAtUtc, radiusMeters, maximumAccuracyMeters, maximumFixAgeSeconds);
+            if (gps != DeliveryGpsFailure.None) return DriverEventResult.GpsRejected;
+        }
 
         byte[]? photo = null;
         try
