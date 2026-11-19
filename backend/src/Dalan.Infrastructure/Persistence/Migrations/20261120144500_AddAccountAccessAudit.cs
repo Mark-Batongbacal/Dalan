@@ -1,14 +1,10 @@
 using System;
-using Dalan.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Dalan.Infrastructure.Persistence.Migrations;
 
-[DbContext(typeof(DalanDbContext))]
-[Migration("20261120144500_AddAccountAccessAudit")]
 public partial class AddAccountAccessAudit : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
