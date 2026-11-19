@@ -31,8 +31,10 @@ public sealed class CreateDeliveryViewModel
     [Range(0.01, double.MaxValue)]
     public decimal? PayloadWeightKg { get; set; }
 
-    [Display(Name = "Expected delivery time (UTC)")]
+    [Display(Name = "Expected delivery time")]
     public DateTimeOffset? ExpectedDeliveryAtUtc { get; set; }
+
+    public string? ExpectedDeliveryLocal { get; set; }
 }
 
 public sealed record DeliveryDetailsViewModel(

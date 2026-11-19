@@ -26,8 +26,10 @@
         <input asp-for="Settings.MaxFleetTravelSeconds" type="hidden" />
         <input asp-for="Settings.WarehouseLatitude" type="hidden" />
         <input asp-for="Settings.WarehouseLongitude" type="hidden" />
+        <input asp-for="Settings.WarehouseAddress" type="hidden" />
         <input asp-for="RotationVersion" type="hidden" />
         <p>Strategy: @DispatchStrategyInput.Label(Model.Strategy). Reviewed stops are validated again on confirmation.</p>
+        <p>All vehicles start at the selected warehouse: @Model.Settings.WarehouseAddress (@Model.Settings.WarehouseLatitude, @Model.Settings.WarehouseLongitude).</p>
         <p>Handling assumption: @Model.Settings.ServiceSecondsPerStop seconds per stop.
             Editing routes may change equity and completion estimates.</p>
         @for (var i = 0; i < Model.Vehicles.Count; i++)
@@ -35,6 +37,8 @@
             <input asp-for="Vehicles[i].VehicleId" type="hidden" />
             <input asp-for="Vehicles[i].StartLatitude" type="hidden" />
             <input asp-for="Vehicles[i].StartLongitude" type="hidden" />
+            <input asp-for="Vehicles[i].ExistingWorkloadSeconds" type="hidden" />
+            <p>@Model.VehicleNames.GetValueOrDefault(Model.Vehicles[i].VehicleId, "Vehicle"): existing work estimate @Model.Vehicles[i].ExistingWorkloadSeconds.ToString("N0") seconds, outside this batch.</p>
         }
 
         @for (var i = 0; i < Model.Versions.Count; i++)

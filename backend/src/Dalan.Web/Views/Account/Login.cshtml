@@ -14,15 +14,30 @@
     <div class="mb-3">
         <label asp-for="Email" class="form-label"></label>
         <input asp-for="Email" class="form-control" autocomplete="username" />
+        <div class="form-text">Use your full staff email address.</div>
         <span asp-validation-for="Email" class="text-danger"></span>
     </div>
     <div class="mb-3">
         <label asp-for="Password" class="form-label"></label>
-        <input asp-for="Password" class="form-control" autocomplete="current-password" />
+        <div class="input-group">
+            <input asp-for="Password" class="form-control" autocomplete="current-password" />
+            <button id="toggle-password" class="btn btn-outline-secondary" type="button" aria-controls="Password" aria-pressed="false">Show password</button>
+        </div>
         <span asp-validation-for="Password" class="text-danger"></span>
     </div>
     <button class="btn btn-primary" type="submit">Sign in</button>
 </form>
 </div>
 </div>
-@section Scripts { <partial name="_ValidationScriptsPartial" /> }
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.getElementById('toggle-password').addEventListener('click', function () {
+            const password = document.getElementById('Password');
+            const show = password.type === 'password';
+            password.type = show ? 'text' : 'password';
+            this.setAttribute('aria-pressed', String(show));
+            this.textContent = show ? 'Hide password' : 'Show password';
+        });
+    </script>
+}

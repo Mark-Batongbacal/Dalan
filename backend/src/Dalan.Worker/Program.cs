@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
+builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.EnvironmentName, builder.Environment.ContentRootPath);
 if (!builder.Configuration.GetValue<bool>("Operations:Enabled"))
 {
     Console.WriteLine("Operations jobs are disabled. Set Operations__Enabled=true to run the worker.");

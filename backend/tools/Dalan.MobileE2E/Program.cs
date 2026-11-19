@@ -13,8 +13,10 @@ using Microsoft.Extensions.DependencyInjection;
 var connection = Environment.GetEnvironmentVariable("DALAN_MOBILE_E2E_SQL")
     ?? throw new InvalidOperationException("Set DALAN_MOBILE_E2E_SQL to an isolated local SQL test database.");
 var sql = new SqlConnectionStringBuilder(connection);
-if (!sql.InitialCatalog.StartsWith("DalanMobileE2E_", StringComparison.Ordinal)
-    || !(sql.DataSource.StartsWith("127.0.0.1,", StringComparison.Ordinal) || sql.DataSource.StartsWith("localhost,", StringComparison.Ordinal)))
+var localServer = sql.DataSource is "localhost" or "127.0.0.1"
+    || sql.DataSource.StartsWith("127.0.0.1,", StringComparison.Ordinal)
+    || sql.DataSource.StartsWith("localhost,", StringComparison.Ordinal);
+if (!sql.InitialCatalog.StartsWith("DalanMobileE2E_", StringComparison.Ordinal) || !localServer)
     throw new InvalidOperationException("This fixture operates only on local DalanMobileE2E_* databases.");
 var manifestPath = Environment.GetEnvironmentVariable("DALAN_MOBILE_E2E_MANIFEST")
     ?? throw new InvalidOperationException("Set DALAN_MOBILE_E2E_MANIFEST to a private temporary file path.");

@@ -4,7 +4,7 @@ using Dalan.Contracts.Dispatch;
 
 namespace Dalan.Application.Dispatch;
 
-public sealed record DispatchVehicleStart(Guid VehicleId, GeoPoint Start);
+public sealed record DispatchVehicleStart(Guid VehicleId, GeoPoint Start, double ExistingWorkloadSeconds = 0);
 
 public sealed record DispatchPreviewRequest(
     IReadOnlyList<DispatchVehicleStart> Vehicles,
@@ -25,7 +25,8 @@ public sealed record DispatchPreviewRoute(
     GeoPoint Start,
     IReadOnlyList<DispatchPreviewStop> Stops,
     double DistanceMeters,
-    double DurationSeconds);
+    double DurationSeconds,
+    double ExistingWorkloadSeconds = 0);
 
 public sealed record DispatchPreviewResult(
     IReadOnlyList<DispatchPreviewRoute> Routes,

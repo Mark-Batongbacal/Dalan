@@ -4,7 +4,7 @@ using Dalan.Contracts.Dispatch;
 namespace Dalan.Application.FleetOptimization;
 
 public sealed record FleetVehicle(
-    Guid Id, GeoPoint Start, decimal? PayloadCapacityKg = null);
+    Guid Id, GeoPoint Start, decimal? PayloadCapacityKg = null, double ExistingWorkloadSeconds = 0);
 
 public sealed record FleetJob(
     string Id,

@@ -20,6 +20,30 @@ namespace Dalan.IntegrationTests;
 public sealed class PlanningMapWebTests
 {
     [Theory]
+    [InlineData("2040-01-01T12:30:00Z", "2040-01-01T13:00:00Z")]
+    [InlineData("2040-01-01T23:50:00Z", "2040-01-02T00:00:00Z")]
+    public async Task Create_defaults_to_a_future_half_hour_and_renders_warehouse_and_local_time_controls(string now, string expected)
+    {
+        using var factory = Factory().WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<TimeProvider>(new FrozenTime(DateTimeOffset.Parse(now)))));
+        using var client = Client(factory);
+        var html = await client.GetStringAsync("/Deliveries/Create");
+        var hidden = Regex.Matches(html, "<input[^>]*>").Cast<Match>()
+            .Single(match => match.Value.Contains("id=\"ExpectedDeliveryAtUtc\"", StringComparison.Ordinal)).Value;
+        var value = Regex.Match(hidden, "value=\"([^\"]+)\"").Groups[1].Value;
+        Assert.Equal(DateTimeOffset.Parse(expected), DateTimeOffset.Parse(WebUtility.HtmlDecode(value)));
+        Assert.Contains("type=\"datetime-local\"", html);
+        Assert.Contains("step=\"1800\"", html);
+        Assert.Contains("Warehouse address or name", html);
+        Assert.Contains("data-warehouse-selection", html);
+    }
+
+    private sealed class FrozenTime(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    [Theory]
     [InlineData(null, HttpStatusCode.Unauthorized)]
     [InlineData("Admin", HttpStatusCode.Forbidden)]
     [InlineData("Driver", HttpStatusCode.Forbidden)]

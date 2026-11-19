@@ -191,6 +191,9 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                     b.Property<double>("DurationSeconds")
                         .HasColumnType("float");
 
+                    b.Property<double>("ExistingWorkloadSeconds")
+                        .HasColumnType("float");
+
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
 

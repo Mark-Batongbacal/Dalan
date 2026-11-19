@@ -19,6 +19,8 @@ public sealed partial class FleetOptimizer
     public static void ValidateOptions(FleetOptimizationRequest request)
     {
         var options = request.Options ?? new();
+        if (request.Vehicles.Any(vehicle => !double.IsFinite(vehicle.ExistingWorkloadSeconds) || vehicle.ExistingWorkloadSeconds < 0))
+            throw new ArgumentException("Existing workload must be a finite, nonnegative number of seconds.");
         if (!double.IsFinite(options.ServiceSecondsPerStop) || options.ServiceSecondsPerStop is < 0 or > 3600
             || options.MaxFleetTravelSeconds is double limit && (!double.IsFinite(limit) || limit < 0))
             throw new ArgumentException("Handling time must be 0–3600 seconds per stop; any travel budget must be finite and nonnegative.");
@@ -219,7 +221,7 @@ public sealed partial class FleetOptimizer
     private static Objective FleetScore(List<IndexedStop>[] routes, FleetOptimizationRequest request, TravelMetric?[,] matrix)
     {
         var travel = routes.Select((route, index) => Score(route, index, matrix).Duration).ToArray();
-        var workloads = travel.Select((duration, index) => duration
+        var workloads = travel.Select((duration, index) => request.Vehicles[index].ExistingWorkloadSeconds + duration
             + routes[index].Count * (request.Options?.ServiceSecondsPerStop ?? 0)).ToArray();
         var primary = request.Strategy == DispatchStrategy.WorkloadEquity
             ? workloads.Max() - workloads.Min() : workloads.Max();

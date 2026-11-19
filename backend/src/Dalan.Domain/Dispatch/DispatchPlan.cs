@@ -89,6 +89,7 @@ public sealed class DispatchRoute
     public double StartLongitude { get; private set; }
     public double DistanceMeters { get; private set; }
     public double DurationSeconds { get; private set; }
+    public double ExistingWorkloadSeconds { get; private set; }
     public List<DispatchStop> Stops { get; private set; } = [];
 
     public static DispatchRoute Create(
@@ -98,9 +99,12 @@ public sealed class DispatchRoute
         double startLongitude,
         double distanceMeters,
         double durationSeconds,
-        IReadOnlyList<DispatchStop> stops)
+        IReadOnlyList<DispatchStop> stops,
+        double existingWorkloadSeconds = 0)
     {
         ArgumentNullException.ThrowIfNull(stops);
+        if (!double.IsFinite(existingWorkloadSeconds) || existingWorkloadSeconds < 0)
+            throw new ArgumentException("Existing workload must be finite and nonnegative.", nameof(existingWorkloadSeconds));
 
         if (vehicleId == Guid.Empty || driverId == Guid.Empty)
             throw new ArgumentException("A route needs a Driver and Vehicle.");
@@ -115,6 +119,7 @@ public sealed class DispatchRoute
         {
             Id = Guid.NewGuid(),
             VehicleId = vehicleId,
+            ExistingWorkloadSeconds = existingWorkloadSeconds,
             DriverId = driverId,
             StartLatitude = startLatitude,
             StartLongitude = startLongitude,

@@ -7,7 +7,10 @@
         x => x.Id, x => x.RegistrationNumber);
 }
 
-@section Scripts { <partial name="_PlanningMapAssets" /> }
+@section Scripts {
+    <script src="~/js/warehouse-selection.js" asp-append-version="true"></script>
+    <partial name="_PlanningMapAssets" />
+}
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
     <h1>Dispatch board</h1>
@@ -19,7 +22,10 @@
     <div class="alert alert-danger" role="alert">@Model.Error</div>
 }
 
-<form asp-action="Index" method="post">
+<form asp-action="Index" method="post" data-warehouse-selection
+      data-warehouse-owner="@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)"
+      data-warehouse-latitude="Settings_WarehouseLatitude" data-warehouse-longitude="Settings_WarehouseLongitude"
+      data-warehouse-address="Settings_WarehouseAddress" data-warehouse-restore="@(ViewData.ModelState.Count == 0 ? "true" : "false")">
     <partial name="_PlanningMap" model="PlanningMapViewModel.ForBoard(Model)" />
     <div class="content-card mb-4">
         <label asp-for="Strategy" class="form-label">Optimization strategy</label>
@@ -56,8 +62,12 @@
             </div>
         </div>
         <fieldset>
-            <legend class="h6">Common warehouse (warehouse strategy only)</legend>
-            <p class="text-muted">All selected starts and pickups must match this origin. New strategies require known weights and vehicle capacities.</p>
+            <legend class="h6">Warehouse</legend>
+            <p class="text-muted">Select the warehouse for this dispatch. All selected vehicles start here. The selection is shared with Create delivery in this browser for your account.</p>
+            <div class="mb-3">
+                <label asp-for="Settings.WarehouseAddress" class="form-label">Warehouse address or name</label>
+                <input asp-for="Settings.WarehouseAddress" class="form-control" maxlength="500" />
+            </div>
             <div class="row g-3">
                 <div class="col-md-6">
                     <label asp-for="Settings.WarehouseLatitude" class="form-label">Warehouse latitude</label>
@@ -68,10 +78,12 @@
                     <input asp-for="Settings.WarehouseLongitude" type="number" min="-180" max="180" step="any" class="form-control" />
                 </div>
             </div>
+            <p class="form-text" data-warehouse-status aria-live="polite"></p>
         </fieldset>
     </div>
     <div class="content-card mb-4">
         <h2 class="h5">Available vehicles</h2>
+        <p class="text-muted">Every selected vehicle starts at the warehouse above.</p>
         @if (Model.Vehicles.Count == 0)
         {
             <div class="alert alert-info mb-0" role="status">
@@ -83,7 +95,7 @@
             @for (var i = 0; i < Model.Vehicles.Count; i++)
             {
                 <div class="row g-3 align-items-end mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <input asp-for="Vehicles[i].Id" type="hidden" />
                         <div class="form-check">
                             <input asp-for="Vehicles[i].Selected"
@@ -94,17 +106,10 @@
                             </label>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <label asp-for="Vehicles[i].StartLatitude"
-                               class="form-label">Start latitude</label>
-                        <input asp-for="Vehicles[i].StartLatitude"
-                               class="form-control" type="number" step="any" />
-                    </div>
-                    <div class="col-md-4">
-                        <label asp-for="Vehicles[i].StartLongitude"
-                               class="form-label">Start longitude</label>
-                        <input asp-for="Vehicles[i].StartLongitude"
-                               class="form-control" type="number" step="any" />
+                    <div class="col-md-6">
+                        <label asp-for="Vehicles[i].ExistingWorkloadSeconds" class="form-label">Existing work (seconds)</label>
+                        <input asp-for="Vehicles[i].ExistingWorkloadSeconds" class="form-control" type="number" min="0" step="any" />
+                        <span asp-validation-for="Vehicles[i].ExistingWorkloadSeconds" class="text-danger"></span>
                     </div>
                 </div>
             }
@@ -113,6 +118,7 @@
 
     <div class="content-card mb-4">
         <h2 class="h5">Eligible deliveries</h2>
+        <p class="text-secondary">Existing work estimates cover work outside this batch. Include its remaining driving and handling time once; do not include selected deliveries. Zero assumes no other work. Workload equity and earliest completion use this estimate; travel-first and warehouse rotation keep their allocation rules.</p>
         @if (Model.Deliveries.Count == 0)
         {
             <div class="alert alert-info mb-0" role="status">
@@ -168,8 +174,10 @@
                 </h3>
                 <p>
                     Start: @route.Start.Latitude, @route.Start.Longitude<br />
-                    Estimated distance: @(route.DistanceMeters / 1000).ToString("N1") km;
-                    time: @(route.DurationSeconds / 60).ToString("N0") minutes
+                    Estimated distance: @((route.DistanceMeters / 1000).ToString("N1")) km;
+                    new driving time: @((route.DurationSeconds / 60).ToString("N0")) minutes<br />
+                    Existing work: @((route.ExistingWorkloadSeconds / 60).ToString("N1")) minutes;
+                    combined workload: @(((route.ExistingWorkloadSeconds + route.DurationSeconds + route.Stops.Count * Model.Settings.ServiceSecondsPerStop) / 60).ToString("N1")) minutes.
                     <br />Deliveries: @(route.Stops.Count / 2)
                 </p>
                 @if (route.Stops.Count == 0)
@@ -212,16 +220,14 @@
                 <input name="Settings.MaxFleetTravelSeconds" type="hidden" value="@Model.Settings.MaxFleetTravelSeconds" />
                 <input name="Settings.WarehouseLatitude" type="hidden" value="@Model.Settings.WarehouseLatitude" />
                 <input name="Settings.WarehouseLongitude" type="hidden" value="@Model.Settings.WarehouseLongitude" />
+                <input asp-for="Settings.WarehouseAddress" type="hidden" />
                 @for (var i = 0; i < Model.Vehicles.Count; i++)
                 {
                     <input name="Vehicles[@i].Id"
                            type="hidden" value="@Model.Vehicles[i].Id" />
                     <input name="Vehicles[@i].Selected"
                            type="hidden" value="@Model.Vehicles[i].Selected.ToString().ToLowerInvariant()" />
-                    <input name="Vehicles[@i].StartLatitude"
-                           type="hidden" value="@Model.Vehicles[i].StartLatitude" />
-                    <input name="Vehicles[@i].StartLongitude"
-                           type="hidden" value="@Model.Vehicles[i].StartLongitude" />
+                    <input asp-for="Vehicles[i].ExistingWorkloadSeconds" type="hidden" />
                 }
                 @for (var i = 0; i < Model.Deliveries.Count; i++)
                 {

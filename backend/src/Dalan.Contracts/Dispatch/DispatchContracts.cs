@@ -4,7 +4,8 @@ namespace Dalan.Contracts.Dispatch;
 
 public sealed record DispatchVehicleStartRequest(
     Guid VehicleId,
-    CoordinateRequest? Start);
+    CoordinateRequest? Start,
+    double ExistingWorkloadSeconds = 0);
 
 public sealed record PreviewDispatchRequest(
     IReadOnlyList<DispatchVehicleStartRequest>? Vehicles,
@@ -44,7 +45,8 @@ public sealed record DispatchRouteResponse(
     CoordinateRequest Start,
     IReadOnlyList<DispatchStopResponse> Stops,
     double DistanceMeters,
-    double DurationSeconds);
+    double DurationSeconds,
+    double ExistingWorkloadSeconds = 0);
 
 public sealed record DispatchPreviewResponse(
     IReadOnlyList<DispatchRouteResponse> Routes,
