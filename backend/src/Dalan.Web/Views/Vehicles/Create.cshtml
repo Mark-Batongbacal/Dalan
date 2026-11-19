@@ -10,35 +10,36 @@
 </div>
 <div class="content-card form-panel">
 <form asp-action="Create" method="post">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
     <div class="mb-3">
         <label asp-for="RegistrationNumber" class="form-label"></label>
-        <input asp-for="RegistrationNumber" class="form-control" maxlength="32" />
-        <span asp-validation-for="RegistrationNumber" class="text-danger"></span>
+        <input asp-for="RegistrationNumber" class="form-control" aria-describedby="RegistrationNumber-validation" maxlength="32" />
+        <span id="RegistrationNumber-validation" asp-validation-for="RegistrationNumber" class="text-danger"></span>
     </div>
     <div class="mb-3">
         <label asp-for="Type" class="form-label"></label>
-        <input asp-for="Type" class="form-control" maxlength="64" placeholder="Enter the fleet's own description" />
-        <span asp-validation-for="Type" class="text-danger"></span>
+        <input asp-for="Type" class="form-control" aria-describedby="Type-validation" maxlength="64" placeholder="Enter the fleet's own description" />
+        <span id="Type-validation" asp-validation-for="Type" class="text-danger"></span>
     </div>
     <div class="row g-3 mb-3">
         <div class="col-sm-6">
             <label asp-for="PayloadCapacityKg" class="form-label"></label>
-            <input asp-for="PayloadCapacityKg" class="form-control" type="number" step="0.01" min="0.01" />
-            <span asp-validation-for="PayloadCapacityKg" class="text-danger"></span>
+            <input asp-for="PayloadCapacityKg" class="form-control" aria-describedby="PayloadCapacityKg-validation" type="number" step="0.01" min="0.01" />
+            <span id="PayloadCapacityKg-validation" asp-validation-for="PayloadCapacityKg" class="text-danger"></span>
         </div>
         <div class="col-sm-6">
             <label asp-for="SeatCapacity" class="form-label"></label>
-            <input asp-for="SeatCapacity" class="form-control" type="number" min="1" />
-            <span asp-validation-for="SeatCapacity" class="text-danger"></span>
+            <input asp-for="SeatCapacity" class="form-control" aria-describedby="SeatCapacity-validation" type="number" min="1" />
+            <span id="SeatCapacity-validation" asp-validation-for="SeatCapacity" class="text-danger"></span>
         </div>
     </div>
     <div class="mb-3">
         <label asp-for="NextMaintenanceDate" class="form-label"></label>
-        <input asp-for="NextMaintenanceDate" class="form-control" type="date" />
-        <span asp-validation-for="NextMaintenanceDate" class="text-danger"></span>
+        <input asp-for="NextMaintenanceDate" class="form-control" aria-describedby="NextMaintenanceDate-validation" type="date" />
+        <span id="NextMaintenanceDate-validation" asp-validation-for="NextMaintenanceDate" class="text-danger"></span>
     </div>
-    <button type="submit" class="btn btn-primary">Register</button>
+    <button type="submit" class="btn btn-primary">Register vehicle</button>
+    <a asp-action="Index" class="btn btn-outline-secondary ms-2">Cancel</a>
 </form>
 </div>
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }

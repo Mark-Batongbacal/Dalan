@@ -19,7 +19,6 @@
     </script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/Dalan.Web.styles.css" asp-append-version="true" />
 </head>
 <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -62,7 +61,7 @@
             <header class="topbar">
                 @if (signedIn)
                 {
-                    <button class="nav-toggle btn btn-outline-secondary" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="main-navigation" onclick="var nav=document.getElementById('main-navigation'); var open=nav.classList.toggle('open'); this.setAttribute('aria-expanded', open);">☰</button>
+                    <button class="nav-toggle btn btn-outline-secondary" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="main-navigation">☰</button>
                     <span class="topbar-title">@pageTitle</span>
                     <div class="topbar-actions">
                         <span class="account-name">@User.Identity?.Name</span>
