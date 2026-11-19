@@ -14,24 +14,24 @@
 }
 <div class="content-card form-panel">
 <form asp-action="Create" method="post">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
     <div class="mb-3">
         <label asp-for="Email" class="form-label"></label>
-        <input asp-for="Email" class="form-control" autocomplete="off" />
-        <span asp-validation-for="Email" class="text-danger"></span>
+        <input asp-for="Email" class="form-control" aria-describedby="Email-validation" autocomplete="off" />
+        <span id="Email-validation" asp-validation-for="Email" class="text-danger"></span>
     </div>
     <div class="mb-3">
         <label asp-for="Password" class="form-label"></label>
-        <input asp-for="Password" class="form-control" autocomplete="new-password" />
-        <span asp-validation-for="Password" class="text-danger"></span>
+        <input asp-for="Password" class="form-control" aria-describedby="Password-validation" autocomplete="new-password" />
+        <span id="Password-validation" asp-validation-for="Password" class="text-danger"></span>
     </div>
     <div class="mb-3">
         <label asp-for="Role" class="form-label"></label>
-        <select asp-for="Role" class="form-select">
+        <select asp-for="Role" class="form-select" aria-describedby="Role-validation">
             <option value="Dispatcher">Dispatcher</option>
             <option value="Admin">Admin</option>
         </select>
-        <span asp-validation-for="Role" class="text-danger"></span>
+        <span id="Role-validation" asp-validation-for="Role" class="text-danger"></span>
     </div>
     <button type="submit" class="btn btn-primary">Create account</button>
 </form>

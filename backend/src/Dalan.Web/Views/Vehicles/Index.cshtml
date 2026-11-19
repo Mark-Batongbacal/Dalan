@@ -25,7 +25,7 @@
 }
 else
 {
-    <div class="table-responsive">
+    <div class="table-responsive registry-table">
         <table class="table table-striped align-middle">
             <thead>
                 <tr>
@@ -41,18 +41,20 @@ else
                 @foreach (var vehicle in Model.Vehicles)
                 {
                     <tr>
-                        <td>@vehicle.RegistrationNumber</td>
-                        <td>@(vehicle.Type ?? "—")</td>
-                        <td>
+                        <td data-label="Registration number">@vehicle.RegistrationNumber</td>
+                        <td data-label="Type">@(vehicle.Type ?? "—")</td>
+                        <td data-label="Capacity">
+                            <div>
                             @if (vehicle.PayloadCapacityKg is not null) { <span>@vehicle.PayloadCapacityKg.Value.ToString("N2") kg</span> }
                             @if (vehicle.SeatCapacity is not null) { <span class="d-block">@vehicle.SeatCapacity seats</span> }
                             @if (vehicle.PayloadCapacityKg is null && vehicle.SeatCapacity is null) { <span>—</span> }
+                            </div>
                         </td>
-                        <td><span class="status-chip">@vehicle.Availability</span></td>
-                        <td>@(vehicle.NextMaintenanceDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                        <td data-label="Availability"><span class="status-chip">@vehicle.Availability</span></td>
+                        <td data-label="Maintenance due">@(vehicle.NextMaintenanceDate?.ToString("yyyy-MM-dd") ?? "—")</td>
                         @if (User.IsInRole("Admin"))
                         {
-                            <td><a asp-action="Edit" asp-route-id="@vehicle.Id">Edit</a></td>
+                            <td data-label="Actions"><a asp-action="Edit" asp-route-id="@vehicle.Id" aria-label="Edit @vehicle.RegistrationNumber">Edit</a></td>
                         }
                     </tr>
                 }

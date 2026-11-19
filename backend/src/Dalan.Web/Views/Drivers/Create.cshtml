@@ -10,12 +10,12 @@
 </div>
 <div class="content-card form-panel-wide">
     <form asp-action="Create" method="post">
-        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-        <div class="mb-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" /><span asp-validation-for="Name" class="text-danger"></span></div>
-        <div class="mb-3"><label asp-for="Phone" class="form-label"></label><input asp-for="Phone" class="form-control" type="tel" /><span asp-validation-for="Phone" class="text-danger"></span></div>
+        <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
+        <div class="mb-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" aria-describedby="Name-validation" /><span id="Name-validation" asp-validation-for="Name" class="text-danger"></span></div>
+        <div class="mb-3"><label asp-for="Phone" class="form-label"></label><input asp-for="Phone" class="form-control" aria-describedby="Phone-validation" type="tel" /><span id="Phone-validation" asp-validation-for="Phone" class="text-danger"></span></div>
         <div class="row g-3 mb-4">
-            <div class="col-sm-6"><label asp-for="LicenseNumber" class="form-label"></label><input asp-for="LicenseNumber" class="form-control" /><span asp-validation-for="LicenseNumber" class="text-danger"></span></div>
-            <div class="col-sm-6"><label asp-for="LicenseExpiry" class="form-label"></label><input asp-for="LicenseExpiry" class="form-control" type="date" /><span asp-validation-for="LicenseExpiry" class="text-danger"></span></div>
+            <div class="col-sm-6"><label asp-for="LicenseNumber" class="form-label"></label><input asp-for="LicenseNumber" class="form-control" aria-describedby="LicenseNumber-validation" /><span id="LicenseNumber-validation" asp-validation-for="LicenseNumber" class="text-danger"></span></div>
+            <div class="col-sm-6"><label asp-for="LicenseExpiry" class="form-label"></label><input asp-for="LicenseExpiry" class="form-control" aria-describedby="LicenseExpiry-validation" type="date" /><span id="LicenseExpiry-validation" asp-validation-for="LicenseExpiry" class="text-danger"></span></div>
         </div>
         <button type="submit" class="btn btn-primary">Add driver</button>
         <a asp-action="Index" class="btn btn-outline-secondary ms-2">Cancel</a>

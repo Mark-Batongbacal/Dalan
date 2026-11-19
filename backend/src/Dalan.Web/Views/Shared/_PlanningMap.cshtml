@@ -52,9 +52,13 @@
     </div>
     @if (Model.Targets.Count > 0)
     {
-        <p id="map-pick-help" class="text-muted mt-2">Click the map to set the selected location, or move it with the arrow keys and use “Use map center”. Coordinate fields remain editable.</p>
+        <p id="map-pick-help" class="text-muted mt-2">Search and select an address, click a map point, or move with the arrow keys and use “Use map center”. Confirm the location before continuing. Manual entry is available under Advanced coordinates.</p>
         <button type="button" class="btn btn-outline-secondary mb-3" data-map-use-center>Use map center</button>
         <ul class="planning-map-results list-unstyled" data-map-results aria-label="Address search results"></ul>
+        <p data-map-selection role="status">Choose a location to confirm.</p>
+        <button type="button" class="btn btn-primary mb-3" data-map-confirm disabled>Confirm location</button>
+        <button type="button" class="btn btn-outline-secondary mb-3" data-map-advanced>Advanced coordinates</button>
+        <ul data-map-location-list aria-label="Confirmed locations"></ul>
     }
     <p class="planning-map-status" data-map-status role="status" aria-live="polite">Loading map. Coordinate fields and stop lists remain available if the map cannot load.</p>
     <div class="planning-map-canvas" data-map-canvas tabindex="0" aria-label="Interactive planning map. Arrow keys move the map; plus and minus change zoom."></div>

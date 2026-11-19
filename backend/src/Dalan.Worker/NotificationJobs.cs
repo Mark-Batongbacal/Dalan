@@ -3,8 +3,13 @@ using Dalan.Application.Tracking;
 
 namespace Dalan.Worker;
 
-public sealed class NotificationJobs(IOperationsNotificationService notifications, IFleetTrackingService tracking)
+public sealed class NotificationJobs(IOperationsNotificationService notifications,
+    IFleetTrackingService tracking, Dalan.Infrastructure.Notifications.IDriverCredentialEmailOutbox credentials)
 {
-    public Task RetryAsync(CancellationToken cancellationToken) => notifications.RetryPendingAsync(cancellationToken);
+    public async Task RetryAsync(CancellationToken cancellationToken)
+    {
+        await notifications.RetryPendingAsync(cancellationToken);
+        await credentials.RetryPendingAsync(cancellationToken);
+    }
     public Task CleanupTrackingAsync(CancellationToken cancellationToken) => tracking.CleanupAsync(cancellationToken);
 }

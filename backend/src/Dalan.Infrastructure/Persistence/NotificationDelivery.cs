@@ -9,7 +9,7 @@ public sealed class NotificationDelivery
     public required string From { get; init; }
     public required string ToJson { get; init; }
     public required string Subject { get; init; }
-    public required string Text { get; init; }
+    public required string Text { get; set; }
     public Guid Claim { get; set; }
     public DateTimeOffset? LeaseUntilUtc { get; set; }
     public DateTimeOffset? NextAttemptAtUtc { get; set; }

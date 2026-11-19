@@ -18,20 +18,20 @@
     }
     else
     {
-        <div class="table-responsive">
+        <div class="table-responsive registry-table">
             <table class="table align-middle">
-                <thead><tr><th>Name</th><th>Phone</th><th>License</th><th>Expires</th><th>Availability</th><th>Vehicle</th><th>Actions</th></tr></thead>
+                <thead><tr><th scope="col">Name</th><th scope="col">Phone</th><th scope="col">License</th><th scope="col">Expires</th><th scope="col">Availability</th><th scope="col">Vehicle</th><th scope="col">Actions</th></tr></thead>
                 <tbody>
                 @foreach (var driver in Model.Drivers)
                 {
                     <tr>
-                        <td>@driver.Name</td>
-                        <td>@driver.Phone</td>
-                        <td>@driver.LicenseNumber</td>
-                        <td>@driver.LicenseExpiry.ToString("yyyy-MM-dd")</td>
-                        <td><span class="status-chip">@driver.Availability</span></td>
-                        <td>@(driver.VehicleRegistration ?? "—")</td>
-                        <td><a asp-action="Edit" asp-route-id="@driver.Id">Edit</a></td>
+                        <td data-label="Name">@driver.Name</td>
+                        <td data-label="Phone">@driver.Phone</td>
+                        <td data-label="License">@driver.LicenseNumber</td>
+                        <td data-label="Expires">@driver.LicenseExpiry.ToString("yyyy-MM-dd")</td>
+                        <td data-label="Availability"><span class="status-chip">@driver.Availability</span></td>
+                        <td data-label="Vehicle">@(driver.VehicleRegistration ?? "—")</td>
+                        <td data-label="Actions"><a asp-action="Edit" asp-route-id="@driver.Id" aria-label="Edit @driver.Name">Edit</a></td>
                     </tr>
                 }
                 </tbody>

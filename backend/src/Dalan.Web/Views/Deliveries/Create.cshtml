@@ -1,4 +1,4 @@
-﻿@model CreateDeliveryViewModel
+@model CreateDeliveryViewModel
 @{
     ViewData["Title"] = "Create delivery";
 }
@@ -26,7 +26,7 @@
             <label asp-for="PickupAddress" class="form-label">Warehouse address or name</label>
             <input asp-for="PickupAddress" class="form-control" />
         </div>
-        <div class="row g-3 mb-3">
+        <details class="mb-3" data-map-coordinate-fields><summary>Advanced coordinates</summary><div class="row g-3 mb-3">
             <div class="col-sm-6">
                 <label asp-for="PickupLatitude" class="form-label">Warehouse latitude</label>
                 <input asp-for="PickupLatitude" class="form-control"
@@ -37,7 +37,7 @@
                 <input asp-for="PickupLongitude" class="form-control"
                        type="number" step="any" />
             </div>
-        </div>
+        </div></details>
 
         <p class="form-text" data-warehouse-status aria-live="polite">This warehouse is also used as the start for vehicles on your dispatch board.</p>
 
@@ -45,7 +45,7 @@
             <label asp-for="DropoffAddress" class="form-label">Drop-off address</label>
             <input asp-for="DropoffAddress" class="form-control" />
         </div>
-        <div class="row g-3 mb-3">
+        <details class="mb-3" data-map-coordinate-fields><summary>Advanced coordinates</summary><div class="row g-3 mb-3">
             <div class="col-sm-6">
                 <label asp-for="DropoffLatitude" class="form-label">Drop-off latitude</label>
                 <input asp-for="DropoffLatitude" class="form-control"
@@ -56,7 +56,7 @@
                 <input asp-for="DropoffLongitude" class="form-control"
                        type="number" step="any" />
             </div>
-        </div>
+        </div></details>
 
         <div class="row g-3 mb-3">
             <div class="col-sm-6">

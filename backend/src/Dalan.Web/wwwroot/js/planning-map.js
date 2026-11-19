@@ -45,6 +45,62 @@
         const routeSelect = find("[data-map-route]");
         const roadButton = find("[data-map-roads]");
         const targetSelect = find("[data-map-target]");
+        const confirmButton = find("[data-map-confirm]");
+        let pendingLocation = null;
+        let candidateMarker = null;
+        const confirmedLabels = new Map();
+        find("[data-map-advanced]")?.addEventListener("click", () => {
+            clearSelection();
+            const input = byId(model.targets[Number(targetSelect.value)].latitudeInputId);
+            const details = input?.closest("details");
+            if (details) details.open = true;
+            input?.focus();
+        });
+        document.addEventListener("planning-map-job-added", event => {
+            const index = event.detail.index;
+            for (const [kind, label] of [["Pickup", "pickup"], ["Dropoff", "drop-off"]]) {
+                const target = { label: `Job ${index + 1} ${label}`, latitudeInputId: `Jobs_${index}__${kind}Latitude`,
+                    longitudeInputId: `Jobs_${index}__${kind}Longitude` };
+                const option = document.createElement("option");
+                option.value = model.targets.length; option.textContent = target.label;
+                targetSelect.append(option); model.targets.push(target);
+                model.overview.push({ ...target, order: 0 });
+            }
+        });
+        function clearSelection() {
+            pendingLocation = null;
+            candidateMarker?.remove(); candidateMarker = null;
+            if (confirmButton) confirmButton.disabled = true;
+            const selection = find("[data-map-selection]");
+            if (selection) selection.textContent = "Choose a location to confirm. Existing confirmed locations are unchanged.";
+        }
+        function proposeLocation(lat, lon, label) {
+            if (coordinate(lat, 90) === null || coordinate(lon, 180) === null) return;
+            pendingLocation = { lat, lon, label: label || "Selected map point" };
+            candidateMarker?.remove();
+            if (map) candidateMarker = new maplibregl.Marker({ color: getComputedStyle(root).getPropertyValue("--primary").trim() })
+                .setLngLat([lon, lat]).addTo(map);
+            find("[data-map-selection]").textContent = model.targets[Number(targetSelect.value)].label + ": " +
+                pendingLocation.label + ". Confirm to use this location.";
+            confirmButton.disabled = false;
+        }
+        confirmButton?.addEventListener("click", () => {
+            if (!pendingLocation) return;
+            const { lat, lon, label } = pendingLocation;
+            setLocation(lat, lon, label);
+            confirmedLabels.set(targetSelect.value, label); paint();
+            clearSelection();
+        });
+        root.closest("form")?.addEventListener("submit", event => {
+            if (!pendingLocation) return;
+            event.preventDefault();
+            message("Confirm the selected location before continuing, or choose another location to keep existing inputs.");
+            confirmButton.focus();
+        });
+        root.closest("form")?.addEventListener("invalid", event => {
+            const details = event.target.closest("details");
+            if (details) details.open = true;
+        }, true);
         let map = null, markers = [], stale = false, mapFailed = false, styleReady = false;
         let request = null, requestVersion = 0, geometry = [];
         let searchRequest = null, searchVersion = 0;
@@ -92,6 +148,15 @@
         function paint() {
             markers.forEach(marker => marker.remove()); markers = [];
             const points = visiblePoints();
+            const list = find("[data-map-location-list]");
+            if (list) list.replaceChildren(...model.targets.map((target, index) => {
+                const item = document.createElement("li");
+                const valid = coordinate(byId(target.latitudeInputId)?.value, 90) !== null &&
+                    coordinate(byId(target.longitudeInputId)?.value, 180) !== null;
+                item.textContent = target.label + ": " + (valid ?
+                    byId(target.addressInputId)?.value || confirmedLabels.get(String(index)) || "Location selected" : "Not selected");
+                return item;
+            }));
             if (roadButton) roadButton.disabled = !!request || stale || !activeRoute() || pointsFor(activeRoute()).length < 2;
             if (!map) return;
             points.forEach((point, index) => {
@@ -117,6 +182,9 @@
         function changed(event) {
             if (root.contains(event.target)) return;
             const id = event.target.id || "";
+            model.targets.forEach((target, index) => {
+                if ([target.latitudeInputId, target.longitudeInputId].includes(id)) confirmedLabels.delete(String(index));
+            });
             const watched = model.targets.some(t => [t.latitudeInputId, t.longitudeInputId, t.selectionInputId].includes(id)) ||
                 model.overview.some(p => p.selectionInputId === id) ||
                 model.routes.some(r => r.points.some(p => [p.latitudeInputId, p.longitudeInputId, p.orderInputId, p.vehicleInputId].includes(id)));
@@ -147,6 +215,18 @@
                 byId(target.selectionInputId).dispatchEvent(new Event("change", { bubbles: true }));
             }
             clearRoad(); paint();
+            const form = root.closest("form");
+            const summary = form?.querySelector(".validation-summary-errors[data-valmsg-summary]");
+            const validator = form && window.jQuery?.(form).data("validator");
+            if (summary && validator) {
+                validator.form();
+                const list = summary.querySelector("ul");
+                list?.replaceChildren(...validator.errorList.map(error => {
+                    const item = document.createElement("li"); item.textContent = error.message; return item;
+                }));
+                summary.classList.toggle("validation-summary-errors", validator.errorList.length > 0);
+                summary.classList.toggle("validation-summary-valid", validator.errorList.length === 0);
+            }
             message(target.label + " set to " + lat.toFixed(6) + ", " + lon.toFixed(6) +
                 ". Check the form before saving." + (stale ? " Preview routes again." : ""));
         }
@@ -163,7 +243,7 @@
             map.scrollZoom.disable();
             map.on("click", event => {
                 if (model.targets.length && !event.originalEvent.target.closest(".planning-map-marker, .maplibregl-popup, .maplibregl-control-container"))
-                    setLocation(event.lngLat.lat, event.lngLat.lng);
+                    proposeLocation(event.lngLat.lat, event.lngLat.lng);
             });
             map.on("load", () => {
                 mapFailed = false; renderGeometry(); paint(); fit();
@@ -199,9 +279,14 @@
         });
         find("[data-map-use-center]")?.addEventListener("click", () => {
             if (!map) return message("Map graphics are unavailable. Use coordinate fields or address search.");
-            const center = map.getCenter(); setLocation(center.lat, center.lng);
+            const center = map.getCenter(); proposeLocation(center.lat, center.lng);
         });
         targetSelect?.addEventListener("change", () => {
+            clearSelection();
+            searchRequest?.abort(); searchVersion++;
+            find("[data-map-search-button]").disabled = false;
+            find("[data-map-results]").replaceChildren();
+            find("[data-map-search]").value = "";
             const target = model.targets[Number(targetSelect.value)];
             const lat = coordinate(byId(target.latitudeInputId)?.value, 90);
             const lon = coordinate(byId(target.longitudeInputId)?.value, 180);
@@ -259,6 +344,8 @@
         const searchButton = find("[data-map-search-button]");
         const searchInput = find("[data-map-search]");
         searchInput?.addEventListener("input", () => {
+            clearSelection();
+            searchButton.disabled = false;
             searchRequest?.abort(); searchVersion++; find("[data-map-results]").replaceChildren();
             message("Press Search to look up this address, or choose a map point.");
         });
@@ -277,7 +364,7 @@
                     button.type = "button"; button.className = "planning-map-result";
                     button.textContent = result.label;
                     button.addEventListener("click", () => {
-                        setLocation(result.location.latitude, result.location.longitude, result.label);
+                        proposeLocation(result.location.latitude, result.location.longitude, result.label);
                         map?.easeTo({ center: [result.location.longitude, result.location.latitude], zoom: 15, duration: 0 });
                         results.replaceChildren();
                     });
@@ -288,7 +375,7 @@
             } catch (error) {
                 if (version === searchVersion && error.name !== "AbortError") message(error.message);
             } finally {
-                searchButton.disabled = false;
+                if (version === searchVersion) searchButton.disabled = false;
             }
         });
         paint();
