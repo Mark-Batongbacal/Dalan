@@ -1,4 +1,4 @@
-﻿@model DispatchBoardViewModel
+@model DispatchBoardViewModel
 @{
     ViewData["Title"] = "Dispatch board";
     var deliveryNames = Model.Deliveries.ToDictionary(
@@ -74,7 +74,7 @@
                 <label asp-for="Settings.WarehouseAddress" class="form-label">Warehouse address or name</label>
                 <input asp-for="Settings.WarehouseAddress" class="form-control" maxlength="500" />
             </div>
-            <div class="row g-3">
+            <details data-map-coordinate-fields><summary>Advanced coordinates</summary><div class="row g-3">
                 <div class="col-md-6">
                     <label asp-for="Settings.WarehouseLatitude" class="form-label">Warehouse latitude</label>
                     <input asp-for="Settings.WarehouseLatitude" type="number" min="-90" max="90" step="any" class="form-control" />
@@ -83,7 +83,7 @@
                     <label asp-for="Settings.WarehouseLongitude" class="form-label">Warehouse longitude</label>
                     <input asp-for="Settings.WarehouseLongitude" type="number" min="-180" max="180" step="any" class="form-control" />
                 </div>
-            </div>
+            </div></details>
             <p class="form-text" data-warehouse-status aria-live="polite"></p>
         </fieldset>
     </div>

@@ -22,7 +22,9 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
         await page.goto(base + "/DispatchBoard");
         await page.locator("#Strategy").selectOption("WorkloadEquity");
         await page.locator('[name="Settings.ServiceSecondsPerStop"]').fill("60");
+        await page.locator("#Settings_WarehouseLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLatitude").fill("14.6");
+        await page.locator("#Settings_WarehouseLongitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLongitude").fill("121.03");
         for (let i = 0; i < 2; i++) {
             await page.locator(`[name="Vehicles[${i}].Selected"][type="checkbox"]`).check();

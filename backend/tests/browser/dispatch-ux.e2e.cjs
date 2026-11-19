@@ -55,7 +55,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
                 await page.setViewportSize({ width, height: 1000 });
                 await page.emulateMedia({ colorScheme: theme === 'system' ? 'dark' : theme });
                 await page.locator('#theme-select').selectOption(theme);
-                await page.waitForFunction(expected => { const button = document.querySelector('.btn-primary'); return !button || getComputedStyle(button).color === expected; },
+                await page.waitForFunction(expected => { const button = document.querySelector('.btn-primary:not(:disabled)'); return !button || getComputedStyle(button).color === expected; },
                     theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(37, 28, 19)');
                 assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), stage + ' fits ' + width);
                 assert.ok(await page.evaluate(() => { const ids = [...document.querySelectorAll('[id]')].map(e => e.id); return new Set(ids).size === ids.length; }), stage + ' IDs unique');
@@ -65,7 +65,56 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.goto(base + '/Deliveries');
         await capture('delivery-queue');
         await page.goto(base + '/FleetPlanner');
+        await page.route('**/PlanningMap/Search', route => route.fulfill({ json: {
+            results: [{ label: 'UX warehouse', location: { latitude: 14.6, longitude: 121 } }], attribution: 'Photon / OpenStreetMap'
+        } }));
+        async function chooseLocation(target) {
+            await page.locator('[data-map-target]').selectOption(target);
+            await page.locator('[data-map-search]').fill('Manila');
+            await page.locator('[data-map-search-button]').click();
+            await page.getByRole('button', { name: 'UX warehouse', exact: true }).click();
+            await page.locator('[data-map-confirm]').focus();
+            await page.keyboard.press('Enter');
+        }
+        assert.equal(await page.locator('[data-map-coordinate-fields][open]').count(), 0);
+        const startTarget = await page.locator('[data-map-target] option').allTextContents();
+        await chooseLocation({ label: startTarget[0] });
+        assert.equal(await page.locator('#Vehicles_0__StartLatitude').inputValue(), '14.600000');
+        await chooseLocation({ label: 'Job 1 pickup' });
+        await chooseLocation({ label: 'Job 1 drop-off' });
+        await page.getByRole('button', { name: 'Add job', exact: true }).click();
+        await chooseLocation({ label: 'Job 2 pickup' });
+        await chooseLocation({ label: 'Job 2 drop-off' });
+        assert.equal(await page.locator('#Jobs_1__DropoffLatitude').inputValue(), '14.600000');
         await capture('fleet-planner');
+        await page.goto(base + '/Deliveries/Create');
+        await page.locator('#RecipientName').fill('Location workflow');
+        await chooseLocation('0');
+        await page.locator('[data-map-target]').selectOption('1');
+        await page.locator('[data-map-search]').fill('Manila');
+        await page.locator('[data-map-search-button]').click();
+        await page.getByRole('button', { name: 'UX warehouse', exact: true }).click();
+        assert.equal(await page.locator('#DropoffLatitude').inputValue(), '');
+        assert.equal(await page.locator('[data-planning-map]').evaluate(root =>
+            root.closest('form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))), false);
+        await page.locator('[data-map-target]').selectOption('0');
+        assert.ok(await page.locator('[data-map-confirm]').isDisabled());
+        assert.equal(await page.locator('[data-map-results] button').count(), 0);
+        await chooseLocation('1');
+        assert.equal(await page.locator('#DropoffLatitude').inputValue(), '14.600000');
+        assert.doesNotMatch(await page.locator('[data-valmsg-summary]').innerText(), /Dropoff/);
+        await capture('delivery-location');
+        await page.route('**/PlanningMap/Search', route => route.fulfill({ status: 503, json: { error: 'Search unavailable. Use Advanced coordinates.' } }));
+        await page.locator('[data-map-search]').fill('Unavailable');
+        await page.locator('[data-map-search-button]').click();
+        await page.waitForFunction(() => !document.querySelector('[data-map-search-button]').disabled);
+        assert.equal(await page.locator('#DropoffLatitude').inputValue(), '14.600000');
+        assert.equal(await page.locator('#RecipientName').inputValue(), 'Location workflow');
+        await page.locator('[data-map-advanced]').click();
+        assert.ok(await page.locator('#DropoffLatitude').evaluate(input => document.activeElement === input && input.closest('details').open));
+        await page.locator('#PayloadWeightKg').fill('2');
+        await submit('Create delivery');
+        assert.match(await page.locator('#main-content').innerText(), /Location workflow/);
         await page.goto(base + '/DispatchBoard');
         assert.equal(matrices, 0);
         const vehicle = page.locator('input[name$=".Id"][value="' + fixture.vehicleId + '"]').first();
@@ -73,9 +122,8 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.locator(`[name="${prefix}.Selected"][type=checkbox]`).check();
         await page.locator(`[name="${prefix}.ExistingWorkloadSeconds"]`).fill('600');
         await page.getByLabel(/UX Recipient/).check();
-        await page.locator('#Settings_WarehouseLatitude').fill('14.6');
-        await page.locator('#Settings_WarehouseLongitude').fill('121');
-        await page.locator('#Settings_WarehouseAddress').fill('UX warehouse');
+        assert.equal(await page.locator('#Settings_WarehouseLatitude').inputValue(), '14.6');
+        assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), 'UX warehouse');
         await page.locator('#Strategy').selectOption('WorkloadEquity');
         await page.locator('#Settings_ServiceSecondsPerStop').fill('60');
         await submit('Suggest strategy without routing');
