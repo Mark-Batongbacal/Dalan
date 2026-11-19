@@ -186,6 +186,53 @@ public sealed class DriverSecuritySqlTests(SqlServerFixture fixture)
         Assert.False(await verify.DriverEventReceipts.AnyAsync(r => r.DeliveryId == seeded.DeliveryId));
     }
 
+    [Fact]
+    public async Task Enabled_gps_proof_must_match_server_destination_and_have_fresh_accurate_fix()
+    {
+        using var factory = CreateFactory().WithWebHostBuilder(builder =>
+            builder.UseSetting("DriverGpsProof:Enabled", "true"));
+        using var client = Client(factory);
+        var seeded = await SeedAndLogin(factory, client, "Driver", pickedUp: true);
+        var eventTime = seeded.AssignedAt.AddMinutes(2);
+        var valid = new DriverTaskEvent(Guid.NewGuid(), seeded.AssignedAt, eventTime,
+            "Deliver", 14.1, 121.1, "Recipient confirmed",
+            [0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9],
+            LocationAccuracyMeters: 8,
+            LocationCapturedAtUtc: eventTime.AddSeconds(-10));
+        var endpoint = $"/api/driver/tasks/{seeded.DeliveryId}/events";
+
+        using var distant = await client.PostAsJsonAsync(endpoint,
+            valid with { EventId = Guid.NewGuid(), Latitude = 14.5, Longitude = 121.5 });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, distant.StatusCode);
+        Assert.Contains("GPS", await distant.Content.ReadAsStringAsync());
+
+        using var stale = await client.PostAsJsonAsync(endpoint,
+            valid with { EventId = Guid.NewGuid(), LocationCapturedAtUtc = eventTime.AddMinutes(-5) });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, stale.StatusCode);
+
+        using var unmeasured = await client.PostAsJsonAsync(endpoint,
+            valid with { EventId = Guid.NewGuid(), LocationAccuracyMeters = null });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, unmeasured.StatusCode);
+
+        await using (var db = fixture.CreateContext())
+        {
+            var delivery = await db.Deliveries.Include(x => x.Proof)
+                .SingleAsync(x => x.Id == seeded.DeliveryId);
+            Assert.Equal(DeliveryStatus.PickedUp, delivery.Status);
+            Assert.Null(delivery.Proof);
+            Assert.False(await db.DriverEventReceipts.AnyAsync(x => x.DeliveryId == seeded.DeliveryId));
+        }
+
+        using var accepted = await client.PostAsJsonAsync(endpoint, valid);
+        Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
+        using var replay = await client.PostAsJsonAsync(endpoint, valid);
+        Assert.Equal(HttpStatusCode.NoContent, replay.StatusCode);
+        await using var verify = fixture.CreateContext();
+        Assert.Equal(DeliveryStatus.Delivered,
+            (await verify.Deliveries.SingleAsync(x => x.Id == seeded.DeliveryId)).Status);
+        Assert.Equal(1, await verify.DriverEventReceipts.CountAsync(x => x.DeliveryId == seeded.DeliveryId));
+    }
+
     private WebApplicationFactory<Program> CreateFactory(IRoutingService? routing = null, bool tracking = false) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
             .UseEnvironment("Testing").UseSetting("ConnectionStrings:Dalan", fixture.ConnectionString)
