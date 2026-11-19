@@ -48,7 +48,7 @@ public sealed class DriverCredentialEmailSqlTests(SqlServerFixture fixture)
         using (var retry = fixture.CreateContext())
             await NewOutbox(retry, transport, options, clock, protection).RetryPendingAsync(default);
 
-        Assert.Equal([id, id], transport.Ids);
+        Assert.Equal(new[] { id, id }, transport.Ids);
         await using var verify = fixture.CreateContext();
         var delivered = await verify.NotificationDeliveries.SingleAsync(x => x.Id == id);
         Assert.NotNull(delivered.AcceptedAtUtc);
