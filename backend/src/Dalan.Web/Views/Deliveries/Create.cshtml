@@ -6,48 +6,53 @@
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
     <h1>Create delivery</h1>
-    <p>Enter the recipient and pickup and drop-off locations.</p>
+    <p>Select the warehouse pickup, then enter the recipient and delivery destination.</p>
 </div>
 
 <div class="content-card form-panel-wide">
-    <form asp-action="Create" method="post">
+    <form asp-action="Create" method="post" data-warehouse-selection
+          data-warehouse-owner="@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)"
+          data-warehouse-latitude="PickupLatitude" data-warehouse-longitude="PickupLongitude"
+          data-warehouse-address="PickupAddress" data-warehouse-restore="@(ViewData.ModelState.Count == 0 ? "true" : "false")">
         <div asp-validation-summary="All" class="text-danger"></div>
         <partial name="_PlanningMap" model="PlanningMapViewModel.ForDelivery()" />
 
         <div class="mb-3">
-            <label asp-for="RecipientName" class="form-label"></label>
+            <label asp-for="RecipientName" class="form-label">Recipient name</label>
             <input asp-for="RecipientName" class="form-control" />
         </div>
 
         <div class="mb-3">
-            <label asp-for="PickupAddress" class="form-label"></label>
+            <label asp-for="PickupAddress" class="form-label">Warehouse address or name</label>
             <input asp-for="PickupAddress" class="form-control" />
         </div>
         <div class="row g-3 mb-3">
             <div class="col-sm-6">
-                <label asp-for="PickupLatitude" class="form-label"></label>
+                <label asp-for="PickupLatitude" class="form-label">Warehouse latitude</label>
                 <input asp-for="PickupLatitude" class="form-control"
                        type="number" step="any" />
             </div>
             <div class="col-sm-6">
-                <label asp-for="PickupLongitude" class="form-label"></label>
+                <label asp-for="PickupLongitude" class="form-label">Warehouse longitude</label>
                 <input asp-for="PickupLongitude" class="form-control"
                        type="number" step="any" />
             </div>
         </div>
 
+        <p class="form-text" data-warehouse-status aria-live="polite">This warehouse is also used as the start for vehicles on your dispatch board.</p>
+
         <div class="mb-3">
-            <label asp-for="DropoffAddress" class="form-label"></label>
+            <label asp-for="DropoffAddress" class="form-label">Drop-off address</label>
             <input asp-for="DropoffAddress" class="form-control" />
         </div>
         <div class="row g-3 mb-3">
             <div class="col-sm-6">
-                <label asp-for="DropoffLatitude" class="form-label"></label>
+                <label asp-for="DropoffLatitude" class="form-label">Drop-off latitude</label>
                 <input asp-for="DropoffLatitude" class="form-control"
                        type="number" step="any" />
             </div>
             <div class="col-sm-6">
-                <label asp-for="DropoffLongitude" class="form-label"></label>
+                <label asp-for="DropoffLongitude" class="form-label">Drop-off longitude</label>
                 <input asp-for="DropoffLongitude" class="form-control"
                        type="number" step="any" />
             </div>
@@ -55,17 +60,21 @@
 
         <div class="row g-3 mb-3">
             <div class="col-sm-6">
-                <label asp-for="PayloadWeightKg" class="form-label"></label>
+                <label asp-for="PayloadWeightKg" class="form-label">Payload weight (kg)</label>
                 <input asp-for="PayloadWeightKg" class="form-control"
                        type="number" step="0.01" min="0.01" />
             </div>
             <div class="col-sm-6">
-                <label asp-for="ExpectedDeliveryAtUtc" class="form-label"></label>
                 <input asp-for="ExpectedDeliveryAtUtc" class="form-control"
-                       type="text" placeholder="2026-11-10T14:30:00+00:00" />
-                <small class="form-text text-muted">
-                    Include a time zone offset, such as +00:00 for UTC.
-                </small>
+                       type="hidden" value="@(Model.ExpectedDeliveryAtUtc?.ToString("O"))" />
+                <label for="ExpectedDeliveryLocal" class="form-label">Expected delivery time</label>
+                <input asp-for="ExpectedDeliveryLocal" class="form-control" type="datetime-local" step="1800" data-delivery-time
+                       data-time-default="@(ViewData.ModelState.Count == 0 ? "true" : "false")" />
+                <div class="d-flex gap-2 mt-2">
+                    <button type="button" class="btn btn-outline-secondary" data-time-step="-30" aria-label="Expected delivery time 30 minutes earlier">−30 min</button>
+                    <button type="button" class="btn btn-outline-secondary" data-time-step="30" aria-label="Expected delivery time 30 minutes later">+30 min</button>
+                </div>
+                <small class="form-text text-muted" data-time-zone>Defaults to the next half-hour from now. Adjust in 30-minute steps.</small>
             </div>
         </div>
 
@@ -75,6 +84,8 @@
 </div>
 
 @section Scripts {
+    <script src="~/js/warehouse-selection.js" asp-append-version="true"></script>
     <partial name="_PlanningMapAssets" />
     <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/delivery-time.js" asp-append-version="true"></script>
 }

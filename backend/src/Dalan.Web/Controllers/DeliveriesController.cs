@@ -12,7 +12,7 @@ namespace Dalan.Web.Controllers;
 public sealed class DeliveriesController(
     IDeliveryService deliveries,
     IDriverService drivers,
-    IVehicleService vehicles) : Controller
+    IVehicleService vehicles, TimeProvider clock) : Controller
 {
     [HttpGet]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
@@ -43,7 +43,12 @@ public sealed class DeliveriesController(
     }
 
     [HttpGet]
-    public IActionResult Create() => View(new CreateDeliveryViewModel());
+    public IActionResult Create()
+    {
+        var now = clock.GetUtcNow();
+        var nextSlot = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute / 30 * 30, 0, TimeSpan.Zero).AddMinutes(30);
+        return View(new CreateDeliveryViewModel { PickupAddress = "Warehouse", ExpectedDeliveryAtUtc = nextSlot });
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]

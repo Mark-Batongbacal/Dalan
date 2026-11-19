@@ -21,16 +21,13 @@ public sealed class PlanningMapViewModel
 
     public static PlanningMapViewModel ForBoard(DispatchBoardViewModel board)
     {
-        var targets = new List<PlanningMapTarget> { new("Common warehouse", "Settings_WarehouseLatitude", "Settings_WarehouseLongitude") };
+        var targets = new List<PlanningMapTarget> { new("Warehouse", "Settings_WarehouseLatitude", "Settings_WarehouseLongitude", "Settings_WarehouseAddress") };
         var overview = new List<PlanningMapPoint>();
         for (var i = 0; i < board.Vehicles.Count; i++)
         {
             var v = board.Vehicles[i];
-            var prefix = $"Vehicles_{i}__";
-            targets.Add(new(v.RegistrationNumber + " start", prefix + "StartLatitude", prefix + "StartLongitude",
-                SelectionInputId: prefix + "Selected"));
-            overview.Add(new(v.RegistrationNumber + " start", LatitudeInputId: prefix + "StartLatitude",
-                LongitudeInputId: prefix + "StartLongitude", SelectionInputId: prefix + "Selected"));
+            overview.Add(new(v.RegistrationNumber + " warehouse start", LatitudeInputId: "Settings_WarehouseLatitude",
+                LongitudeInputId: "Settings_WarehouseLongitude", SelectionInputId: $"Vehicles_{i}__Selected"));
         }
         for (var i = 0; i < board.Deliveries.Count; i++)
         {
@@ -44,7 +41,7 @@ public sealed class PlanningMapViewModel
         return new()
         {
             Title = "Dispatch planning map",
-            Description = "Choose a location field, then select a map point or use its coordinates. Vehicle starts are dispatcher-confirmed locations, not live GPS.",
+            Description = "Select the warehouse on the map, search its address, or enter coordinates. Every selected vehicle starts at this warehouse.",
             Preview = board.Preview is not null, Targets = targets, Overview = overview,
             Routes = board.Preview?.Routes.Select(r => new PlanningMapRoute(r.VehicleId.ToString(),
                 vehicles.GetValueOrDefault(r.VehicleId) ?? "Vehicle",
@@ -57,12 +54,12 @@ public sealed class PlanningMapViewModel
 
     public static PlanningMapViewModel ForDelivery() => new()
     {
-        Title = "Pickup and drop-off",
-        Description = "Select a map point, search an address, or enter coordinates below. Check the address and position before saving.",
-        Targets = [new("Pickup", "PickupLatitude", "PickupLongitude", "PickupAddress"),
+        Title = "Warehouse and drop-off",
+        Description = "Select your warehouse and the delivery destination. The warehouse is the pickup and is remembered for your dispatch board in this browser.",
+        Targets = [new("Warehouse", "PickupLatitude", "PickupLongitude", "PickupAddress"),
                    new("Drop-off", "DropoffLatitude", "DropoffLongitude", "DropoffAddress")],
-        Routes = [new("delivery", "Pickup to drop-off", [
-            new("Pickup", LatitudeInputId: "PickupLatitude", LongitudeInputId: "PickupLongitude", Order: -1),
+        Routes = [new("delivery", "Warehouse to drop-off", [
+            new("Warehouse", LatitudeInputId: "PickupLatitude", LongitudeInputId: "PickupLongitude", Order: -1),
             new("Drop-off", LatitudeInputId: "DropoffLatitude", LongitudeInputId: "DropoffLongitude")])]
     };
 

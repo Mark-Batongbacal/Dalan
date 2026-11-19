@@ -261,6 +261,8 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             ["Deliveries[0].Id"] = delivery.Id.ToString(),
             ["Deliveries[0].Selected"] = "true"
         };
+        choices["Settings.WarehouseLatitude"] = "7.0";
+        choices["Settings.WarehouseLongitude"] = "125.6";
 
         using (var previewPage = await client.PostAsync(
             "/DispatchBoard", new FormUrlEncodedContent(choices)))
@@ -282,6 +284,8 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             {
                 ["__RequestVerificationToken"] = token,
                 ["Vehicles[0].VehicleId"] = vehicle.Id.ToString(),
+                ["Settings.WarehouseLatitude"] = "7.0",
+                ["Settings.WarehouseLongitude"] = "125.6",
                 ["Vehicles[0].StartLatitude"] = "7.0",
                 ["Vehicles[0].StartLongitude"] = "125.6",
                 ["Stops[0].DeliveryId"] = delivery.Id.ToString(),
@@ -314,6 +318,8 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             {
                 ["__RequestVerificationToken"] = token,
                 ["Vehicles[0].VehicleId"] = vehicle.Id.ToString(),
+                ["Settings.WarehouseLatitude"] = "7.0",
+                ["Settings.WarehouseLongitude"] = "125.6",
                 ["Vehicles[0].StartLatitude"] = "7.0",
                 ["Vehicles[0].StartLongitude"] = "125.6",
                 ["Stops[0].DeliveryId"] = delivery.Id.ToString(),

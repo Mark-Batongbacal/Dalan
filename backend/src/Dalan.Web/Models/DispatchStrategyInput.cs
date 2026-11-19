@@ -9,6 +9,8 @@ public sealed class DispatchStrategyInput
     public double? MaxFleetTravelSeconds { get; set; }
     public double? WarehouseLatitude { get; set; }
     public double? WarehouseLongitude { get; set; }
+    [System.ComponentModel.DataAnnotations.StringLength(500)]
+    public string? WarehouseAddress { get; set; }
 
     public DispatchStrategySettings ToContract() => new(
         WarehouseLatitude is double latitude && WarehouseLongitude is double longitude

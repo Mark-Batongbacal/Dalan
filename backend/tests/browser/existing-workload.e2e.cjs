@@ -26,8 +26,6 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
         await page.locator("#Settings_WarehouseLongitude").fill("121.03");
         for (let i = 0; i < 2; i++) {
             await page.locator(`[name="Vehicles[${i}].Selected"][type="checkbox"]`).check();
-            await page.locator(`[name="Vehicles[${i}].StartLatitude"]`).fill("14.6");
-            await page.locator(`[name="Vehicles[${i}].StartLongitude"]`).fill("121.03");
             await page.locator(`[name="Vehicles[${i}].ExistingWorkloadSeconds"]`).fill(i === 0 ? "7200" : "1800");
         }
         for (let i = 0; i < 6; i++) await page.locator(`[name="Deliveries[${i}].Selected"][type="checkbox"]`).check();
