@@ -48,6 +48,8 @@ public sealed class DriverCredentialEmailRoutingTests
         public Task<string> QueueAsync(EmailEnvelope envelope, CancellationToken cancellationToken)
         { Queued.Add(envelope.Id); return Task.FromResult("queued"); }
         public Task RetryPendingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyList<DriverCredentialEmailStatus>> RecentAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<DriverCredentialEmailStatus>>([]);
     }
 
     private sealed class RecordingHandler : HttpMessageHandler
