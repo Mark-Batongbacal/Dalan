@@ -4,40 +4,63 @@
 }
 
 <div class="auth-wrap">
-<div class="content-card">
-<span class="auth-badge">Staff access</span>
-<h1>Welcome back.</h1>
-<p>Sign in to manage your fleet workspace.</p>
-<form asp-action="Login" method="post">
-    <input asp-for="ReturnUrl" type="hidden" />
-    <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
-    <div class="mb-3">
-        <label asp-for="Email" class="form-label"></label>
-        <input asp-for="Email" class="form-control" aria-describedby="Email-validation" autocomplete="username" />
-        <div class="form-text">Use your full staff email address.</div>
-        <span id="Email-validation" asp-validation-for="Email" class="text-danger"></span>
+    <div class="content-card">
+        <a class="auth-logo" asp-controller="Home" asp-action="Index">
+            <span class="brand-mark">D</span>
+            Dalan
+        </a>
+        <h1>Welcome back.</h1>
+        <p>Sign in to manage your fleet workspace.</p>
+        <form asp-action="Login" method="post">
+            <input asp-for="ReturnUrl" type="hidden" />
+            <div asp-validation-summary="All" class="validation-summary-errors" role="alert" tabindex="-1" style="display:none"></div>
+
+            <div class="form-group">
+                <label asp-for="Email" class="form-label">Email address</label>
+                <input asp-for="Email" class="form-control" aria-describedby="Email-validation"
+                       autocomplete="username" placeholder="you@company.com" />
+                <span id="Email-validation" asp-validation-for="Email" class="text-danger" style="font-size:13px"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Password" class="form-label">Password</label>
+                <div class="input-group">
+                    <input asp-for="Password" class="form-control" aria-describedby="Password-validation"
+                           autocomplete="current-password" placeholder="••••••••" />
+                    <button id="toggle-password" class="btn btn-outline-secondary" type="button"
+                            aria-controls="Password" aria-pressed="false"
+                            style="border-radius: 0 var(--r-sm) var(--r-sm) 0; min-width:90px">
+                        Show
+                    </button>
+                </div>
+                <span id="Password-validation" asp-validation-for="Password" class="text-danger" style="font-size:13px"></span>
+            </div>
+
+            <button class="btn btn-primary" type="submit" style="margin-top:8px">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M15 3h4v14h-4M10 15l5-5-5-5M14 10H3"/>
+                </svg>
+                Sign in to workspace
+            </button>
+        </form>
     </div>
-    <div class="mb-3">
-        <label asp-for="Password" class="form-label"></label>
-        <div class="input-group">
-            <input asp-for="Password" class="form-control" aria-describedby="Password-validation" autocomplete="current-password" />
-            <button id="toggle-password" class="btn btn-outline-secondary" type="button" aria-controls="Password" aria-pressed="false">Show password</button>
-        </div>
-        <span id="Password-validation" asp-validation-for="Password" class="text-danger"></span>
-    </div>
-    <button class="btn btn-primary" type="submit">Sign in</button>
-</form>
 </div>
-</div>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
+        // Show validation summary if it has content
+        (function () {
+            var summary = document.querySelector('[data-valmsg-summary]') || document.querySelector('.validation-summary-errors');
+            if (summary && summary.querySelector('li')) summary.style.display = '';
+        })();
+
         document.getElementById('toggle-password').addEventListener('click', function () {
-            const password = document.getElementById('Password');
-            const show = password.type === 'password';
+            var password = document.getElementById('Password');
+            var show = password.type === 'password';
             password.type = show ? 'text' : 'password';
             this.setAttribute('aria-pressed', String(show));
-            this.textContent = show ? 'Hide password' : 'Show password';
+            this.textContent = show ? 'Hide' : 'Show';
         });
     </script>
 }

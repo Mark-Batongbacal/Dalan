@@ -2,38 +2,129 @@ package com.example.dalanmobile.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ShapeDefaults
 
-private val dark = darkColorScheme(
-    primary = Color(0xFFE4AD56), onPrimary = Color(0xFF251C13),
-    background = Color(0xFF17191D), onBackground = Color(0xFFF4EFE8),
-    surface = Color(0xFF23262B), onSurface = Color(0xFFF4EFE8),
-    surfaceVariant = Color(0xFF2D3036), onSurfaceVariant = Color(0xFFBBB3A9),
-    surfaceContainer = Color(0xFF23262B), surfaceContainerHigh = Color(0xFF23262B),
-    surfaceContainerHighest = Color(0xFF2D3036),
-    secondary = Color(0xFFE4AD56), onSecondary = Color(0xFF251C13),
-    secondaryContainer = Color(0xFF493728), onSecondaryContainer = Color(0xFFF4EFE8),
-    outline = Color(0xFFBBB3A9), error = Color(0xFFFFAAA3),
-    errorContainer = Color(0xFF4B272B), onErrorContainer = Color(0xFFFFAAA3),
+// Soft Orange — DLN-40 Material 3 colour scheme
+private val lightScheme = lightColorScheme(
+    // Primary: CTA orange
+    primary             = SoftOrangeDark,
+    onPrimary           = WarmIvory,
+    primaryContainer    = AccentSubtle,
+    onPrimaryContainer  = SoftOrangeDeep,
+
+    // Secondary: accent orange
+    secondary           = SoftOrange,
+    onSecondary         = WarmIvory,
+    secondaryContainer  = AccentSubtle,
+    onSecondaryContainer = SoftOrangeDeep,
+
+    // Tertiary: for success/positive contextual color
+    tertiary            = SemanticSuccess,
+    onTertiary          = WarmIvory,
+    tertiaryContainer   = SemanticSuccessBg,
+    onTertiaryContainer = SemanticSuccess,
+
+    // Backgrounds & surfaces
+    background          = WarmIvory,
+    onBackground        = WarmInk,
+    surface             = WarmIvory,
+    onSurface           = WarmInk,
+    surfaceVariant      = SoftPeach,
+    onSurfaceVariant    = WarmMuted,
+    surfaceContainer    = SoftPeach,
+    surfaceContainerHigh = PeachSubtle,
+    surfaceContainerHighest = PeachSubtle,
+    surfaceBright       = WarmIvory,
+    surfaceDim          = SoftPeach,
+
+    // Outlines
+    outline             = SoftBorderStrong,
+    outlineVariant      = SoftBorder,
+
+    // Error
+    error               = SemanticError,
+    onError             = WarmIvory,
+    errorContainer      = SemanticErrorBg,
+    onErrorContainer    = SemanticError,
+
+    // Inverse
+    inverseSurface      = CharcoalNav,
+    inverseOnSurface    = DarkText,
+    inversePrimary      = DarkAccent,
 )
 
-private val light = lightColorScheme(
-    primary = Color(0xFF9A5B20), onPrimary = Color.White,
-    background = Color(0xFFF8F6F2), onBackground = Color(0xFF2C3035),
-    surface = Color.White, onSurface = Color(0xFF2C3035),
-    surfaceVariant = Color(0xFFF1EEE8), onSurfaceVariant = Color(0xFF64676B),
-    surfaceContainer = Color.White, surfaceContainerHigh = Color.White,
-    surfaceContainerHighest = Color(0xFFF1EEE8),
-    secondary = Color(0xFF9A5B20), onSecondary = Color.White,
-    secondaryContainer = Color(0xFFF3E7D6), onSecondaryContainer = Color(0xFF2C3035),
-    outline = Color(0xFF64676B), error = Color(0xFFB42318),
-    errorContainer = Color(0xFFFDE8E8), onErrorContainer = Color(0xFFB42318),
+private val darkScheme = darkColorScheme(
+    // Primary
+    primary             = DarkPrimary,
+    onPrimary           = DarkOnPrimary,
+    primaryContainer    = DarkAccentSubtle,
+    onPrimaryContainer  = DarkAccent,
+
+    // Secondary
+    secondary           = DarkAccent,
+    onSecondary         = DarkOnPrimary,
+    secondaryContainer  = DarkAccentSubtle,
+    onSecondaryContainer = DarkAccent,
+
+    // Tertiary
+    tertiary            = DarkSuccess,
+    onTertiary          = DarkCanvas,
+    tertiaryContainer   = DarkSuccessBg,
+    onTertiaryContainer = DarkSuccess,
+
+    // Backgrounds & surfaces
+    background          = DarkCanvas,
+    onBackground        = DarkText,
+    surface             = DarkCard,
+    onSurface           = DarkText,
+    surfaceVariant      = DarkSurface,
+    onSurfaceVariant    = DarkMuted,
+    surfaceContainer    = DarkCard,
+    surfaceContainerHigh = DarkSubtle,
+    surfaceContainerHighest = DarkSubtle,
+    surfaceBright       = DarkCard,
+    surfaceDim          = DarkSurface,
+
+    // Outlines
+    outline             = DarkBorderStrong,
+    outlineVariant      = DarkBorder,
+
+    // Error
+    error               = DarkError,
+    onError             = DarkCard,
+    errorContainer      = DarkErrorBg,
+    onErrorContainer    = DarkError,
+
+    // Inverse
+    inverseSurface      = DarkText,
+    inverseOnSurface    = DarkCanvas,
+    inversePrimary      = SoftOrangeDark,
+)
+
+// Shape system: rounded to match web (20–24px cards → ~16–20dp)
+private val DalanShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small      = RoundedCornerShape(12.dp),
+    medium     = RoundedCornerShape(16.dp),
+    large      = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(24.dp),
 )
 
 @Composable
-fun DalanMobileTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (darkTheme) dark else light, typography = Typography, content = content)
+fun DalanMobileTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    MaterialTheme(
+        colorScheme = if (darkTheme) darkScheme else lightScheme,
+        typography  = Typography,
+        shapes      = DalanShapes,
+        content     = content
+    )
 }
