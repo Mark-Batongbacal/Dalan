@@ -5,6 +5,7 @@ using Dalan.Application.FleetOptimization;
 using Dalan.Application.Dispatch;
 using Dalan.Infrastructure;
 using Dalan.Infrastructure.Persistence;
+using Dalan.Infrastructure.Auditing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.EnvironmentName, builder.Environment.ContentRootPath);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options => options.Filters.AddService<AccountAccessAuditFilter>());
+builder.Services.AddScoped<AccountAccessAuditFilter>();
 builder.Services.AddScoped<Dalan.Application.Analytics.IAnalyticsService, Dalan.Application.Analytics.AnalyticsService>();
 builder.Services.Configure<Dalan.Web.Models.PlanningMapOptions>(builder.Configuration.GetSection("PlanningMap"));
 builder.Services.AddScoped<IVehicleService, VehicleService>();
