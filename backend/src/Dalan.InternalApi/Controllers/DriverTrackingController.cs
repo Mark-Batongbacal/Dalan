@@ -52,6 +52,9 @@ public sealed class DriverTrackingController(SignInManager<IdentityUser> signIn,
     private async Task<Guid?> Driver(CancellationToken cancellationToken)
     {
         var user = await signIn.ValidateSecurityStampAsync(User);
-        return user is not null && await users.IsInRoleAsync(user, "Driver") ? await tasks.FindDriverAsync(user.Id, cancellationToken) : null;
+        return user is not null && await users.IsInRoleAsync(user, "Driver")
+            && !await users.IsLockedOutAsync(user)
+            ? await tasks.FindDriverAsync(user.Id, cancellationToken)
+            : null;
     }
 }
