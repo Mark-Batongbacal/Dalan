@@ -22,7 +22,9 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
         await page.goto(base + "/DispatchBoard");
         await page.locator("#Strategy").selectOption("WorkloadEquity");
         await page.locator('[name="Settings.ServiceSecondsPerStop"]').fill("60");
+        await page.locator("#Settings_WarehouseLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLatitude").fill("14.6");
+        await page.locator("#Settings_WarehouseLongitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLongitude").fill("121.03");
         for (let i = 0; i < 2; i++) {
             await page.locator(`[name="Vehicles[${i}].Selected"][type="checkbox"]`).check();
@@ -40,7 +42,7 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
             await page.screenshot({ path: path.join(output, "workload-preview.png"), fullPage: true });
             await page.locator("#theme-select").selectOption("dark");
             await page.waitForFunction(() => getComputedStyle(document.querySelector(".btn-primary")).color === "rgb(37, 28, 19)");
-            await page.locator(".content-card").filter({ has: page.getByRole("heading", { name: "Available vehicles", exact: true }) })
+            await page.locator(".content-card").filter({ has: page.getByRole("heading", { name: "Choose 1 to 8 available vehicles", exact: true }) })
                 .screenshot({ path: path.join(output, "workload-dark.png") });
             await page.emulateMedia({ colorScheme: "light" });
             await page.locator("#theme-select").selectOption("system");

@@ -224,6 +224,8 @@ public sealed class DispatchBoardController(
             };
 
             await PopulateReviewNames(review, cancellationToken);
+            // The review contains only selected vehicles, with new collection indices.
+            ModelState.Clear();
             return View(review);
         }
         catch (ArgumentException error) { board.Error = error.Message; }
@@ -236,6 +238,31 @@ public sealed class DispatchBoardController(
             board.Error = "The routing provider timed out.";
         }
 
+        return View("Index", board);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditSelection(DispatchReviewViewModel review, CancellationToken cancellationToken)
+    {
+        if (review.Vehicles is null || review.Stops is null || review.Settings is null ||
+            review.Vehicles.Count > 8 || review.Stops.Count > 30 ||
+            review.Vehicles.Any(x => x is null) || review.Stops.Any(x => x is null))
+            return BadRequest();
+
+        var board = new DispatchBoardViewModel
+        {
+            Strategy = review.Strategy,
+            Settings = review.Settings,
+            Vehicles = review.Vehicles.Select(x => new DispatchVehicleInput
+            { Id = x.VehicleId, Selected = true, ExistingWorkloadSeconds = x.ExistingWorkloadSeconds }).ToList(),
+            Deliveries = review.Stops.Select(x => x.DeliveryId).Distinct()
+                .Select(id => new DispatchDeliveryInput { Id = id, Selected = true }).ToList()
+        };
+        // Review and board collection indices differ; render the rebuilt choices by identity.
+        ModelState.Clear();
+        await PopulateChoices(board, cancellationToken);
+        ViewData["PreserveDispatchSelection"] = true;
         return View("Index", board);
     }
 

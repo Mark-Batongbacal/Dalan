@@ -98,6 +98,32 @@ a:hover { color: var(--hover); }
 .btn-outline-danger { --bs-btn-color: var(--danger); --bs-btn-border-color: var(--danger); --bs-btn-hover-color: var(--danger); --bs-btn-hover-bg: var(--danger-bg); --bs-btn-hover-border-color: var(--danger); }
 .form-control:disabled, .form-select:disabled { background: var(--subtle); color: var(--muted); }
 [data-warehouse-selection] .form-text, [data-warehouse-selection] .text-muted { color: var(--muted) !important; }
+
+.form-text { color: var(--muted); }
+.input-validation-error { border-color: var(--danger); }
+.validation-summary-errors { margin-bottom: 20px; padding: 16px; background: var(--danger-bg); border-left: 3px solid var(--danger); }
+.validation-summary-errors ul { margin: 0; padding-left: 20px; }
+.registry-table a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 8px; }
+.topbar-title, .account-name { overflow-wrap: anywhere; }
+@media (max-width: 800px) {
+  .sidebar { position: fixed; }
+}
+@media (max-width: 600px) {
+  .registry-table { overflow: visible; }
+  .registry-table table, .registry-table tbody, .registry-table tr, .registry-table td { display: block; width: 100%; }
+  .registry-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .registry-table tr + tr { margin-top: 20px; border-top: 2px solid var(--border); }
+  .registry-table td { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; padding: 10px 0; overflow-wrap: anywhere; }
+  .registry-table td::before { content: attr(data-label); font-weight: 600; color: var(--muted); }
+  .registry-table .status-chip { white-space: normal; }
+  .auth-wrap { margin: 24px auto; }
+  .auth-wrap .content-card { padding: 24px; }
+  .app-footer select { min-height: 44px; }
+}
+
+.dispatch-workflow .text-muted, .dispatch-workflow .text-secondary { color: var(--muted) !important; }
+.dispatch-workflow .btn-link { color: var(--primary); }
+
 .google-attribution { display: inline-block; padding: 10px 10px 5px; background: white; border-radius: 4px; }
 .google-attribution img { display: block; height: 18px; width: auto; }
 .fleet-position { padding: 5px 8px; border-radius: 8px; background: var(--primary); color: var(--on-primary); border: 2px solid var(--card); font-size: 12px; font-weight: 700; }

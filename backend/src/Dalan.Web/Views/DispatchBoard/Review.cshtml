@@ -4,6 +4,7 @@
 }
 
 @section Scripts { <partial name="_PlanningMapAssets" /> }
+<div class="dispatch-workflow">
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
     <h1>Review dispatch</h1>
@@ -15,12 +16,13 @@
 
 @if (Model.Error is not null)
 {
-    <div class="alert alert-danger" role="alert">@Model.Error</div>
+    <div class="alert alert-danger" role="alert" tabindex="-1" data-dispatch-error>@Model.Error<p class="mb-0">Your review edits are retained. Retry confirmation after a temporary routing failure. If the plan is stale or eligibility changed, use Change selections and generate a fresh preview.</p></div>
 }
 
 <div class="content-card">
     <partial name="_PlanningMap" model="PlanningMapViewModel.ForReview(Model)" />
     <form asp-action="Confirm" method="post">
+        <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
         <input asp-for="Strategy" type="hidden" />
         <input asp-for="Settings.ServiceSecondsPerStop" type="hidden" />
         <input asp-for="Settings.MaxFleetTravelSeconds" type="hidden" />
@@ -28,7 +30,8 @@
         <input asp-for="Settings.WarehouseLongitude" type="hidden" />
         <input asp-for="Settings.WarehouseAddress" type="hidden" />
         <input asp-for="RotationVersion" type="hidden" />
-        <p>Strategy: @DispatchStrategyInput.Label(Model.Strategy). Reviewed stops are validated again on confirmation.</p>
+        <p><strong>Final review before saving.</strong> Confirm dispatch saves this plan and assigns its deliveries.
+        </p><p>Strategy: @DispatchStrategyInput.Label(Model.Strategy). Reviewed stops are validated again on confirmation.</p>
         <p>All vehicles start at the selected warehouse: @Model.Settings.WarehouseAddress (@Model.Settings.WarehouseLatitude, @Model.Settings.WarehouseLongitude).</p>
         <p>Handling assumption: @Model.Settings.ServiceSecondsPerStop seconds per stop.
             Editing routes may change equity and completion estimates.</p>
@@ -47,7 +50,7 @@
             <input asp-for="Versions[i].RowVersion" type="hidden" />
         }
 
-        <div class="table-responsive">
+        <div class="table-responsive registry-table">
             <table class="table align-middle">
                 <thead>
                     <tr>
@@ -61,20 +64,20 @@
                 @for (var i = 0; i < Model.Stops.Count; i++)
                 {
                     <tr>
-                        <td>
+                        <td data-label="Delivery">
                             @(Model.DeliveryNames.GetValueOrDefault(
                                 Model.Stops[i].DeliveryId)
                                 ?? Model.Stops[i].DeliveryId.ToString())
                             <input asp-for="Stops[i].DeliveryId" type="hidden" />
                         </td>
-                        <td>
+                        <td data-label="Stop">
                             @Model.Stops[i].Kind
                             <input asp-for="Stops[i].Kind" type="hidden" />
                         </td>
-                        <td>
+                        <td data-label="Vehicle">
                             <select asp-for="Stops[i].VehicleId"
                                     class="form-select"
-                                    aria-label="Vehicle for stop">
+                                    aria-label="Vehicle for @Model.Stops[i].Kind of @Model.DeliveryNames.GetValueOrDefault(Model.Stops[i].DeliveryId, Model.Stops[i].DeliveryId.ToString())">
                                 @foreach (var vehicle in Model.Vehicles)
                                 {
                                     <option value="@vehicle.VehicleId">
@@ -85,10 +88,10 @@
                                 }
                             </select>
                         </td>
-                        <td>
+                        <td data-label="Order">
                             <input asp-for="Stops[i].Order"
                                    class="form-control" type="number"
-                                   min="0" aria-label="Stop order" />
+                                   min="0" aria-label="Order for @Model.Stops[i].Kind of @Model.DeliveryNames.GetValueOrDefault(Model.Stops[i].DeliveryId, Model.Stops[i].DeliveryId.ToString())" />
                         </td>
                     </tr>
                 }
@@ -99,8 +102,11 @@
         <button type="submit" class="btn btn-primary">
             Confirm dispatch
         </button>
+        <button type="submit" asp-action="EditSelection" formnovalidate class="btn btn-outline-secondary">Change selections (new preview required)</button>
         <a asp-action="Index" class="btn btn-link">
-            Start a new preview
+            Start over (clear selections)
         </a>
     </form>
+</div>
+
 </div>

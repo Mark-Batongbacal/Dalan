@@ -268,7 +268,7 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             "/DispatchBoard", new FormUrlEncodedContent(choices)))
         {
             Assert.Equal(HttpStatusCode.OK, previewPage.StatusCode);
-            Assert.Contains("Proposed routes", await previewPage.Content.ReadAsStringAsync());
+            Assert.Contains("Selected-plan results", await previewPage.Content.ReadAsStringAsync());
         }
 
         using (var reviewPage = await client.PostAsync(
