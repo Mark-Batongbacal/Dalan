@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Dalan.Domain.Deliveries;
 using Dalan.Domain.Drivers;
+using Dalan.Domain.Vehicles;
 using Dalan.Infrastructure.Identity;
 using Dalan.Infrastructure.Persistence;
 using Dalan.Web;
@@ -156,12 +157,13 @@ public sealed class DriverMobileAccessSqlTests(SqlServerFixture fixture)
         var random = Guid.NewGuid().ToString("N");
         var driver = Driver.Register("Revocation Driver", "09123456789", random,
             DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1));
+        var vehicle = Vehicle.Register("REV-" + random[..12]);
         var email = "revocation-" + random + "@dalan.test";
         var password = "Driver-Auth#" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8));
         var assigned = DateTimeOffset.UtcNow.AddMinutes(-5);
         var delivery = Delivery.Create("Recipient", "Warehouse", 14, 121, "Destination", 14.1, 121.1,
             assigned.AddMinutes(-1));
-        delivery.Assign(driver.Id, Guid.NewGuid(), assigned);
+        delivery.Assign(driver.Id, vehicle.Id, assigned);
         using (var api = ApiFactory())
         using (var scope = api.Services.CreateScope())
         {
@@ -173,7 +175,7 @@ public sealed class DriverMobileAccessSqlTests(SqlServerFixture fixture)
             var user = new IdentityUser { UserName = email, Email = email, EmailConfirmed = true };
             Assert.True((await users.CreateAsync(user, password)).Succeeded);
             Assert.True((await users.AddToRoleAsync(user, "Driver")).Succeeded);
-            db.AddRange(driver, delivery, new DriverAccount { DriverId = driver.Id, UserId = user.Id });
+            db.AddRange(driver, vehicle, delivery, new DriverAccount { DriverId = driver.Id, UserId = user.Id });
             await db.SaveChangesAsync();
         }
         return (driver.Id, delivery.Id, email, password);
