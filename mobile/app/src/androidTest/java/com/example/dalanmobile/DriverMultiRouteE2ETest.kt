@@ -12,6 +12,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -105,18 +109,23 @@ class DriverMultiRouteE2ETest {
         showScreen()
         var count = 0
         for (task in differentRoutes) {
-            model.record(task, "Pickup")
+            openTask(task)
+            compose.onNodeWithText("Confirm pickup").performScrollTo().performClick()
             count++
             await { !it.busy && it.events.size == count }
+            compose.onNodeWithText("Confirm delivery").performScrollTo().assertIsNotEnabled()
             model.record(task, "Deliver", task.dropoffLatitude, task.dropoffLongitude,
                 "Synthetic E2E recipient", jpeg())
             count++
             await { !it.busy && it.events.size == count }
+            compose.onNodeWithText("Back to deliveries").performScrollTo().performClick()
         }
         val third = state.tasks.first { it.id !in differentRoutes.map { task -> task.id } }
         model.record(third, "Pickup")
         val queued = await { !it.busy && it.events.size == 5 }
         assertTrue(queued.message.orEmpty().contains("Offline"))
+        assertFalse(queued.syncing)
+        assertNull(queued.lastSyncedAt) // This ViewModel has not refreshed from the stopped server.
         assertEquals(listOf("Pickup", "Deliver", "Pickup", "Deliver", "Pickup"), queued.events.map { it.kind })
         File(context.filesDir, "dalan-e2e/events.json").writeText(driverJson.encodeToString(
             queued.events.map { Replay(it.deliveryId, driverJson.decodeFromString<TaskEvent>(it.payload)) }))
@@ -131,18 +140,20 @@ class DriverMultiRouteE2ETest {
         showScreen()
         val task = cached.tasks.first()
         openTask(task)
-        compose.onNodeWithText("View route map").performClick()
+        compose.onNodeWithText("View route map").performScrollTo().performClick()
         compose.waitUntil(30_000) {
             compose.onAllNodes(hasText("Road route unavailable.", substring = true)).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("Retry map").assertExists()
-        compose.onNodeWithText("Back to delivery").performClick()
+        compose.onNodeWithText("Back to delivery").performScrollTo().performClick()
     }
 
     @Test fun reconnect_replays_once_and_switching_driver_hides_other_tasks(): Unit = runBlocking {
         await { it.signedIn && it.events.size == 5 }
         model.sync()
         val synced = await { !it.busy && it.events.isEmpty() && it.tasks.size == fixture.initialTasks - 2 }
+        assertFalse(synced.syncing)
+        assertNotNull(synced.lastSyncedAt)
         assertEquals(1, synced.tasks.count { it.status == "PickedUp" })
         val replay = driverJson.decodeFromString<List<Replay>>(File(context.filesDir, "dalan-e2e/events.json").readText())
         DriverApi().use { api ->
@@ -171,15 +182,19 @@ class DriverMultiRouteE2ETest {
     private fun checkMaps(tasks: List<TaskInfo>) {
         for (task in tasks.groupBy { it.routeId }.values.map { it.first() }) {
             openTask(task)
-            compose.onNodeWithText("View route map").performClick()
-            compose.waitUntil(40_000) {
-                compose.onAllNodes(hasText("min by road", substring = true)).fetchSemanticsNodes().isNotEmpty()
+            compose.onNodeWithText("View route map").performScrollTo().performClick()
+            try {
+                compose.waitUntil(40_000) {
+                    compose.onAllNodes(hasText("min by road", substring = true)).fetchSemanticsNodes().isNotEmpty()
+                }
+            } catch (error: AssertionError) {
+                throw AssertionError("Route view did not show road estimates: " + compose.onRoot().printToString(), error)
             }
             compose.waitUntil(40_000) { routeGeometryLoaded() }
             assertTrue("The online basemap should load, rather than its fallback style.",
                 compose.onAllNodes(hasText("Basemap unavailable.", substring = true)).fetchSemanticsNodes().isEmpty())
-            compose.onNodeWithText("Back to delivery").performClick()
-            compose.onNodeWithText("Back to deliveries").performClick()
+            compose.onNodeWithText("Back to delivery").performScrollTo().performClick()
+            compose.onNodeWithText("Back to deliveries").performScrollTo().performClick()
         }
     }
 
