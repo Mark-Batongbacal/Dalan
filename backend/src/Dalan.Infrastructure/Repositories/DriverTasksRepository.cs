@@ -19,11 +19,11 @@ public sealed class DriverTasksRepository(
 {
     private readonly bool verifyGps = bool.TryParse(
         configuration["DriverGpsProof:Enabled"], out var gpsEnabled) && gpsEnabled;
-    private readonly double radiusMeters = Number("DriverGpsProof:RadiusMeters", 100, 10, 500);
-    private readonly double maximumAccuracyMeters = Number("DriverGpsProof:MaxAccuracyMeters", 30, 1, 100);
-    private readonly double maximumFixAgeSeconds = Number("DriverGpsProof:MaxFixAgeSeconds", 120, 10, 600);
+    private readonly double radiusMeters = Number(configuration, "DriverGpsProof:RadiusMeters", 100, 10, 500);
+    private readonly double maximumAccuracyMeters = Number(configuration, "DriverGpsProof:MaxAccuracyMeters", 30, 1, 100);
+    private readonly double maximumFixAgeSeconds = Number(configuration, "DriverGpsProof:MaxFixAgeSeconds", 120, 10, 600);
 
-    private double Number(string key, double fallback, double min, double max)
+    private static double Number(IConfiguration configuration, string key, double fallback, double min, double max)
     {
         var setting = configuration[key];
         if (string.IsNullOrWhiteSpace(setting)) return fallback;
