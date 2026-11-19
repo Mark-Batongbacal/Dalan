@@ -179,7 +179,7 @@ public sealed class DriverInvitationsController(
         var configured = configuration["DriverInvitations:PublicBaseUrl"];
         if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri)
             || uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo)
-            || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            || uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
             return false;
         baseUrl = uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
         return true;
