@@ -70,7 +70,7 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
         for (let i = 0; i < 2; i++) await page.locator(`[name="Vehicles[${i}].Selected"][type="checkbox"]`).check();
         await page.getByLabel(/Warehouse UI recipient/).check();
         await page.getByRole("button", { name: "Preview routes", exact: true }).click();
-        await page.getByRole("heading", { name: "Proposed routes" }).waitFor();
+        await page.getByRole("heading", { name: "Selected-plan results" }).waitFor();
         await page.getByRole("button", { name: "Review this plan", exact: true }).click();
         await page.getByRole("heading", { name: "Review dispatch", exact: true }).waitFor();
         for (let i = 0; i < 2; i++) {

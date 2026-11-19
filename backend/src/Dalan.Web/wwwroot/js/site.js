@@ -27,6 +27,6 @@
         mobile.addEventListener('change', close);
         navigation.querySelectorAll('nav a.active').forEach(link => link.setAttribute('aria-current', 'page'));
     }
-    const errors = document.querySelector('.validation-summary-errors');
+    const errors = document.querySelector('.validation-summary-errors, [data-dispatch-error]');
     if (errors) errors.focus();
 })();

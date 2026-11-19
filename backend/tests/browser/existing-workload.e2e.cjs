@@ -40,7 +40,7 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
             await page.screenshot({ path: path.join(output, "workload-preview.png"), fullPage: true });
             await page.locator("#theme-select").selectOption("dark");
             await page.waitForFunction(() => getComputedStyle(document.querySelector(".btn-primary")).color === "rgb(37, 28, 19)");
-            await page.locator(".content-card").filter({ has: page.getByRole("heading", { name: "Available vehicles", exact: true }) })
+            await page.locator(".content-card").filter({ has: page.getByRole("heading", { name: "Choose 1 to 8 available vehicles", exact: true }) })
                 .screenshot({ path: path.join(output, "workload-dark.png") });
             await page.emulateMedia({ colorScheme: "light" });
             await page.locator("#theme-select").selectOption("system");

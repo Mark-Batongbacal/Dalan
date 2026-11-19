@@ -120,3 +120,6 @@ a:hover { color: var(--hover); }
   .auth-wrap .content-card { padding: 24px; }
   .app-footer select { min-height: 44px; }
 }
+
+.dispatch-workflow .text-muted, .dispatch-workflow .text-secondary { color: var(--muted) !important; }
+.dispatch-workflow .btn-link { color: var(--primary); }

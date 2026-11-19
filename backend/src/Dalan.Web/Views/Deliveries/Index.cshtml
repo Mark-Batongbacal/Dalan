@@ -9,6 +9,7 @@
         <h1>Delivery queue</h1>
         <p>Review delivery status and assignments.</p>
     </div>
+    <a asp-controller="DispatchBoard" asp-action="Index" class="btn btn-outline-secondary">Plan dispatch</a>
     <a asp-action="Create" class="btn btn-primary">Create delivery</a>
 </div>
 
@@ -21,7 +22,7 @@
     }
     else
     {
-        <div class="table-responsive">
+        <div class="table-responsive registry-table">
             <table class="table align-middle">
                 <thead>
                     <tr>
@@ -37,12 +38,12 @@
                     @foreach (var delivery in Model)
                     {
                         <tr>
-                            <td>@delivery.RecipientName</td>
-                            <td>@delivery.PickupAddress</td>
-                            <td>@delivery.DropoffAddress</td>
-                            <td><span class="status-chip">@delivery.Status</span></td>
-                            <td>@delivery.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</td>
-                            <td>
+                            <td data-label="Recipient">@delivery.RecipientName</td>
+                            <td data-label="Pickup">@delivery.PickupAddress</td>
+                            <td data-label="Drop-off">@delivery.DropoffAddress</td>
+                            <td data-label="Status"><span class="status-chip">@delivery.Status</span></td>
+                            <td data-label="Created">@delivery.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</td>
+                            <td data-label="Action">
                                 <a asp-action="Details" asp-route-id="@delivery.Id">
                                     View details
                                 </a>

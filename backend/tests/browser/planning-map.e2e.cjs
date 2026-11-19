@@ -136,7 +136,7 @@ function polyline(points) {
         await page.locator("#Settings_WarehouseLatitude").fill("14.6");
         await page.locator("#Settings_WarehouseLongitude").fill("121.03");
         await page.getByRole("button", { name: "Preview routes", exact: true }).click();
-        await page.getByRole("heading", { name: "Proposed routes" }).waitFor({ timeout: 45000 });
+        await page.getByRole("heading", { name: "Selected-plan results" }).waitFor({ timeout: 45000 });
         await page.locator("[data-map-route]").selectOption({ index: 1 });
         await draw();
         await page.locator("[data-planning-map]").screenshot({ path: path.join(output, "dispatch-preview.png") });
@@ -145,7 +145,7 @@ function polyline(points) {
         assert.ok(await page.locator("[data-map-roads]").isDisabled());
         await page.locator("#Settings_WarehouseLatitude").fill("14.6");
         await page.getByRole("button", { name: "Preview routes", exact: true }).click();
-        await page.getByRole("heading", { name: "Proposed routes" }).waitFor({ timeout: 45000 });
+        await page.getByRole("heading", { name: "Selected-plan results" }).waitFor({ timeout: 45000 });
         console.log("PASS: changed preview inputs disable stale routes until a fresh preview");
         await page.getByRole("button", { name: "Review this plan", exact: true }).click();
         await page.waitForURL(url => url.pathname.includes("/DispatchBoard/Review"));
