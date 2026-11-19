@@ -31,8 +31,13 @@
       data-warehouse-owner="@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)"
       data-warehouse-latitude="Settings_WarehouseLatitude" data-warehouse-longitude="Settings_WarehouseLongitude"
       data-warehouse-address="Settings_WarehouseAddress" data-warehouse-restore="@(ViewData.ModelState.Count == 0 && ViewData["PreserveDispatchSelection"] is not true ? "true" : "false")">
+    <div class="location-workspace">
+        <aside class="location-workspace-map" aria-label="Dispatch warehouse and route map">
+            <partial name="_PlanningMap" model="PlanningMapViewModel.ForBoard(Model)" />
+        </aside>
+        <div class="location-workspace-fields">
     <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
-    <partial name="_PlanningMap" model="PlanningMapViewModel.ForBoard(Model)" />
+
     <div class="content-card mb-4">
         <label asp-for="Strategy" class="form-label">Optimization strategy</label>
         <select asp-for="Strategy" class="form-select" aria-describedby="strategy-help">
@@ -155,6 +160,9 @@
 
     <button type="submit" class="btn btn-primary">Preview routes</button>
     <button type="submit" asp-action="SuggestStrategy" class="btn btn-outline-secondary">Suggest strategy without routing</button>
+
+        </div>
+    </div>
 </form>
 
 @if (Model.Preview is not null)

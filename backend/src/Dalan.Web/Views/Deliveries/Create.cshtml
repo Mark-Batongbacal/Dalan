@@ -9,13 +9,18 @@
     <p>Select the warehouse pickup, then enter the recipient and delivery destination.</p>
 </div>
 
-<div class="content-card form-panel-wide">
+<div class="location-editor-shell">
     <form asp-action="Create" method="post" data-warehouse-selection
           data-warehouse-owner="@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)"
           data-warehouse-latitude="PickupLatitude" data-warehouse-longitude="PickupLongitude"
           data-warehouse-address="PickupAddress" data-warehouse-restore="@(ViewData.ModelState.Count == 0 ? "true" : "false")">
-        <div asp-validation-summary="All" class="text-danger"></div>
-        <partial name="_PlanningMap" model="PlanningMapViewModel.ForDelivery()" />
+        <div class="location-workspace">
+        <aside class="location-workspace-map" aria-label="Delivery location map">
+            <partial name="_PlanningMap" model="PlanningMapViewModel.ForDelivery()" />
+        </aside>
+        <section class="content-card location-workspace-fields" aria-label="Delivery details">
+    <div asp-validation-summary="All" class="text-danger"></div>
+
 
         <div class="mb-3">
             <label asp-for="RecipientName" class="form-label">Recipient name</label>
@@ -71,8 +76,8 @@
                 <input asp-for="ExpectedDeliveryLocal" class="form-control" type="datetime-local" step="1800" data-delivery-time
                        data-time-default="@(ViewData.ModelState.Count == 0 ? "true" : "false")" />
                 <div class="d-flex gap-2 mt-2">
-                    <button type="button" class="btn btn-outline-secondary" data-time-step="-30" aria-label="Expected delivery time 30 minutes earlier">−30 min</button>
-                    <button type="button" class="btn btn-outline-secondary" data-time-step="30" aria-label="Expected delivery time 30 minutes later">+30 min</button>
+                    <button type="button" class="btn btn-outline-secondary" data-time-step="-30" aria-label="−30 min: expected delivery time 30 minutes earlier">−30 min</button>
+                    <button type="button" class="btn btn-outline-secondary" data-time-step="30" aria-label="+30 min: expected delivery time 30 minutes later">+30 min</button>
                 </div>
                 <small class="form-text text-muted" data-time-zone>Defaults to the next half-hour from now. Adjust in 30-minute steps.</small>
             </div>
@@ -80,7 +85,10 @@
 
         <button type="submit" class="btn btn-primary">Create delivery</button>
         <a asp-action="Index" class="btn btn-link">Cancel</a>
-    </form>
+
+        </section>
+    </div>
+</form>
 </div>
 
 @section Scripts {

@@ -34,7 +34,7 @@
     }
     else
     {
-        <div class="table-responsive-wrap">
+        <div class="table-responsive-wrap" tabindex="0" role="region" aria-label="Scrollable data table">
             <table class="table align-middle">
                 <thead>
                     <tr>
@@ -44,6 +44,7 @@
                         <th scope="col">Expires</th>
                         <th scope="col">Availability</th>
                         <th scope="col">Vehicle</th>
+                        <th scope="col">Mobile account</th>
                         <th scope="col">Actions</th>
                     </tr>
                 </thead>
@@ -68,14 +69,16 @@
                                 <span class="@chipClass">@avail</span>
                             </td>
                             <td data-label="Vehicle" style="font-size:13px">@(driver.VehicleRegistration ?? "—")</td>
-                            <td data-label="Actions">
+                            <td data-label="Mobile account"><span data-mobile-access-status="@driver.Id" role="status">Loading…</span></td>
+                            <td data-label="Actions"><div class="d-flex flex-wrap gap-2">
+                                <a href="/Drivers/@driver.Id/Access" class="btn btn-ghost btn-sm" aria-label="Manage mobile access for @driver.Name">Mobile access</a>
                                 <a asp-action="Edit" asp-route-id="@driver.Id"
                                    class="btn btn-ghost btn-sm"
                                    aria-label="Edit @driver.Name">
                                     <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3l3 3L7 16H4v-3L14 3z"/></svg>
                                     Edit
                                 </a>
-                            </td>
+                            </div></td>
                         </tr>
                     }
                 </tbody>
@@ -83,3 +86,5 @@
         </div>
     }
 </div>
+
+@section Scripts { <script src="~/js/driver-administration.js" asp-append-version="true"></script> }

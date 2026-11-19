@@ -11,17 +11,17 @@ public sealed class DeliveryProof
     public Guid DeliveryId { get; private set; }
     public string PhotoReference { get; private set; } = string.Empty;
     public string RecipientConfirmation { get; private set; } = string.Empty;
-    public double Latitude { get; private set; }
-    public double Longitude { get; private set; }
+    public double? Latitude { get; private set; }
+    public double? Longitude { get; private set; }
     public DateTimeOffset CapturedAtUtc { get; private set; }
 
     internal static DeliveryProof Create(
         Guid deliveryId,
         string? photoReference,
         string? recipientConfirmation,
-        double latitude,
-        double longitude,
-        DateTimeOffset capturedAtUtc)
+        double? latitude,
+        double? longitude,
+        DateTimeOffset capturedAtUtc, bool reviewedException = false)
     {
         if (deliveryId == Guid.Empty)
             throw new ArgumentException("Choose a valid delivery.", nameof(deliveryId));
@@ -37,7 +37,10 @@ public sealed class DeliveryProof
             throw new ArgumentException(
                 $"Recipient confirmation must contain 1 to {MaxRecipientConfirmationLength} characters.",
                 nameof(recipientConfirmation));
-        Delivery.ValidateCoordinates(latitude, longitude, nameof(latitude), nameof(longitude));
+        if (latitude is double lat && longitude is double lon)
+            Delivery.ValidateCoordinates(lat, lon, nameof(latitude), nameof(longitude));
+        else if (!reviewedException || latitude is not null || longitude is not null)
+            throw new ArgumentException("Both coordinates are required unless a missing-GPS exception was reviewed.");
 
         return new DeliveryProof
         {

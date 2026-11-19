@@ -24,29 +24,36 @@ public sealed class AccountAccessAuditFilter(
         var descriptor = context.ActionDescriptor as ControllerActionDescriptor;
         var action = descriptor is null ? null : Classify(
             descriptor.ControllerName, descriptor.ActionName, context.HttpContext.Request.Method);
-        var executed = await next();
         if (action is null || !bool.TryParse(configuration["AccountAudit:Enabled"], out var enabled) || !enabled)
+        {
+            await next();
             return;
-
-        var result = executed.Result;
-        var successful = result is RedirectToActionResult or RedirectResult or LocalRedirectResult
-            or SignInResult or OkResult or OkObjectResult or AcceptedResult or AcceptedAtActionResult
-            or NoContentResult;
-        var outcome = executed.Exception is not null && !executed.ExceptionHandled
-            ? "Error"
-            : successful ? action == "DriverRecoveryRequested" ? "Requested" : "Succeeded" : "Rejected";
-
-        // For "Create" actions, rendering the form with validation errors is not a success.
-        // The request/credential payload is never logged or serialized.
-        var values = context.ActionArguments.Values.Where(value => value is not null).ToArray();
-        var driverId = ReadDriverId(context, values);
-        var email = ReadString(values, "Email");
-        var reason = action is "DriverMobileDisabled" or "DriverMobileEnabled"
-            ? SafeReason(ReadString(values, "Reason")) : null;
-
-        string? targetUserId = null;
+        }
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable, context.HttpContext.RequestAborted);
+        var executed = await next();
         try
         {
+            var result = executed.Result;
+            var successful = result is ObjectResult { StatusCode: >= 200 and < 300 }
+                || result is RedirectToActionResult or RedirectResult or LocalRedirectResult
+                or SignInResult or OkResult or OkObjectResult or AcceptedResult or AcceptedAtActionResult
+                or NoContentResult;
+            var outcome = executed.Exception is not null && !executed.ExceptionHandled
+                ? "Error"
+                : successful ? action == "DriverRecoveryRequested" ? "Requested" : "Succeeded" : "Rejected";
+
+            // For "Create" actions, rendering the form with validation errors is not a success.
+            // The request/credential payload is never logged or serialized.
+            var values = context.ActionArguments.Values.Where(value => value is not null).ToArray();
+            var driverId = ReadDriverId(context, values);
+            var email = ReadString(values, "Email");
+            var reason = action is "DriverMobileDisabled" or "DriverMobileEnabled"
+                ? SafeReason(ReadString(values, "Reason")) : null;
+
+            string? targetUserId = null;
+            if (executed.Exception is not null && !executed.ExceptionHandled)
+                return; // Disposal rolls back the action along with any uncommitted audit.
             if (driverId is Guid id)
                 targetUserId = await db.DriverAccounts.AsNoTracking()
                     .Where(x => x.DriverId == id).Select(x => x.UserId)
@@ -69,7 +76,10 @@ public sealed class AccountAccessAuditFilter(
             // failed requests for known accounts and authenticated mutations remain auditable.
             if (targetUserId is null && (action is "DriverLogin" or "StaffLogin" or "DriverRecoveryRequested")
                 && outcome is "Rejected" or "Requested")
+            {
+                await transaction.CommitAsync(context.HttpContext.RequestAborted);
                 return;
+            }
 
             db.AccountAccessAudits.Add(new AccountAccessAudit
             {
@@ -83,12 +93,15 @@ public sealed class AccountAccessAuditFilter(
                 CorrelationId = Clip(context.HttpContext.TraceIdentifier, 128)
             });
             await db.SaveChangesAsync(context.HttpContext.RequestAborted);
+            await transaction.CommitAsync(context.HttpContext.RequestAborted);
         }
         catch (Exception error) when (!context.HttpContext.RequestAborted.IsCancellationRequested)
         {
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            context.HttpContext.Response.Headers.Remove("Set-Cookie");
+            executed.Result = new ObjectResult(new { message = "Account action could not be recorded. Try again later." }) { StatusCode = 503 };
             // Do not log models or exception messages, which might contain PII.
-            // The audit event is best-effort after the original action, not an
-            // atomic replacement for DLN-30/31/32 controller transaction logging.
             logger.LogError("Could not persist {AuditAction} audit event. ErrorType={ErrorType}",
                 action, error.GetType().Name);
         }

@@ -129,10 +129,10 @@ else if (!ViewData.ModelState.IsValid)
         <p class="status-chip">Saved plans · not GPS-measured utilization</p>
         <p class="analytics-help">Plans confirmed in the selected period, through generation time. Participation uses today's registered fleet as its denominator; it is not historical availability or time-based utilization.</p>
         <dl class="analytics-fleet-summary">
-            <div><dt>Fleet participation</dt><dd data-metric="participation">@Percent(report.FleetParticipationPercent)</dd><span class="analytics-help">@fleet.DispatchedVehicles of @fleet.TotalVehicles current vehicles</span></div>
-            <div><dt>Available now</dt><dd>@fleet.AvailableVehicles.ToString("N0")</dd><span class="analytics-help">Current availability, independent of the period</span></div>
+            <div><dt>Fleet participation</dt><dd data-metric="participation">@Percent(report.FleetParticipationPercent)</dd><dd class="analytics-help">@fleet.DispatchedVehicles of @fleet.TotalVehicles current vehicles</dd></div>
+            <div><dt>Available now</dt><dd>@fleet.AvailableVehicles.ToString("N0")</dd><dd class="analytics-help">Current availability, independent of the period</dd></div>
             <div><dt>Confirmed plans / routes</dt><dd>@fleet.ConfirmedPlans.ToString("N0") / @fleet.ConfirmedRoutes.ToString("N0")</dd></div>
-            <div><dt>Planned road distance</dt><dd>@((fleet.PlannedDistanceMeters / 1000).ToString("N1")) km</dd><span class="analytics-help">@Duration(fleet.PlannedDrivingSeconds) estimated driving</span></div>
+            <div><dt>Planned road distance</dt><dd>@((fleet.PlannedDistanceMeters / 1000).ToString("N1")) km</dd><dd class="analytics-help">@Duration(fleet.PlannedDrivingSeconds) estimated driving</dd></div>
         </dl>
         @if (fleet.TotalVehicles == 0)
         {

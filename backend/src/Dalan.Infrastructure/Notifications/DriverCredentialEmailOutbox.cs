@@ -52,12 +52,20 @@ public sealed class DriverCredentialEmailOutbox(
 
         db.NotificationDeliveries.Add(new NotificationDelivery
         {
-            Id = message.Id, Kind = kind, DayUtc = DateOnly.FromDateTime(now.UtcDateTime),
-            CreatedAtUtc = now, From = message.From, ToJson = "[]",
-            Subject = "Dalan Driver account email", Text = protectedPayload
+            Id = message.Id,
+            Kind = kind,
+            DayUtc = DateOnly.FromDateTime(now.UtcDateTime),
+            CreatedAtUtc = now,
+            From = message.From,
+            ToJson = "[]",
+            Subject = "Dalan Driver account email",
+            Text = protectedPayload
         });
         await db.SaveChangesAsync(cancellationToken);
-        await TrySendAsync(message.Id, cancellationToken);
+        // Audited account requests commit their encrypted outbox row with the account change.
+        // The Worker sends it only after that transaction has become visible.
+        if (db.Database.CurrentTransaction is null)
+            await TrySendAsync(message.Id, cancellationToken);
         // Queued is not equivalent to provider-accepted or inbox-delivered.
         return "queued";
     }

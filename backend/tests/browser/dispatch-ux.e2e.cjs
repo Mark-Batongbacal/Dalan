@@ -46,7 +46,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.goto(base + '/Account/Login');
         await page.locator('#Email').fill(fixture.email);
         await page.locator('#Password').fill(fixture.password);
-        await Promise.all([page.waitForURL('**/Vehicles'), page.getByRole('button', { name: 'Sign in', exact: true }).click()]);
+        await Promise.all([page.waitForURL('**/Vehicles'), page.getByRole('button', { name: /^Sign in(?: to workspace)?$/ }).click()]);
         async function submit(name) {
             await Promise.all([page.waitForNavigation(), page.getByRole('button', { name, exact: true }).click()]);
         }
@@ -55,8 +55,11 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
                 await page.setViewportSize({ width, height: 1000 });
                 await page.emulateMedia({ colorScheme: theme === 'system' ? 'dark' : theme });
                 await page.locator('#theme-select').selectOption(theme);
-                await page.waitForFunction(expected => { const button = document.querySelector('.btn-primary:not(:disabled)'); return !button || getComputedStyle(button).color === expected; },
-                    theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(37, 28, 19)');
+                await page.waitForFunction(() => {
+                    const button = document.querySelector('.btn-primary:not(:disabled)'); if (!button) return true;
+                    const probe = document.createElement('span'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--on-primary'); document.body.append(probe);
+                    const expected = getComputedStyle(probe).color; probe.remove(); return getComputedStyle(button).color === expected;
+                });
                 assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), stage + ' fits ' + width);
                 assert.ok(await page.evaluate(() => { const ids = [...document.querySelectorAll('[id]')].map(e => e.id); return new Set(ids).size === ids.length; }), stage + ' IDs unique');
                 await page.screenshot({ path: path.join(output, `${stage}-${width}-${theme}.png`), fullPage: true });
@@ -65,16 +68,37 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.goto(base + '/Deliveries');
         await capture('delivery-queue');
         await page.goto(base + '/FleetPlanner');
-        await page.route('**/PlanningMap/Search', route => route.fulfill({ json: {
-            results: [{ label: 'UX warehouse', location: { latitude: 14.6, longitude: 121 } }], attribution: 'Photon / OpenStreetMap'
+        await page.route('**/PlanningMap/Addresses', route => route.fulfill({ json: {
+            results: [{ address: '123 UX Street' }]
         } }));
+        async function chooseAddress() {
+            await page.locator('[data-google-open]').click();
+            await page.locator('[data-map-search]').fill('123 UX Street');
+            await page.locator('[data-map-search-button]').click();
+            await page.locator('[data-address-intended]').check();
+            await page.getByRole('button', { name: '123 UX Street', exact: true }).click();
+        }
         async function chooseLocation(target) {
             await page.locator('[data-map-target]').selectOption(target);
-            await page.locator('[data-map-search]').fill('Manila');
-            await page.locator('[data-map-search-button]').click();
-            await page.getByRole('button', { name: 'UX warehouse', exact: true }).click();
-            await page.locator('[data-map-confirm]').focus();
-            await page.keyboard.press('Enter');
+            await chooseAddress();
+            await page.locator('[data-map-advanced]').click();
+            const ids = await page.locator('[data-planning-map]').evaluate(root => {
+                const model = JSON.parse(root.querySelector('[data-map-model]').textContent).model;
+                const target = root.querySelector('[data-map-target]').value;
+                return model.targets[Number(target)] || {latitudeInputId:'Jobs_1__' + (target.endsWith('0') ? 'Pickup' : 'Dropoff') + 'Latitude'};
+            });
+            // Dynamic jobs are represented by the option label rather than the initial JSON.
+            const label = await page.locator('[data-map-target] option:checked').textContent();
+            let latitude = ids.latitudeInputId, longitude = ids.longitudeInputId;
+            if (label.includes('Job 2')) { const kind = label.includes('pickup') ? 'Pickup' : 'Dropoff'; latitude = `Jobs_1__${kind}Latitude`; longitude = `Jobs_1__${kind}Longitude`; }
+            await page.locator('#' + latitude).fill('14.600000');
+            await page.locator('#' + longitude).fill('121.000000');
+            if (ids.addressInputId) await page.locator('#' + ids.addressInputId).fill('123 UX Street');
+            await page.locator('[data-map-coordinate-fields][open] summary').first().click();
+            const selected = await page.locator('[data-map-target]').inputValue();
+            await page.locator('[data-map-target]').selectOption(selected);
+            await page.locator('[data-map-use-center]').click();
+            await page.locator('[data-map-confirm]').click();
         }
         assert.equal(await page.locator('[data-map-coordinate-fields][open]').count(), 0);
         const startTarget = await page.locator('[data-map-target] option').allTextContents();
@@ -91,9 +115,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.locator('#RecipientName').fill('Location workflow');
         await chooseLocation('0');
         await page.locator('[data-map-target]').selectOption('1');
-        await page.locator('[data-map-search]').fill('Manila');
-        await page.locator('[data-map-search-button]').click();
-        await page.getByRole('button', { name: 'UX warehouse', exact: true }).click();
+        await chooseAddress();
         assert.equal(await page.locator('#DropoffLatitude').inputValue(), '');
         assert.equal(await page.locator('[data-planning-map]').evaluate(root =>
             root.closest('form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))), false);
@@ -104,12 +126,14 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         assert.equal(await page.locator('#DropoffLatitude').inputValue(), '14.600000');
         assert.doesNotMatch(await page.locator('[data-valmsg-summary]').innerText(), /Dropoff/);
         await capture('delivery-location');
-        await page.route('**/PlanningMap/Search', route => route.fulfill({ status: 503, json: { error: 'Search unavailable. Use Advanced coordinates.' } }));
+        await page.route('**/PlanningMap/Addresses', route => route.fulfill({ status: 503, json: { error: 'Search unavailable. Use Advanced coordinates.' } }));
+        await page.locator('[data-google-open]').click();
         await page.locator('[data-map-search]').fill('Unavailable');
         await page.locator('[data-map-search-button]').click();
         await page.waitForFunction(() => !document.querySelector('[data-map-search-button]').disabled);
         assert.equal(await page.locator('#DropoffLatitude').inputValue(), '14.600000');
         assert.equal(await page.locator('#RecipientName').inputValue(), 'Location workflow');
+        await page.locator('[data-google-close]').click();
         await page.locator('[data-map-advanced]').click();
         assert.ok(await page.locator('#DropoffLatitude').evaluate(input => document.activeElement === input && input.closest('details').open));
         await page.locator('#PayloadWeightKg').fill('2');
@@ -123,7 +147,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.locator(`[name="${prefix}.ExistingWorkloadSeconds"]`).fill('600');
         await page.getByLabel(/UX Recipient/).check();
         assert.equal(await page.locator('#Settings_WarehouseLatitude').inputValue(), '14.6');
-        assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), 'UX warehouse');
+        assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), '123 UX Street');
         await page.locator('#Strategy').selectOption('WorkloadEquity');
         await page.locator('#Settings_ServiceSecondsPerStop').fill('60');
         await submit('Suggest strategy without routing');
@@ -132,7 +156,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         fail = true;
         await submit('Preview routes');
         assert.match(await page.locator('[role=alert]').first().innerText(), /routing provider failed/i);
-        assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), 'UX warehouse');
+        assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), '123 UX Street');
         fail = false;
         await submit('Preview routes');
         assert.equal(matrices, 1);
@@ -145,7 +169,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await submit('Change selections (new preview required)');
         assert.equal(matrices, beforeReturn);
         assert.equal(await page.locator('#Strategy').inputValue(), 'WorkloadEquity');
-        assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), 'UX warehouse');
+        assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), '123 UX Street');
         assert.equal(await page.locator(`[name="${prefix}.ExistingWorkloadSeconds"]`).inputValue(), '600');
         assert.ok(await page.locator(`[name="${prefix}.Selected"][type=checkbox]`).isChecked());
         await submit('Preview routes');

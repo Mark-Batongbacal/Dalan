@@ -100,35 +100,36 @@ function polyline(points) {
         assert.equal(await page.evaluate(() => window.__dln14Map.getStyle()?.sources?.["dalan-road"]?.data?.features?.length || 0), 0);
         console.log("PASS: editing coordinates clears stale geometry");
 
-        // Deterministic empty, unsafe-label, provider failure and search-selection states.
-        await page.route("**/PlanningMap/Search", route => route.fulfill({ json: { results: [], attribution: "OpenStreetMap" } }));
+        // Address predictions are text only. The fixture chooses its own map pin independently.
+        await page.locator("[data-google-open]").click();
+        await page.route("**/PlanningMap/Addresses", route => route.fulfill({ json: { results: [] } }));
         await page.locator("[data-map-search]").fill("No such address");
-        await page.locator("[data-map-search]").press("Enter"); await settle("Searching");
-        assert.match(await page.locator("[data-map-status]").innerText(), /No matching addresses/);
-        await page.unroute("**/PlanningMap/Search");
-        await page.route("**/PlanningMap/Search", route => route.fulfill({ json: {
-            results: [{ label: "<img src=x onerror=alert(1)>", location: { latitude: 14.61, longitude: 120.99 } }],
-            attribution: "OpenStreetMap · Photon" } }));
-        await page.locator("[data-map-search]").fill("Test address");
-        await page.locator("[data-map-search-button]").click(); await settle("Searching");
-        assert.equal(await page.locator("[data-map-results] img").count(), 0);
-        await page.locator(".planning-map-result").click();
-        await page.locator("[data-map-confirm]").click();
-        assert.equal(await page.locator("#DropoffLatitude").inputValue(), "14.610000");
-        await page.unroute("**/PlanningMap/Search");
-        await page.route("**/PlanningMap/Search", route => route.fulfill({ status: 503,
-            contentType: "application/problem+json", body: JSON.stringify({ title: "Address search is unavailable." }) }));
-        await page.locator("[data-map-search-button]").click(); await settle("Searching");
-        assert.match(await page.locator("[data-map-status]").innerText(), /unavailable/);
-        await page.unroute("**/PlanningMap/Search");
-        console.log("PASS: empty search, safe text labels, selected coordinates, provider failure");
-
+        await page.locator("[data-map-search]").press("Enter");
+        await page.locator("[data-google-status]").filter({hasText:"No matching street addresses"}).waitFor();
+        await page.unroute("**/PlanningMap/Addresses");
+        await page.route("**/PlanningMap/Addresses", route => route.fulfill({json:{results:[{address:"<img src=x onerror=alert(1)>"}]}}));
+        const beforeSearch = await page.locator("#DropoffLatitude").inputValue();
+        await page.locator("[data-map-search]").fill("Test street address");
+        await page.locator("[data-map-search-button]").click();
+        await page.locator(".planning-map-result").waitFor();
+        assert.equal(await page.locator("[data-map-results] img").count(),0);
+        await page.locator("[data-address-intended]").check(); await page.locator(".planning-map-result").click();
+        assert.equal(await page.locator("#DropoffLatitude").inputValue(),beforeSearch);
+        await page.evaluate(()=>window.__dln14Map.jumpTo({center:[120.99,14.61]}));
+        await page.locator("[data-map-use-center]").click(); await page.locator("[data-map-confirm]").click();
+        assert.equal(await page.locator("#DropoffLatitude").inputValue(),"14.610000");
+        await page.unroute("**/PlanningMap/Addresses");
+        await page.route("**/PlanningMap/Addresses", route=>route.fulfill({status:503,json:{title:"Search is unavailable."}}));
+        await page.locator("[data-google-open]").click(); await page.locator("[data-map-search-button]").click();
+        await page.locator("[data-google-status]").filter({hasText:"unavailable"}).waitFor();
+        await page.unroute("**/PlanningMap/Addresses");
+        console.log("PASS: empty search, safe address text, explicit independent pin, provider failure");
         if (live) {
-            await page.locator("[data-map-search]").fill("Manila City Hall");
-            await page.locator("[data-map-search-button]").click(); await settle("Searching");
-            assert.ok(await page.locator(".planning-map-result").count() > 0, await page.locator("[data-map-status]").innerText());
-            console.log("PASS: live Photon address results");
+            await page.locator("[data-map-search]").fill("123 Main Street, Los Angeles, CA");
+            await page.locator("[data-map-search-button]").click(); await page.locator(".planning-map-result").first().waitFor();
+            console.log("PASS: live Google street-address suggestions");
         }
+        await page.locator("[data-google-close]").click();
         await page.locator("#RecipientName").fill("DLN14 disposable browser delivery");
         await page.locator("#PickupAddress").fill("Temporary manual pickup");
         await page.locator("#DropoffAddress").fill("Temporary manual drop-off");

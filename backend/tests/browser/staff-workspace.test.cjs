@@ -12,7 +12,7 @@ function workspace() {
         contains(target) { return target === link; }, querySelector() { return link; }, querySelectorAll() { return [link]; }
     };
     const toggle = { attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, addEventListener(key, handler) { handlers['toggle:' + key] = handler; }, contains(target) { return target === toggle; }, focus() { document.activeElement = toggle; } };
-    const document = { activeElement: null, querySelector(selector) { return selector === '.nav-toggle' ? toggle : null; }, getElementById() { return navigation; }, addEventListener(key, handler) { handlers[key] = handler; } };
+    const document = { body: { style: {} }, activeElement: null, querySelector(selector) { return selector === '.nav-toggle' ? toggle : null; }, getElementById(id) { return id === 'main-navigation' ? navigation : null; }, addEventListener(key, handler) { handlers[key] = handler; } };
     vm.runInNewContext(fs.readFileSync(require.resolve('../../src/Dalan.Web/wwwroot/js/site.js'), 'utf8'), { document, window: { matchMedia() { return { matches: true, addEventListener(key, handler) { handlers.resize = handler; } }; } } });
     return { handlers, document, toggle, link };
 }

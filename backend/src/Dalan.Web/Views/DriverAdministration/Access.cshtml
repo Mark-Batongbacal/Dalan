@@ -1,0 +1,15 @@
+@model Dalan.Application.Drivers.DriverDetails
+@{ ViewData["Title"] = "Driver mobile access"; }
+<div class="page-heading"><span class="page-kicker">Fleet administration</span><h1>Driver mobile access</h1><p>@Model.Name</p><a asp-controller="Drivers" asp-action="Index">Back to Driver registry</a></div>
+<section class="content-card" data-driver-access="@Model.Id">
+ @Html.AntiForgeryToken()
+ <h2 class="h5">Account status</h2><p data-access-status role="status">Loading account status…</p>
+ <button type="button" class="btn btn-outline-secondary" data-access-refresh>Refresh status</button>
+ <h2 class="h5 mt-4">Invite Driver</h2><p>The Driver sets their own password using a private email link. Reissuing an invitation invalidates the previous link.</p>
+ <form data-access-form="invite"><label for="invite-email" class="form-label">Approved Driver email</label><input id="invite-email" class="form-control mb-3" type="email" name="email" required maxlength="256" autocomplete="email" /><button class="btn btn-primary">Send / reissue invitation</button></form>
+ <h2 class="h5 mt-4">Disable or restore mobile access</h2><p>Disabling revokes existing sessions. It preserves the Driver profile, deliveries and evidence. Re-enabling requires a fresh sign-in.</p>
+ <form data-access-form="change"><label for="access-reason" class="form-label">Reason (8–240 characters)</label><input id="access-reason" class="form-control mb-3" name="reason" required minlength="8" maxlength="240" /><div class="d-flex flex-wrap gap-2"><button class="btn btn-outline-danger" name="action" value="disable">Disable access</button><button class="btn btn-outline-secondary" name="action" value="enable">Restore access</button></div></form>
+ <p class="mt-3" data-access-message role="status" aria-live="polite"></p>
+ <a href="/AccountAudit?driverId=@Model.Id">View account audit history</a> · <a href="/DriverCredentialEmails">Credential email status</a>
+</section>
+@section Scripts { <script src="~/js/driver-administration.js" asp-append-version="true"></script> }

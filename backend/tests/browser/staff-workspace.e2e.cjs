@@ -35,6 +35,8 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         assert.ok(await page.locator('.skip-link').evaluate(e => e === document.activeElement));
         await page.keyboard.press('Enter');
         await page.keyboard.press('Tab');
+        assert.ok(await page.locator('.auth-logo').evaluate(e => e === document.activeElement));
+        await page.keyboard.press('Tab');
         assert.ok(await page.locator('#Email').evaluate(e => e === document.activeElement));
         await page.keyboard.type(fixture.email);
         await page.keyboard.press('Tab');
@@ -51,15 +53,17 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
             assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${route} fits ${width} ${theme}`);
             assert.equal(await page.locator('h1').count(), 1);
             const primary = page.locator('.btn-primary').first();
-            if (await primary.count()) await page.waitForFunction(expected => {
-                const button = document.querySelector('.btn-primary');
-                return getComputedStyle(button).color === expected;
-            }, theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(37, 28, 19)');
+            if (await primary.count()) await page.waitForFunction(() => {
+                const button = document.querySelector('.btn-primary'); if (!button) return true;
+                const probe = document.createElement('span'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--on-primary'); document.body.append(probe);
+                const expected = getComputedStyle(probe).color; probe.remove(); return getComputedStyle(button).color === expected;
+            });
             assert.equal(await page.evaluate(() => {
                 const ids = [...document.querySelectorAll('[id]')].map(e => e.id);
                 return new Set(ids).size === ids.length;
             }), true, 'unique element IDs');
-            assert.equal(await page.locator('link[rel=stylesheet]').count(), 2);
+            assert.equal(await page.locator('link[rel=stylesheet][href*="/css/site.css"]').count(), 1);
+            assert.equal(await page.locator('link[rel=stylesheet][href*="/lib/bootstrap/"]').count(), 1);
             if (width === 390 && route === '/Vehicles') {
                 await page.getByRole('button', { name: 'Toggle navigation' }).focus();
                 await page.keyboard.press('Enter');

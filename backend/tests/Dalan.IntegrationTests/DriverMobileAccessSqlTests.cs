@@ -55,7 +55,13 @@ public sealed class DriverMobileAccessSqlTests(SqlServerFixture fixture)
         Assert.Equal(HttpStatusCode.Unauthorized, (await mobile.GetAsync("/api/driver/tasks")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await mobile.PostAsync("/api/driver/tracking/start", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
-            (await mobile.PostAsJsonAsync($"/api/driver/tasks/{seeded.DeliveryId}/events", new { })).StatusCode);
+            (await mobile.PostAsJsonAsync($"/api/driver/tasks/{seeded.DeliveryId}/events", new
+            {
+                eventId = Guid.NewGuid(),
+                assignedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5),
+                capturedAtUtc = DateTimeOffset.UtcNow,
+                kind = "Pickup"
+            })).StatusCode);
 
         using var blockedLogin = await mobile.PostAsJsonAsync("/api/driver/login",
             new { email = seeded.Email, password = seeded.Password });
@@ -150,6 +156,51 @@ public sealed class DriverMobileAccessSqlTests(SqlServerFixture fixture)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         await using var verify = fixture.CreateContext();
         Assert.False(await verify.DriverAccounts.AnyAsync(x => x.DriverId == driver.Id));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GPS_exception_is_pending_until_explicit_staff_review_and_preserves_missing_fix(bool approve)
+    {
+        var seeded = await SeedDriver(); DateTimeOffset assigned;
+        await using (var db = fixture.CreateContext())
+        {
+            var delivery = await db.Deliveries.SingleAsync(x => x.Id == seeded.DeliveryId);
+            assigned = delivery.AssignedAtUtc!.Value;
+            delivery.MarkPickedUp(seeded.DriverId, assigned.AddMinutes(1)); await db.SaveChangesAsync();
+        }
+        using var api = ApiFactory().WithWebHostBuilder(b => b.UseSetting("DriverGpsProof:Enabled", "true"));
+        using var mobile = api.CreateClient(new() { BaseAddress = new("https://localhost") });
+        await Login(mobile, seeded.Email, seeded.Password);
+        var proof = new Dalan.Contracts.DriverExecution.DriverTaskEvent(Guid.NewGuid(), assigned,
+            assigned.AddMinutes(2), "Deliver", null, null, "Recipient", [255, 216, 255, 224, 255, 217]);
+        var endpoint = $"/api/driver/tasks/{seeded.DeliveryId}/gps-exceptions";
+        var payload = new Dalan.Contracts.DriverExecution.GpsExceptionRequest(proof, "Location unavailable at the gate");
+        Assert.Equal(HttpStatusCode.Accepted, (await mobile.PostAsJsonAsync(endpoint, payload)).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await mobile.PostAsJsonAsync(endpoint, payload)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await mobile.PostAsJsonAsync(endpoint, payload with { Reason = "Changed evidence must not overwrite" })).StatusCode);
+        await using (var db = fixture.CreateContext())
+        {
+            Assert.Equal(Dalan.Domain.Deliveries.DeliveryStatus.PickedUp, (await db.Deliveries.FindAsync(seeded.DeliveryId))!.Status);
+            Assert.False(await db.DriverEventReceipts.AnyAsync(x => x.EventId == proof.EventId));
+        }
+        using var web = WebFactory().WithWebHostBuilder(b => b.UseSetting("DriverGpsProof:Enabled", "true"));
+        using var driver = WebClient(web, "Driver");
+        Assert.Equal(HttpStatusCode.Forbidden, (await driver.GetAsync("/api/gps-exceptions")).StatusCode);
+        using var admin = WebClient(web, "Admin"); await Antiforgery(admin, seeded.DriverId);
+        var reviewUrl = $"/api/gps-exceptions/{proof.EventId}/review";
+        var decision = new { approve, reason = "Reviewed photo and dispatcher evidence" };
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync(reviewUrl, decision)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync(reviewUrl, decision)).StatusCode);
+        Assert.Equal(approve ? HttpStatusCode.NoContent : HttpStatusCode.UnprocessableEntity, (await mobile.PostAsJsonAsync(endpoint, payload)).StatusCode);
+        await using var verify = fixture.CreateContext();
+        var saved = await verify.Deliveries.Include(x => x.Proof).SingleAsync(x => x.Id == seeded.DeliveryId);
+        Assert.Equal(approve ? Dalan.Domain.Deliveries.DeliveryStatus.Delivered : Dalan.Domain.Deliveries.DeliveryStatus.PickedUp, saved.Status);
+        if (approve) { Assert.NotNull(saved.Proof); Assert.Null(saved.Proof.Latitude); Assert.Null(saved.Proof.Longitude); }
+        Assert.Equal(approve ? 1 : 0, await verify.DriverEventReceipts.CountAsync(x => x.EventId == proof.EventId));
+        var history = await verify.DriverGpsExceptions.SingleAsync(x => x.Id == proof.EventId);
+        Assert.Equal("access-test-admin", history.ReviewerUserId); Assert.NotNull(history.ReviewedAtUtc);
     }
 
     private async Task<(Guid DriverId, Guid DeliveryId, string Email, string Password)> SeedDriver()

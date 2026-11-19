@@ -1,0 +1,4 @@
+@{ ViewData["Title"] = "GPS exception review"; }
+<div class="page-heading"><h1>GPS exception review</h1><p>A request is not a completed delivery. Review the reason and proof; approval explicitly accepts an exception to proximity verification. Missing GPS stays recorded as missing.</p></div>
+<section class="content-card" data-gps-reviews>@Html.AntiForgeryToken()<button class="btn btn-outline-secondary" data-review-refresh>Refresh requests</button><p data-review-status role="status"></p><div data-review-items></div></section>
+@section Scripts { <script src="~/js/gps-reviews.js" asp-append-version="true"></script> }

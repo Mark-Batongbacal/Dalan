@@ -16,8 +16,13 @@
 
 <p><a asp-controller="DispatchBoard" asp-action="Index">Open dispatch board</a> to plan and confirm saved deliveries. This planner is a separate, unsaved preview.</p>
 <form asp-action="Index" method="post">
+    <div class="location-workspace">
+        <aside class="location-workspace-map" aria-label="Fleet planning map">
+            <partial name="_PlanningMap" model="PlanningMapViewModel.ForPlanner(Model)" />
+        </aside>
+        <div class="location-workspace-fields">
     <div asp-validation-summary="All" class="text-danger"></div>
-    <partial name="_PlanningMap" model="PlanningMapViewModel.ForPlanner(Model)" />
+
     <div class="content-card mb-3">
     <h2 class="h4 mb-3">Vehicles and starting points</h2>
     @if (Model.Vehicles.Count == 0)
@@ -26,14 +31,14 @@
     }
     else
     {
-        <div class="table-responsive">
+        <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable data table">
             <table class="table table-sm align-middle registry-table">
                 <thead><tr><th>Use</th><th>Vehicle</th><th>Start location</th></tr></thead>
                 <tbody>
                 @for (var i = 0; i < Model.Vehicles.Count; i++)
                 {
                     <tr>
-                        <td data-label="Use"><input asp-for="Vehicles[i].Selected" class="form-check-input" /><input asp-for="Vehicles[i].Id" type="hidden" /></td>
+                        <td data-label="Use"><input asp-for="Vehicles[i].Selected" class="form-check-input" aria-label="Use vehicle @Model.Vehicles[i].RegistrationNumber" /><input asp-for="Vehicles[i].Id" type="hidden" /></td>
                         <td data-label="Vehicle">@Model.Vehicles[i].RegistrationNumber</td>
                         <td data-label="Start location"><details data-map-coordinate-fields><summary>Advanced coordinates</summary><input asp-for="Vehicles[i].StartLatitude" class="form-control form-control-sm" type="number" step="any" min="-90" max="90" aria-label="Start latitude for @Model.Vehicles[i].RegistrationNumber" /><input asp-for="Vehicles[i].StartLongitude" class="form-control form-control-sm" type="number" step="any" min="-180" max="180" aria-label="Start longitude for @Model.Vehicles[i].RegistrationNumber" /></details></td>
                     </tr>
@@ -50,7 +55,7 @@
         <button type="button" id="add-job" class="btn btn-outline-secondary btn-sm">Add job</button>
     </div>
     <p class="text-muted">Leave “Vehicle” blank to let the planner assign a job. A selected vehicle keeps that job while the planner reorders its stops.</p>
-    <div class="table-responsive">
+    <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable data table">
         <table class="table table-sm align-middle registry-table" id="jobs-table">
             <thead><tr><th>Job ID</th><th>Pickup location</th><th>Drop-off location</th><th>Vehicle</th></tr></thead>
             <tbody>
@@ -73,6 +78,9 @@
         </table>
     </div>
     <button type="submit" class="btn btn-primary" disabled="@(Model.Vehicles.Count == 0)">Optimize plan</button>
+    </div>
+
+        </div>
     </div>
 </form>
 

@@ -112,7 +112,7 @@
         <dl>
             <dt>Recipient confirmation</dt><dd>@proof.RecipientConfirmation</dd>
             <dt>Captured at (UTC)</dt><dd>@proof.CapturedAtUtc.ToUniversalTime().ToString("u")</dd>
-            <dt>Location</dt><dd>@proof.Latitude, @proof.Longitude</dd>
+            <dt>Location</dt><dd>@(proof.Latitude is null ? "Not captured — reviewed GPS exception" : $"{proof.Latitude}, {proof.Longitude}")</dd>
         </dl>
         @if (proof.PhotoReference.StartsWith("driver-upload:", StringComparison.Ordinal))
         {

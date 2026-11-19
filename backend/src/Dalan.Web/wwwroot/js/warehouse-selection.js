@@ -35,9 +35,10 @@
         function save() {
             try {
                 const selected = current();
-                if (selected) localStorage.setItem(key, JSON.stringify(selected));
+                if (selected) localStorage.setItem(key, JSON.stringify({ ...selected,
+                    address: address.dataset.googleAddress === "true" ? "Warehouse" : selected.address }));
                 else localStorage.removeItem(key);
-                if (status) status.textContent = selected ? "Warehouse remembered for your account in this browser." : "Select the warehouse on the map or enter its coordinates.";
+                if (status) status.textContent = selected ? address.dataset.googleAddress === "true" ? "Warehouse map pin remembered. Confirm the address again for each transaction." : "Warehouse remembered for your account in this browser." : "Select the warehouse on the map or enter its coordinates.";
             } catch {
                 if (status) status.textContent = "This browser could not remember the warehouse. The current form can still be used.";
             }

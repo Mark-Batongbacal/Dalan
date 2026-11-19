@@ -130,6 +130,17 @@ public sealed class Delivery
         Status = DeliveryStatus.Delivered;
     }
 
+    public void CompleteReviewedException(Guid driverId, string photoReference, string recipientConfirmation,
+        double? latitude, double? longitude, DateTimeOffset capturedAt)
+    {
+        if (Status != DeliveryStatus.PickedUp) throw new InvalidOperationException("Pickup must be confirmed first.");
+        EnsureAssignedDriver(driverId);
+        var at = RequireTimeAtOrAfter(capturedAt, PickedUpAtUtc!.Value, nameof(capturedAt));
+        Proof = DeliveryProof.Create(Id, photoReference, recipientConfirmation, latitude, longitude, at, true);
+        DeliveredAtUtc = at;
+        Status = DeliveryStatus.Delivered;
+    }
+
     public void Cancel(DateTimeOffset cancelledAt)
     {
         if (Status is not (DeliveryStatus.Pending or DeliveryStatus.Assigned))
