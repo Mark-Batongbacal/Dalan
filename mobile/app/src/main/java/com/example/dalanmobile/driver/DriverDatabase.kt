@@ -56,6 +56,9 @@ interface DriverDao {
     @Query("UPDATE PendingEvent SET failure = :reason WHERE sequence = :sequence")
     suspend fun fail(sequence: Long, reason: String)
 
+    @Query("UPDATE PendingEvent SET payload = :payload, failure = NULL WHERE sequence = :sequence AND owner = :owner")
+    suspend fun requestReview(sequence: Long, owner: String, payload: String)
+
     @Query("DELETE FROM PendingEvent WHERE owner = :owner AND deliveryId = :id AND assignment = :assignment")
     suspend fun discard(owner: String, id: String, assignment: String)
 }

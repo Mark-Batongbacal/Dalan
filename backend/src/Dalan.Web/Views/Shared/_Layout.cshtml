@@ -144,7 +144,7 @@
                         <hr class="sidebar-divider" />
                         <span class="sidebar-section">Admin</span>
 
-                        <a class="@(controller == "Drivers" ? "active" : "")"
+                        <a class="@((controller is "Drivers" or "DriverAccounts" || (controller == "DriverAdministration" && action == "Access")) ? "active" : "")"
                            asp-controller="Drivers" asp-action="Index">
                             <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <circle cx="7" cy="6" r="3"/><path d="M1 18c0-3.5 2.7-5.5 6-5.5"/><circle cx="15" cy="12" r="3"/><path d="M12 18v-1a3 3 0 016 0v1"/>
@@ -152,7 +152,7 @@
                             Driver accounts
                         </a>
 
-                        <a class="@(controller == "AccountAudit" ? "active" : "")"
+                        <a class="@((controller == "DriverAdministration" && action == "Audit") ? "active" : "")"
                            href="/AccountAudit">
                             <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M9 11l3 3 6-6"/><path d="M4 4h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z"/>
@@ -160,7 +160,7 @@
                             Account audit
                         </a>
 
-                        <a href="/DriverCredentialEmails">
+                        <a class="@((controller == "DriverAdministration" && action == "Emails") ? "active" : "")" href="/DriverCredentialEmails">
                             <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <rect x="2" y="5" width="16" height="12" rx="1.5"/><path d="M2 7l8 5 8-5"/>
                             </svg>
@@ -235,34 +235,6 @@
             });
         })();
 
-        // Sidebar toggle
-        (function () {
-            var btn = document.getElementById('nav-toggle-btn');
-            var nav = document.getElementById('main-navigation');
-            var overlay = document.getElementById('sidebar-overlay');
-            if (!btn || !nav) return;
-
-            function openNav() {
-                nav.classList.add('open');
-                btn.setAttribute('aria-expanded', 'true');
-                if (overlay) overlay.style.display = 'block';
-                document.body.style.overflow = 'hidden';
-            }
-            function closeNav() {
-                nav.classList.remove('open');
-                btn.setAttribute('aria-expanded', 'false');
-                if (overlay) overlay.style.display = 'none';
-                document.body.style.overflow = '';
-            }
-
-            btn.addEventListener('click', function () {
-                nav.classList.contains('open') ? closeNav() : openNav();
-            });
-            if (overlay) overlay.addEventListener('click', closeNav);
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape') closeNav();
-            });
-        })();
     </script>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

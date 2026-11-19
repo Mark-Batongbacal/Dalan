@@ -17,6 +17,6 @@ public sealed record DriverTaskEvent(
     [StringLength(120)] string? RecipientConfirmation,
     [MaxLength(512_000)] byte[]? Photo,
     // Optional for compatibility with existing Room queues and installed APKs.
-    // Required when DriverGpsProof:Enabled is turned on after Codex adds capture.
+    // Required for delivery proof when DriverGpsProof:Enabled is turned on.
     [Range(0d, 10000d)] double? LocationAccuracyMeters = null,
     DateTimeOffset? LocationCapturedAtUtc = null);

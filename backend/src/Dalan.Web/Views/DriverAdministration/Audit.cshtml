@@ -1,0 +1,7 @@
+@{ ViewData["Title"] = "Account audit history"; }
+<div class="page-heading"><h1>Account audit history</h1><p>Read-only security events in UTC. History is preserved when mobile access is disabled. Only administrators can view it.</p></div>
+<section class="content-card" data-account-audit>
+ <form class="d-flex flex-wrap gap-2 mb-3"><div><label for="audit-driver" class="form-label">Driver identifier (optional)</label><input id="audit-driver" class="form-control" name="driverId" value="@Context.Request.Query["driverId"]" /></div><button class="btn btn-primary align-self-end">Filter history</button></form>
+ <p data-table-status role="status"></p><div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable data table"><table class="table"><caption>Account actions, newest first</caption><thead><tr><th scope="col">UTC time</th><th scope="col">Action</th><th scope="col">Outcome</th><th scope="col">Actor</th><th scope="col">Target</th><th scope="col">Reason</th></tr></thead><tbody></tbody></table></div><button type="button" class="btn btn-outline-secondary" data-audit-more hidden>Load older events</button>
+</section>
+@section Scripts { <script src="~/js/driver-administration.js" asp-append-version="true"></script> }

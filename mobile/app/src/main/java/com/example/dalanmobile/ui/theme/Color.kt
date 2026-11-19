@@ -46,3 +46,7 @@ val DarkWarning       = Color(0xFFF2BB4D)
 val DarkWarningBg     = Color(0xFF362610)
 val DarkInfo          = Color(0xFF7ABAFF)
 val DarkInfoBg        = Color(0xFF172540)
+
+// Input outlines are stronger than decorative borders for non-text contrast.
+val ControlOutline = Color(0xFFA1806B)
+val DarkControlOutline = Color(0xFFA38470)

@@ -47,6 +47,7 @@
         const targetSelect = find("[data-map-target]");
         const confirmButton = find("[data-map-confirm]");
         let pendingLocation = null;
+        let selectedStreetAddress = null;
         let candidateMarker = null;
         const confirmedLabels = new Map();
         find("[data-map-advanced]")?.addEventListener("click", () => {
@@ -76,7 +77,7 @@
         }
         function proposeLocation(lat, lon, label) {
             if (coordinate(lat, 90) === null || coordinate(lon, 180) === null) return;
-            pendingLocation = { lat, lon, label: label || "Selected map point" };
+            pendingLocation = { lat, lon, label: label || selectedStreetAddress || byId(model.targets[Number(targetSelect.value)].addressInputId)?.value || "Selected map point" };
             candidateMarker?.remove();
             if (map) candidateMarker = new maplibregl.Marker({ color: getComputedStyle(root).getPropertyValue("--primary").trim() })
                 .setLngLat([lon, lat]).addTo(map);
@@ -208,7 +209,7 @@
             }
             if (label && target.addressInputId) {
                 const address = byId(target.addressInputId);
-                if (address) { address.value = label; address.dispatchEvent(new Event("input", { bubbles: true })); }
+                if (address) { if (label === selectedStreetAddress) address.dataset.googleAddress = "true"; else delete address.dataset.googleAddress; address.value = label; address.dispatchEvent(new Event("input", { bubbles: true })); }
             }
             if (target.selectionInputId && byId(target.selectionInputId)) {
                 byId(target.selectionInputId).checked = true;
@@ -343,41 +344,43 @@
 
         const searchButton = find("[data-map-search-button]");
         const searchInput = find("[data-map-search]");
-        searchInput?.addEventListener("input", () => {
-            clearSelection();
-            searchButton.disabled = false;
-            searchRequest?.abort(); searchVersion++; find("[data-map-results]").replaceChildren();
-            message("Press Search to look up this address, or choose a map point.");
-        });
-        searchInput?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); searchButton.click(); } });
-        searchButton?.addEventListener("click", async () => {
+        const dialog = find("[data-google-dialog]");
+        const searchStatus = find("[data-google-status]");
+        const results = find("[data-map-results]");
+        let timer;
+        function closeSearch() { searchRequest?.abort(); searchVersion++; clearTimeout(timer); if (searchButton) searchButton.disabled = false; results?.replaceChildren(); dialog?.close(); }
+        find("[data-google-open]")?.addEventListener("click", () => { find("[data-address-intended]").checked = false; dialog.showModal(); searchInput.focus(); });
+        find("[data-google-close]")?.addEventListener("click", closeSearch);
+        dialog?.addEventListener("cancel", closeSearch);
+        targetSelect?.addEventListener("change", () => { selectedStreetAddress = null; closeSearch(); });
+        async function search() {
             const query = searchInput.value.trim();
-            if (query.length < 3 || query.length > 200) return message("Enter 3–200 characters to search.");
+            if (query.length < 3 || query.length > 200) { searchStatus.textContent = "Enter 3–200 characters to search."; return; }
             searchRequest?.abort(); const version = ++searchVersion; searchRequest = new AbortController();
-            const results = find("[data-map-results]"); results.replaceChildren();
-            searchButton.disabled = true; message("Searching OpenStreetMap addresses…");
+            results.replaceChildren(); searchButton.disabled = true; searchStatus.textContent = "Searching street addresses…";
             try {
                 const body = await post(root.dataset.searchUrl, { query }, searchRequest.signal);
-                if (version !== searchVersion) return;
+                if (version !== searchVersion || !dialog.open) return;
                 for (const result of body.results) {
                     const row = document.createElement("li"), button = document.createElement("button");
-                    button.type = "button"; button.className = "planning-map-result";
-                    button.textContent = result.label;
+                    button.type = "button"; button.className = "planning-map-result"; button.textContent = result.address;
                     button.addEventListener("click", () => {
-                        proposeLocation(result.location.latitude, result.location.longitude, result.label);
-                        map?.easeTo({ center: [result.location.longitude, result.location.latitude], zoom: 15, duration: 0 });
-                        results.replaceChildren();
+                        if (!find("[data-address-intended]").checked) { searchStatus.textContent = "Confirm this is the street address you intended to enter."; find("[data-address-intended]").focus(); return; }
+                        selectedStreetAddress = result.address;
+                        closeSearch(); clearSelection();
+                        find("[data-map-selection]").textContent = "Address text: " + selectedStreetAddress + ". Select and confirm its map pin. Coordinates have not changed.";
+                        message("Street address selected as text only. Choose a map point or use Advanced coordinates to confirm its position.");
+                        find("[data-map-canvas]")?.focus();
                     });
                     row.append(button); results.append(row);
                 }
-                message(body.results.length ? "Select an address to use it. " + body.attribution :
-                    "No matching addresses. Select a map point or enter coordinates.");
-            } catch (error) {
-                if (version === searchVersion && error.name !== "AbortError") message(error.message);
-            } finally {
-                if (version === searchVersion) searchButton.disabled = false;
-            }
-        });
+                searchStatus.textContent = body.results.length ? "Choose the street address you intended to enter. No map coordinates are supplied." : "No matching street addresses. Keep your address and select a map point manually.";
+            } catch (error) { if (version === searchVersion && error.name !== "AbortError") searchStatus.textContent = error.message; }
+            finally { if (version === searchVersion) searchButton.disabled = false; }
+        }
+        searchInput?.addEventListener("input", () => { selectedStreetAddress = null; clearSelection(); searchRequest?.abort(); searchVersion++; clearTimeout(timer); results.replaceChildren(); searchButton.disabled = false; timer = setTimeout(search, 400); });
+        searchInput?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); clearTimeout(timer); search(); } });
+        searchButton?.addEventListener("click", () => { clearTimeout(timer); search(); });
         paint();
     });
 })();

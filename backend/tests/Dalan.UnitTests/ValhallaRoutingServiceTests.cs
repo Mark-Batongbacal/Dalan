@@ -71,6 +71,16 @@ public sealed class ValhallaRoutingServiceTests
             CreateService(handler).GetRouteAsync(new(14.6, 121.0), new(14.7, 121.1)));
     }
 
+    [Fact]
+    public async Task Navigation_requests_and_parses_visual_maneuvers()
+    {
+        using var handler = new StubHandler(_ => new(HttpStatusCode.OK) { Content = new StringContent("""{"trip":{"summary":{"length":1,"time":120},"legs":[{"shape":"polyline6","maneuvers":[{"instruction":"Turn right.","length":0.2,"time":30,"begin_shape_index":0,"end_shape_index":2}]}]}}""") });
+        var route = await CreateService(handler).GetDirectionsAsync(new(14, 121), new(14.1, 121.1));
+        var turn = Assert.Single(route!.Maneuvers!);
+        Assert.Equal("Turn right.", turn.Instruction); Assert.Equal(200, turn.DistanceMeters);
+        Assert.Equal("instructions", JsonDocument.Parse(handler.LastBody!).RootElement.GetProperty("directions_type").GetString());
+    }
+
     private static ValhallaRoutingService CreateService(HttpMessageHandler handler)
         => new(new HttpClient(handler) { BaseAddress = new Uri("https://valhalla.example/") });
 

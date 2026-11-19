@@ -118,7 +118,18 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                 }
             }
             if (!state.signedIn || state.needsLogin) {
-                item { LoginForm(state.busy, model::login) }
+                item {
+                    LoginForm(state.busy, model::login)
+                    val context = LocalContext.current
+                    var recoveryError by remember { mutableStateOf<String?>(null) }
+                    TextButton(onClick = {
+                        try {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(com.example.dalanmobile.BuildConfig.API_BASE_URL.trimEnd('/') + "/DriverRecovery/Request")))
+                        } catch (_: ActivityNotFoundException) { recoveryError = "No browser available. Ask your administrator for help recovering access." }
+                    }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Forgot password?") }
+                    recoveryError?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+                }
             }
             if (state.signedIn) {
                 item { SyncStatusCard(state) }
@@ -191,7 +202,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                     item {
                         TextButton(onClick = { selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back to deliveries") }
                         key(task.id, task.assignedAtUtc) {
-                            TaskDetails(task, task.assignmentEvents(state.events), state.busy, model) { mapOpen = true }
+                            TaskDetails(task, task.assignmentEvents(state.events), state.busy, state.gpsProofEnabled, model) { mapOpen = true }
                         }
                     }
                 }
@@ -204,6 +215,11 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                                 state.tasks.firstOrNull { it.id == failed.deliveryId }?.recipientName ?: failed.deliveryId,
                                 state.events.count { it.deliveryId == failed.deliveryId && it.assignment == failed.assignment },
                                 state.busy) { model.discard(failed) }
+                            if (state.gpsProofEnabled && failed.kind == "Deliver" && failed.failure.orEmpty().startsWith("Location proof rejected")) {
+                                var reason by remember(failed.sequence) { mutableStateOf("") }
+                                OutlinedTextField(reason, { reason = it.take(500) }, label = { Text("Reason for GPS exception") }, modifier = Modifier.fillMaxWidth())
+                                Button(onClick = { model.requestGpsReview(failed, reason) }, enabled = !state.busy && reason.trim().length >= 8, modifier = Modifier.heightIn(min = 48.dp)) { Text("Request dispatcher review") }
+                            }
                         }
                     }
                 }
@@ -311,7 +327,7 @@ private fun LoginForm(busy: Boolean, login: (String, String) -> Unit) {
 }
 
 @Composable
-private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolean,
+private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolean, gpsProofEnabled: Boolean,
                         model: DriverViewModel, openMap: () -> Unit) {
     val pickedUp = task.status == "PickedUp" || events.any { it.kind == "Pickup" }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -365,7 +381,7 @@ private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolea
                 if (task.status != "PickedUp")
                     Text("Pickup is queued locally. You may capture delivery proof now; the queue sends pickup before delivery.",
                         style = MaterialTheme.typography.bodySmall)
-                ProofForm(task, busy, model)
+                ProofForm(task, busy, gpsProofEnabled, model)
             }
             else -> {
                 Text("Confirm only after collecting the delivery at the pickup address. When offline, this saves an update for later sync.",
@@ -384,7 +400,7 @@ private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolea
 }
 
 @Composable
-private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
+private fun ProofForm(task: TaskInfo, busy: Boolean, gpsProofEnabled: Boolean, model: DriverViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var name by remember(task.id, task.assignedAtUtc) { mutableStateOf("") }
@@ -392,6 +408,7 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
     var location by remember(task.id, task.assignedAtUtc) { mutableStateOf<Location?>(null) }
     var captureBusy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    var exceptionReason by remember { mutableStateOf("") }
 
     fun captureLocation() {
         scope.launch {
@@ -417,7 +434,7 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
     }
     Text("Proof of delivery", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
     Text(
-        "At drop-off, enter the recipient's name, take a proof photo, and capture location. All three are required. Offline confirmation is queued until the server accepts it.",
+        "At drop-off, enter the recipient's name, take a proof photo, and capture location. Normally all three are required. If GPS is unavailable, request dispatcher review. Offline confirmation stays queued until server acceptance.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -457,6 +474,11 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
             )
         }
     }
+    if (gpsProofEnabled) {
+        OutlinedTextField(exceptionReason, { exceptionReason = it.take(500) },
+            label = { Text("GPS exception reason (optional, 8–500 characters)") }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+        Text("Explain missing or inaccurate GPS. The photo and reason stay pending until dispatch explicitly reviews them.", style = MaterialTheme.typography.bodySmall)
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         TextButton(
             onClick = {
@@ -482,7 +504,8 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     Button(onClick = {
         val bitmap = photo ?: return@Button
-        val point = location ?: return@Button
+        val point = location
+        if (point == null && (!gpsProofEnabled || exceptionReason.trim().length < 8)) return@Button
         val confirmation = name.trim()
         scope.launch {
             captureBusy = true
@@ -494,13 +517,16 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
                     }
                 }
                 if (bytes.isEmpty() || bytes.size > 512_000) note = "Photo could not be saved. Retake it."
-                else model.record(task, "Deliver", point.latitude, point.longitude, confirmation,
-                    Base64.encodeToString(bytes, Base64.NO_WRAP))
+                else model.record(task, "Deliver", point?.latitude, point?.longitude, confirmation,
+                    Base64.encodeToString(bytes, Base64.NO_WRAP),
+                    locationAccuracyMeters = if (point?.hasAccuracy() == true) point.accuracy.toDouble() else null,
+                    locationCapturedAtUtc = point?.let { java.time.Instant.ofEpochMilli(it.time).toString() },
+                    gpsExceptionReason = exceptionReason.trim().takeIf { it.length >= 8 })
             } finally {
                 captureBusy = false
             }
         }
-    }, enabled = !busy && !captureBusy && photo != null && location != null && name.isNotBlank(),
+    }, enabled = !busy && !captureBusy && photo != null && (location != null || (gpsProofEnabled && exceptionReason.trim().length >= 8)) && name.isNotBlank(),
         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
         shape = MaterialTheme.shapes.extraLarge
@@ -509,7 +535,7 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, model: DriverViewModel) {
     }
 }
 
-private suspend fun currentLocation(context: Context): Location? {
+internal suspend fun currentLocation(context: Context): Location? {
     val manager = context.getSystemService(LocationManager::class.java)
     val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED

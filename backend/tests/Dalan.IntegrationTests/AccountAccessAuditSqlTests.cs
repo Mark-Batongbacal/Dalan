@@ -25,6 +25,61 @@ namespace Dalan.IntegrationTests;
 public sealed class AccountAccessAuditSqlTests(SqlServerFixture fixture)
 {
     [Fact]
+    public async Task Audit_cursor_does_not_drop_events_with_the_same_timestamp()
+    {
+        var driverId = Guid.NewGuid(); var at = DateTimeOffset.UtcNow;
+        await using (var db = fixture.CreateContext())
+        {
+            for (var i = 0; i < 6; i++) db.AccountAccessAudits.Add(new() { DriverId = driverId, OccurredAtUtc = at, Action = "CursorFixture", Outcome = "Succeeded" });
+            await db.SaveChangesAsync();
+        }
+        using var factory = WebFactory(); using var admin = WebClient(factory, "Admin");
+        var ids = new HashSet<Guid>(); string? before = null; Guid? cursor = null;
+        for (var page = 0; page < 3; page++)
+        {
+            var url = $"/api/admin/account-audit?driverId={driverId}&take=2";
+            if (before is not null) url += "&beforeUtc=" + Uri.EscapeDataString(before) + "&beforeId=" + cursor;
+            var body = await admin.GetFromJsonAsync<JsonElement>(url); var items = body.EnumerateArray().ToArray(); Assert.Equal(2, items.Length);
+            foreach (var item in items) Assert.True(ids.Add(item.GetProperty("id").GetGuid()));
+            before = items[^1].GetProperty("occurredAtUtc").GetString(); cursor = items[^1].GetProperty("id").GetGuid();
+        }
+        Assert.Equal(6, ids.Count);
+    }
+
+    [Fact]
+    public async Task Audit_write_failure_rolls_back_account_creation_instead_of_reporting_success()
+    {
+        var driver = Driver.Register("Atomic audit fixture", "09123456789", Guid.NewGuid().ToString("N"), DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1));
+        await using (var db = fixture.CreateContext()) { db.Drivers.Add(driver); await db.SaveChangesAsync(); }
+        using var web = WebFactory().WithWebHostBuilder(b => b.ConfigureTestServices(services =>
+            services.AddDbContext<DalanDbContext>(options => options.AddInterceptors(new RejectAuditWrite()))));
+        using var admin = WebClient(web, "Admin");
+        var csrf = Token(await admin.GetStringAsync("/DriverAccounts/Create?id=" + driver.Id));
+        var email = Guid.NewGuid().ToString("N") + "@dalan.test";
+        using var response = await admin.PostAsync("/DriverAccounts/Create", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["DriverId"] = driver.Id.ToString(),
+            ["Email"] = email,
+            ["Password"] = "Atomic-Password!2026",
+            ["__RequestVerificationToken"] = csrf
+        }));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        await using var verify = fixture.CreateContext();
+        Assert.False(await verify.DriverAccounts.AnyAsync(x => x.DriverId == driver.Id));
+        Assert.False(await verify.Users.AnyAsync(x => x.Email == email));
+    }
+    private sealed class RejectAuditWrite : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData data, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, CancellationToken token = default)
+        {
+            if (data.Context!.ChangeTracker.Entries<AccountAccessAudit>().Any(x => x.State == EntityState.Added))
+                throw new InvalidOperationException("Injected audit persistence failure");
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    [Fact]
     public async Task Admin_creation_persists_identifiers_without_password_or_email_in_audit()
     {
         var driver = Driver.Register("Audit driver", "09123456789", Guid.NewGuid().ToString("N"),
@@ -120,7 +175,7 @@ public sealed class AccountAccessAuditSqlTests(SqlServerFixture fixture)
         if (expected == HttpStatusCode.OK)
         {
             Assert.True(response.Headers.CacheControl?.NoStore == true);
-            Assert.NotNull(await response.Content.ReadFromJsonAsync<JsonElement>());
+            Assert.Equal(JsonValueKind.Array, (await response.Content.ReadFromJsonAsync<JsonElement>()).ValueKind);
         }
     }
 

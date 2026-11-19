@@ -20,7 +20,7 @@ private val lightScheme = lightColorScheme(
 
     // Secondary: accent orange
     secondary           = SoftOrange,
-    onSecondary         = WarmIvory,
+    onSecondary         = WarmInk,
     secondaryContainer  = AccentSubtle,
     onSecondaryContainer = SoftOrangeDeep,
 
@@ -44,7 +44,7 @@ private val lightScheme = lightColorScheme(
     surfaceDim          = SoftPeach,
 
     // Outlines
-    outline             = SoftBorderStrong,
+    outline             = ControlOutline,
     outlineVariant      = SoftBorder,
 
     // Error
@@ -92,7 +92,7 @@ private val darkScheme = darkColorScheme(
     surfaceDim          = DarkSurface,
 
     // Outlines
-    outline             = DarkBorderStrong,
+    outline             = DarkControlOutline,
     outlineVariant      = DarkBorder,
 
     // Error

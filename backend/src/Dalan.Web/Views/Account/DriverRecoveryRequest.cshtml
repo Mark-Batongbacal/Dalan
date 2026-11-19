@@ -1,0 +1,11 @@
+@{ ViewData["Title"] = "Recover Driver access"; }
+<div class="auth-wrap"><section class="content-card"><h1>Recover Driver access</h1><p>Enter your approved Driver email. If your account is eligible, we will email a private reset link. Your existing password stays unchanged until you use the link.</p>
+<form id="recovery-request"><label for="recovery-email" class="form-label">Driver email</label><input id="recovery-email" class="form-control mb-3" type="email" autocomplete="email" required maxlength="256" /><button class="btn btn-primary">Request reset link</button></form><p id="recovery-status" role="status" aria-live="polite" class="mt-3"></p></section></div>
+@section Scripts { <script>
+ document.getElementById('recovery-request').addEventListener('submit', async event => {
+  event.preventDefault(); const button = event.currentTarget.querySelector('button'), status = document.getElementById('recovery-status'); button.disabled = true;
+  try { const response = await fetch('/api/driver-recovery/request', {method:'POST', credentials:'omit', cache:'no-store', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:document.getElementById('recovery-email').value})});
+   status.textContent = response.status === 202 ? 'If an eligible Driver account exists, a password reset link will be emailed. Check your inbox and spam folder.' : response.status === 429 ? 'Too many requests. Wait 15 minutes before trying again.' : 'Recovery is temporarily unavailable. Contact your administrator.';
+  } catch { status.textContent = 'Unable to connect. Check your connection and try again.'; } finally {button.disabled = false;}
+ });
+</script> }

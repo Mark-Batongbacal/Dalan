@@ -7,8 +7,11 @@ namespace Dalan.Infrastructure.Routing;
 
 public sealed class ValhallaRoutingService(HttpClient client) : IRoutingService
 {
-    public async Task<RoadRoute?> GetRouteAsync(
-        GeoPoint origin, GeoPoint destination, CancellationToken cancellationToken = default)
+    public Task<RoadRoute?> GetRouteAsync(GeoPoint origin, GeoPoint destination, CancellationToken cancellationToken = default)
+        => Route(origin, destination, false, cancellationToken);
+    public Task<RoadRoute?> GetDirectionsAsync(GeoPoint origin, GeoPoint destination, CancellationToken cancellationToken = default)
+        => Route(origin, destination, true, cancellationToken);
+    private async Task<RoadRoute?> Route(GeoPoint origin, GeoPoint destination, bool directions, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(origin);
         ArgumentNullException.ThrowIfNull(destination);
@@ -26,7 +29,7 @@ public sealed class ValhallaRoutingService(HttpClient client) : IRoutingService
             },
             costing = "auto",
             units = "kilometers",
-            directions_type = "none"
+            directions_type = directions ? "instructions" : "none"
         }, cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.BadRequest)
@@ -60,6 +63,23 @@ public sealed class ValhallaRoutingService(HttpClient client) : IRoutingService
             || string.IsNullOrWhiteSpace(shape))
             throw new InvalidDataException("Valhalla returned an invalid route.");
 
-        return new RoadRoute(distanceKilometers * 1000, durationSeconds, shape);
+        var maneuvers = new List<RouteManeuver>();
+        if (directions && legs.GetArrayLength() == 1 && legs[0].TryGetProperty("maneuvers", out var instructions))
+        {
+            if (instructions.GetArrayLength() > 1000) throw new InvalidDataException("Too many route maneuvers.");
+            foreach (var instruction in instructions.EnumerateArray())
+            {
+                var text = instruction.GetProperty("instruction").GetString();
+                var meters = instruction.GetProperty("length").GetDouble() * 1000;
+                var seconds = instruction.GetProperty("time").GetDouble();
+                var begin = instruction.GetProperty("begin_shape_index").GetInt32();
+                var end = instruction.GetProperty("end_shape_index").GetInt32();
+                if (string.IsNullOrWhiteSpace(text) || text.Length > 1024 || !double.IsFinite(meters)
+                    || meters < 0 || !double.IsFinite(seconds) || seconds < 0 || begin < 0 || end < begin)
+                    throw new InvalidDataException("Invalid route maneuver.");
+                maneuvers.Add(new(text, meters, seconds, begin, end));
+            }
+        }
+        return new RoadRoute(distanceKilometers * 1000, durationSeconds, shape, directions ? maneuvers : null);
     }
 }

@@ -46,12 +46,14 @@ internal fun deliveryNextAction(task: TaskInfo, events: List<PendingEvent>): Str
 
 @Composable
 internal fun SyncStatusCard(state: DriverWorkspace) {
-    val failed = state.events.count { it.failure != null }
+    val failed = state.events.count { it.failure != null && it.failure != "Awaiting dispatcher GPS review" }
+    val awaitingReview = state.events.count { it.failure == "Awaiting dispatcher GPS review" }
     val title = when {
         state.needsLogin -> "Sign-in required"
         state.syncing -> "Syncing with server…"
         state.busy -> "Working…"
         failed > 0 -> "Updates need review"
+        awaitingReview > 0 -> "Awaiting dispatcher GPS review"
         state.events.isNotEmpty() -> "Updates queued on this device"
         state.message == "Up to date" && state.lastSyncedAt != null -> "Synchronized"
         else -> "Saved delivery workspace"
@@ -117,14 +119,14 @@ internal fun FailedUpdateCard(
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer
+            containerColor = if (event.failure == "Awaiting dispatcher GPS review") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer,
+            contentColor = if (event.failure == "Awaiting dispatcher GPS review") MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
         ),
         shape = MaterialTheme.shapes.large,
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                if (event.failure == "Assignment or delivery status changed") "Assignment changed" else "Update rejected",
+                if (event.failure == "Awaiting dispatcher GPS review") "Pending GPS review" else if (event.failure == "Assignment or delivery status changed") "Assignment changed" else "Update rejected",
                 Modifier.semantics { heading() },
                 style = MaterialTheme.typography.titleMedium
             )

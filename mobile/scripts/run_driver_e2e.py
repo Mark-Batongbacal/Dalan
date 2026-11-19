@@ -34,7 +34,10 @@ def main():
     parser.add_argument("--adb", default=shutil.which("adb") or str(Path(sdk) / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")))
     parser.add_argument("--skip-build", action="store_true", help="Requires existing isolated E2E APKs and built backend tools")
     parser.add_argument("--tracking-only", action="store_true", help="Run foreground location/minimized/stop checks on the isolated app")
+    parser.add_argument("--maps-only", action="store_true", help="Verify online route rendering and capture map screenshots without queue mutations")
     args = parser.parse_args()
+    if args.tracking_only and args.maps_only:
+        parser.error("Choose either tracking-only or maps-only.")
     package = args.package
     if not package.startswith("com.example.dalanmobile.") or not package.endswith(".e2e") or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789._" for c in package):
         parser.error("Use an isolated com.example.dalanmobile.*.e2e application ID.")
@@ -128,6 +131,18 @@ def main():
                     or "INSTRUMENTATION_STATUS_CODE: -3" in result.stdout):
                     raise RuntimeError(result.stdout + result.stderr)
                 print("Passed: " + method, flush=True)
+                output = os.environ.get("DALAN_MOBILE_E2E_OUTPUT")
+                if output:
+                    destination = Path(output)
+                    destination.mkdir(parents=True, exist_ok=True)
+                    files = subprocess.run(adb + ["shell", f"run-as {package} ls files/dalan-e2e/screenshots"], capture_output=True, text=True)
+                    if files.returncode == 0:
+                        for name in files.stdout.splitlines():
+                            if not name.endswith(".png") or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_." for c in name):
+                                continue
+                            with (destination / name).open("wb") as image:
+                                run(adb + ["exec-out", "run-as", package, "cat", "files/dalan-e2e/screenshots/" + name], stdout=image)
+
 
             try:
                 start()
@@ -157,6 +172,9 @@ def main():
                     run(["dotnet", "run", "--project", "backend/tools/Dalan.MobileE2E", "--no-build", "--", "verify-tracking"], env=env)
                     return
                 phase(PHASES[0])
+                if args.maps_only:
+                    return
+                phase("navigation_current_position_follows_next_stop_and_returns_visual_maneuvers")
                 stop()
                 phase(PHASES[1])
                 phase(PHASES[2])

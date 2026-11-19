@@ -50,7 +50,11 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || "playwright"
         assert.match(await page.locator(".analytics-definitions").innerText(), /not measure GPS activity/);
         await page.locator("#theme-select").selectOption("dark");
         await page.waitForFunction(() => getComputedStyle(document.querySelector(".content-card")).backgroundColor === "rgb(35, 38, 43)");
-        await page.waitForFunction(() => getComputedStyle(document.querySelector(".analytics-filter .btn-primary")).color === "rgb(37, 28, 19)");
+        await page.waitForFunction(() => {
+                const button = document.querySelector('.btn-primary'); if (!button) return true;
+                const probe = document.createElement('span'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--on-primary'); document.body.append(probe);
+                const expected = getComputedStyle(probe).color; probe.remove(); return getComputedStyle(button).color === expected;
+            });
         await page.locator("#main-content").screenshot({ path: path.join(output, "analytics-dark.png") });
         await page.emulateMedia({ colorScheme: "light" });
         await page.locator("#theme-select").selectOption("system");

@@ -30,17 +30,36 @@ public static class DependencyInjection
         }
 
         services.AddDbContext<DalanDbContext>(options => options.UseSqlServer(connectionString));
+        services.AddScoped<Dalan.Application.Identity.IDriverAccountsRepository, DriverAccountsRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverAccountsService, Dalan.Application.Identity.DriverAccountsService>();
+        services.AddScoped<Dalan.Application.Identity.IDriverInvitationsRepository, DriverInvitationsRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverInvitationsService, Dalan.Application.Identity.DriverInvitationsService>();
+        services.AddScoped<Dalan.Application.Identity.IDriverRecoveryRepository, DriverRecoveryRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverRecoveryService, Dalan.Application.Identity.DriverRecoveryService>();
+        services.AddScoped<Dalan.Application.Identity.IDriverAccessRepository, DriverAccessRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverAccessService, Dalan.Application.Identity.DriverAccessService>();
+        services.AddScoped<Dalan.Application.Identity.IAccountAuditRepository, AccountAuditRepository>();
+        services.AddScoped<Dalan.Application.Identity.IAccountAuditService, Dalan.Application.Identity.AccountAuditService>();
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
-        services.AddScoped<IDriverTasks, DriverTasksRepository>();
+        services.AddScoped<DriverTasksRepository>();
+        services.AddScoped<IDriverTasks>(sp => sp.GetRequiredService<DriverTasksRepository>());
+        services.AddScoped<IGpsExceptionRepository, GpsExceptionRepository>();
+        services.AddScoped<IGpsExceptionService, GpsExceptionService>();
+        services.AddScoped<IDriverNavigationService, DriverNavigationService>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
         services.AddScoped<Dalan.Application.Analytics.IAnalyticsRepository, AnalyticsRepository>();
         services.AddSingleton(new TrackingOptions { Enabled = bool.TryParse(configuration["Tracking:Enabled"], out var trackingEnabled) && trackingEnabled });
         services.AddScoped<IFleetTrackingRepository, FleetTrackingRepository>();
         services.AddScoped<IFleetTrackingService, FleetTrackingService>();
-        var email = new ResendOptions { Enabled = bool.TryParse(configuration["Resend:Enabled"], out var sendEnabled) && sendEnabled,
-            ApiKey = configuration["Resend:ApiKey"] ?? "", From = configuration["Resend:From"] ?? "", Recipients = configuration["Resend:Recipients"] ?? "" };
+        var email = new ResendOptions
+        {
+            Enabled = bool.TryParse(configuration["Resend:Enabled"], out var sendEnabled) && sendEnabled,
+            ApiKey = configuration["Resend:ApiKey"] ?? "",
+            From = configuration["Resend:From"] ?? "",
+            Recipients = configuration["Resend:Recipients"] ?? ""
+        };
         if (email.Enabled && (string.IsNullOrWhiteSpace(email.ApiKey)
             || !System.Net.Mail.MailAddress.TryCreate(email.From, out _)
             || email.Recipients.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is not { Length: >= 1 and <= 50 } recipients
@@ -71,6 +90,8 @@ public static class DependencyInjection
                 client.Timeout = TimeSpan.FromSeconds(10);
             }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
                 .AddTypedClient<IGooglePlacesSearch>((client, _) => new GooglePlacesTextSearch(client, googleKey));
+        if (!string.IsNullOrWhiteSpace(googleKey))
+            services.AddScoped<IGoogleAddressSearch>(sp => new GoogleAddressSearch(sp.GetRequiredService<IHttpClientFactory>().CreateClient("GooglePlaces"), googleKey));
         var photonUrl = configuration["Geocoding:PhotonBaseUrl"];
         if (!string.IsNullOrWhiteSpace(photonUrl))
         {

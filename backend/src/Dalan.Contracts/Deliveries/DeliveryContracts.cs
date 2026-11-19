@@ -35,8 +35,8 @@ public sealed record DeliveryProofResponse(
     Guid Id,
     string PhotoReference,
     string RecipientConfirmation,
-    double Latitude,
-    double Longitude,
+    double? Latitude,
+    double? Longitude,
     DateTimeOffset CapturedAtUtc);
 
 public sealed record DeliveryResponse(
