@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Dalan.Application.Routing;
+using Dalan.Application.Tracking;
 using Dalan.Contracts.DriverExecution;
 using Dalan.Domain.Deliveries;
 using Dalan.Domain.Drivers;
@@ -23,6 +24,42 @@ namespace Dalan.IntegrationTests;
 [Collection("SQL Server")]
 public sealed class DriverSecuritySqlTests(SqlServerFixture fixture)
 {
+    [Fact]
+    public async Task Tracking_http_requires_driver_token_owner_current_assignment_and_valid_stamp()
+    {
+        using var factory = CreateFactory(tracking: true);
+        using var client = Client(factory);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/driver/tracking/start", null)).StatusCode);
+        var seeded = await SeedAndLogin(factory, client, "Driver");
+        var sessionResponse = await client.PostAsync("/api/driver/tracking/start", null);
+        Assert.Equal(HttpStatusCode.OK, sessionResponse.StatusCode);
+        Assert.True(sessionResponse.Headers.CacheControl!.NoStore);
+        var session = (await sessionResponse.Content.ReadFromJsonAsync<TrackingStart>())!;
+        var now = DateTimeOffset.UtcNow;
+        var sample = new TrackingFix(Guid.NewGuid(), now, 14, 121, 5);
+        var path = $"/api/driver/tracking/{session.SessionId}/samples";
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(path, sample)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(path, sample)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync(path, sample with { SampleId = Guid.NewGuid(), Latitude = 91, CapturedAtUtc = now.AddSeconds(6) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(path, sample with { Longitude = 122 })).StatusCode);
+        using var other = Client(factory);
+        await SeedAndLogin(factory, other, "Driver");
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync(path, sample)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await other.PostAsync($"/api/driver/tracking/{session.SessionId}/stop", null)).StatusCode);
+        await using (var db = fixture.CreateContext())
+            Assert.Null((await db.TrackingSessions.SingleAsync(x => x.Id == session.SessionId)).EndedAtUtc);
+        using var staff = Client(factory);
+        await SeedAndLogin(factory, staff, "Dispatcher");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await staff.PostAsync("/api/driver/tracking/start", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"/api/driver/tracking/{session.SessionId}/stop", null)).StatusCode);
+        var stopped = await client.PostAsJsonAsync(path, sample with { SampleId = Guid.NewGuid(), CapturedAtUtc = now.AddSeconds(6) });
+        Assert.False((await stopped.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("continueTracking").GetBoolean());
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
+        Assert.True((await users.UpdateSecurityStampAsync((await users.FindByIdAsync(seeded.UserId))!)).Succeeded);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/driver/tracking/start", null)).StatusCode);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("Admin")]
@@ -149,9 +186,10 @@ public sealed class DriverSecuritySqlTests(SqlServerFixture fixture)
         Assert.False(await verify.DriverEventReceipts.AnyAsync(r => r.DeliveryId == seeded.DeliveryId));
     }
 
-    private WebApplicationFactory<Program> CreateFactory(IRoutingService? routing = null) =>
+    private WebApplicationFactory<Program> CreateFactory(IRoutingService? routing = null, bool tracking = false) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
             .UseEnvironment("Testing").UseSetting("ConnectionStrings:Dalan", fixture.ConnectionString)
+            .UseSetting("Tracking:Enabled", tracking.ToString())
             .ConfigureTestServices(services =>
             {
                 if (routing is not null) services.AddSingleton(routing);
@@ -174,6 +212,7 @@ public sealed class DriverSecuritySqlTests(SqlServerFixture fixture)
         Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
         var driver = Driver.Register("Security driver", "09123456789", suffix, DateOnly.FromDateTime(DateTime.UtcNow).AddYears(1));
         var vehicle = Vehicle.Register("SEC-" + suffix[..12]);
+        driver.AssignVehicle(vehicle.Id);
         var assigned = DateTimeOffset.UtcNow.AddMinutes(-5);
         var delivery = Delivery.Create("Recipient", "Pickup", 14, 121, "Dropoff", 14.1, 121.1, assigned.AddMinutes(-1));
         delivery.Assign(driver.Id, vehicle.Id, assigned);

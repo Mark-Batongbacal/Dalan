@@ -24,6 +24,14 @@ import kotlinx.serialization.json.Json
 data class DriverSession(val driverId: String, val token: String)
 
 @Serializable
+data class TrackingStart(val sessionId: String, val vehicleId: String)
+@Serializable
+data class TrackingFix(val sampleId: String, val capturedAtUtc: String, val latitude: Double,
+                       val longitude: Double, val accuracyMeters: Double)
+@Serializable
+data class TrackingResponse(val continueTracking: Boolean)
+
+@Serializable
 data class TaskInfo(
     val id: String,
     val recipientName: String,
@@ -87,6 +95,20 @@ class DriverApi : AutoCloseable {
 
     suspend fun list(session: DriverSession): List<TaskInfo> =
         client.get(url("tasks")) { bearerAuth(session.token) }.requireSuccess().body()
+
+    suspend fun startTracking(session: DriverSession): TrackingStart =
+        client.post(url("tracking/start")) { bearerAuth(session.token) }.requireSuccess().body()
+
+    suspend fun track(session: DriverSession, id: String, fix: TrackingFix): TrackingResponse =
+        client.post(url("tracking/$id/samples")) {
+            bearerAuth(session.token)
+            contentType(ContentType.Application.Json)
+            setBody(fix)
+        }.requireSuccess().body()
+
+    suspend fun stopTracking(session: DriverSession, id: String) {
+        client.post(url("tracking/$id/stop")) { bearerAuth(session.token) }.requireSuccess()
+    }
 
     suspend fun route(session: DriverSession, delivery: String): DriverRoadRoute =
         client.get(url("tasks/$delivery/route")) { bearerAuth(session.token) }.requireSuccess().body()

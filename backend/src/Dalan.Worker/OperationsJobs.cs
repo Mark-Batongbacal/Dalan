@@ -6,11 +6,12 @@ using Hangfire.Server;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Dalan.Application.Notifications;
 
 namespace Dalan.Worker;
 
 public sealed class OperationsJobs(
-    DalanDbContext db, TimeProvider clock, ILogger<OperationsJobs> logger)
+    DalanDbContext db, TimeProvider clock, ILogger<OperationsJobs> logger, IOperationsNotificationService? notifications = null)
 {
     public async Task RunAsync(string kind, PerformContext? context, CancellationToken cancellationToken)
     {
@@ -19,7 +20,7 @@ public sealed class OperationsJobs(
         var hour = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, 0, 0, TimeSpan.Zero);
         var day = DateOnly.FromDateTime(now.UtcDateTime);
         var key = kind == "overdue" ? $"overdue-{hour.Hour:D2}" : kind;
-        if (await Exists()) return;
+        if (await Exists()) { await Notify(); return; }
 
         var dayStart = new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
         object data = kind switch
@@ -29,7 +30,7 @@ public sealed class OperationsJobs(
                     (x.DeliveredAtUtc == null || x.DeliveredAtUtc >= hour) &&
                     (x.CancelledAtUtc == null || x.CancelledAtUtc >= hour))
                 .OrderBy(x => x.ExpectedDeliveryAtUtc).ThenBy(x => x.Id)
-                .Select(x => new { x.Id, x.ExpectedDeliveryAtUtc }).ToListAsync(cancellationToken),
+                .Select(x => new { x.Id, x.RecipientName, x.ExpectedDeliveryAtUtc }).ToListAsync(cancellationToken),
             "dispatch" => await db.DispatchPlans
                 .Where(x => x.ConfirmedAtUtc >= dayStart.AddDays(-1) && x.ConfirmedAtUtc < dayStart)
                 .OrderBy(x => x.ConfirmedAtUtc).ThenBy(x => x.Id)
@@ -56,6 +57,9 @@ public sealed class OperationsJobs(
         {
             if (!await Exists()) throw;
         }
+        await Notify();
+
+        Task Notify() => notifications?.PublishAsync(day, key, cancellationToken) ?? Task.CompletedTask;
 
         Task<bool> Exists() => db.OperationsSnapshots.AnyAsync(
             x => x.DayUtc == day && x.Kind == key, cancellationToken);

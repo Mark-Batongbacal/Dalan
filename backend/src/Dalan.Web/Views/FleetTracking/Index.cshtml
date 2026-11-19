@@ -1,0 +1,37 @@
+@model Dalan.Web.Controllers.FleetTrackingViewModel
+@inject Microsoft.Extensions.Options.IOptions<PlanningMapOptions> MapOptions
+@{ ViewData["Title"] = "Live fleet"; }
+<div class="page-heading"><span class="page-kicker">Observed vehicle activity</span><h1>Live fleet</h1><p>Driver-shared GPS locations and measured movement during active delivery tracking.</p></div>
+@if (Model.Error is not null) { <div class="alert alert-danger" role="alert">@Model.Error</div> }
+@if (Model.Report is { } report)
+{
+    if (!report.Enabled) { <div class="alert alert-info">Fleet tracking is not enabled. Your administrator needs to complete the tracking setup.</div> }
+    else
+    {
+        <div class="content-card mb-4">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-sm-4"><label for="from" class="form-label">From (UTC)</label><input id="from" name="from" type="date" value="@report.From.ToString("yyyy-MM-dd")" class="form-control" /></div>
+                <div class="col-sm-4"><label for="to" class="form-label">Through (UTC)</label><input id="to" name="to" type="date" value="@report.To.ToString("yyyy-MM-dd")" class="form-control" /></div>
+                <div class="col-sm-4"><button class="btn btn-primary">Apply period</button></div>
+            </form>
+            <p class="mt-3">Last 30 UTC dates only. GPS samples older than 30 days are removed by the tracking cleanup worker.</p>
+            <dl class="row"><dt class="col-sm-6">Movement utilization</dt><dd class="col-sm-6" data-observed-utilization>@(report.MovementUtilizationPercent is double percent ? percent.ToString("N1") + "%" : "—")</dd>
+                <dt class="col-sm-6">Observed tracking time</dt><dd class="col-sm-6">@((report.Activity.ObservedSeconds / 60).ToString("N1")) min</dd>
+                <dt class="col-sm-6">Measured moving time</dt><dd class="col-sm-6">@((report.Activity.MovingSeconds / 60).ToString("N1")) min</dd>
+                <dt class="col-sm-6">GPS distance estimate</dt><dd class="col-sm-6">@((report.Activity.GpsDistanceMeters / 1000).ToString("N2")) km</dd></dl>
+            <p>Utilization is moving seconds divided by observed seconds across tracked vehicles. Only consecutive valid samples at most two minutes apart count; longer gaps are excluded. Motion uses displacement above GPS accuracy and at least 0.5 m/s. These are GPS estimates, not full-shift capacity or odometer readings. No samples means unavailable.</p>
+        </div>
+        <section class="content-card" data-fleet-tracking data-feed-url="@Url.Action("Positions")" data-style-url="@MapOptions.Value.StyleUrl" data-dark-style-url="@MapOptions.Value.DarkStyleUrl" aria-label="Current vehicle locations">
+            <h2 class="h5">Current vehicle locations</h2><p>Refreshes every 15 seconds. Samples older than 90 seconds are stale. Up to 200 current registered vehicles are shown; period metrics include all tracked vehicles.</p>
+            <p data-fleet-status role="status">Loading current positions…</p>
+            <div data-fleet-map style="height:420px;max-height:60vh;border-radius:12px" aria-label="Vehicle location map"></div>
+            <p>Map: <a href="https://openfreemap.org/">OpenFreeMap</a> · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
+            <div class="table-responsive"><table class="table"><thead><tr><th>Vehicle</th><th>Driver</th><th>Location status</th><th>Last GPS fix (UTC)</th><th>Accuracy</th></tr></thead><tbody data-fleet-rows></tbody></table></div>
+        </section>
+    }
+}
+@section Scripts {
+    <link rel="stylesheet" href="~/lib/maplibre/maplibre-gl.css" />
+    <script src="~/lib/maplibre/maplibre-gl.js"></script>
+    <script src="~/js/fleet-tracking.js" asp-append-version="true"></script>
+}
