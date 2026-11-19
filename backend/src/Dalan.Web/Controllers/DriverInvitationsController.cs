@@ -123,7 +123,7 @@ public sealed class DriverInvitationsController(
                 new { message = "The Driver account is pending, but invitation delivery failed. Retry the invitation." });
         }
 
-        return Accepted(new { message = "Invitation accepted by the email provider. Delivery is not guaranteed." });
+        return Accepted(new { message = "Invitation submitted for delivery. Check email delivery status; inbox delivery is not guaranteed." });
     }
 
     // Token possession is the authorization. No staff cookies or antiforgery state is used.
