@@ -36,9 +36,9 @@ public sealed class DriverInvitationWebTests(SqlServerFixture fixture)
 
         using var issued = await admin.PostAsJsonAsync("/api/driver-invitations/issue", new { driverId, email });
         Assert.Equal(HttpStatusCode.Accepted, issued.StatusCode);
-        Assert.True(issued.Headers.CacheControl?.NoStore);
+        Assert.True(issued.Headers.CacheControl?.NoStore == true);
         var envelope = Assert.Single(sender.Messages);
-        Assert.Equal([email], envelope.To);
+        Assert.Equal(email, Assert.Single(envelope.To));
         Assert.DoesNotContain("Password=", envelope.Text, StringComparison.OrdinalIgnoreCase);
         var token = Token(envelope.Text);
 
@@ -192,7 +192,7 @@ public sealed class DriverInvitationWebTests(SqlServerFixture fixture)
     private static async Task Antiforgery(HttpClient client, Guid driverId)
     {
         var page = await client.GetStringAsync("/DriverAccounts/Create?id=" + driverId);
-        var match = Regex.Match(page, "name=\\\"__RequestVerificationToken\\\"[^>]*value=\\\"([^\\\"]+)\\\"");
+        var match = Regex.Match(page, @"name=""__RequestVerificationToken""[^>]*value=""([^""]+)""");
         Assert.True(match.Success, "The Driver account form should include a CSRF token.");
         client.DefaultRequestHeaders.Remove("RequestVerificationToken");
         client.DefaultRequestHeaders.Add("RequestVerificationToken",
