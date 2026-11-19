@@ -53,7 +53,8 @@ public static class DispatchStrategyBenchmark
                     break;
                 }
                 watch.Stop();
-                var work = result.Routes.Select(x => x.DurationSeconds + options.ServiceSecondsPerStop * x.Stops.Count).ToArray();
+                var work = result.Routes.Select(x => batch.Vehicles.Single(v => v.Id == x.VehicleId).ExistingWorkloadSeconds
+                    + x.DurationSeconds + options.ServiceSecondsPerStop * x.Stops.Count).ToArray();
                 var nearestVehicle = result.Routes.FirstOrDefault(x => x.Stops.Any(s => s.JobId == batch.Jobs[nearestJob].Id))?.VehicleId;
                 if (nearestVehicle is Guid id) counts[id]++;
                 runs.Add(new(watch.Elapsed.TotalMilliseconds, result.Routes.Sum(x => x.DurationSeconds), work.Max(), work.Max() - work.Min(),

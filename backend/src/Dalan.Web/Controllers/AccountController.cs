@@ -31,7 +31,9 @@ public sealed class AccountController(SignInManager<IdentityUser> signInManager,
             user, model.Password, isPersistent: false, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
-            ModelState.AddModelError(string.Empty, "Invalid sign-in attempt.");
+            ModelState.AddModelError(string.Empty, result.IsLockedOut
+                ? "Sign-in is temporarily locked after repeated failed attempts. Try again in a few minutes."
+                : "Invalid sign-in attempt.");
             return View(model);
         }
 

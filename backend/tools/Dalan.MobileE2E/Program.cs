@@ -13,8 +13,10 @@ using Microsoft.Extensions.DependencyInjection;
 var connection = Environment.GetEnvironmentVariable("DALAN_MOBILE_E2E_SQL")
     ?? throw new InvalidOperationException("Set DALAN_MOBILE_E2E_SQL to an isolated local SQL test database.");
 var sql = new SqlConnectionStringBuilder(connection);
-if (!sql.InitialCatalog.StartsWith("DalanMobileE2E_", StringComparison.Ordinal)
-    || !(sql.DataSource.StartsWith("127.0.0.1,", StringComparison.Ordinal) || sql.DataSource.StartsWith("localhost,", StringComparison.Ordinal)))
+var localServer = sql.DataSource is "localhost" or "127.0.0.1"
+    || sql.DataSource.StartsWith("127.0.0.1,", StringComparison.Ordinal)
+    || sql.DataSource.StartsWith("localhost,", StringComparison.Ordinal);
+if (!sql.InitialCatalog.StartsWith("DalanMobileE2E_", StringComparison.Ordinal) || !localServer)
     throw new InvalidOperationException("This fixture operates only on local DalanMobileE2E_* databases.");
 var manifestPath = Environment.GetEnvironmentVariable("DALAN_MOBILE_E2E_MANIFEST")
     ?? throw new InvalidOperationException("Set DALAN_MOBILE_E2E_MANIFEST to a private temporary file path.");
@@ -76,6 +78,18 @@ if (args is ["seed"])
         return user;
     }
 }
+else if (args is ["verify-tracking"])
+{
+    var manifest = JsonSerializer.Deserialize<Fixture>(await File.ReadAllTextAsync(manifestPath), jsonOptions)!;
+    var firstDriver = await db.DriverAccounts.Join(db.Users, a => a.UserId, u => u.Id, (a, u) => new { a.DriverId, u.Email })
+        .Where(x => x.Email == manifest.DriverEmails[0]).Select(x => x.DriverId).SingleAsync();
+    var sessions = await db.TrackingSessions.AsNoTracking().Where(x => x.DriverId == firstDriver).ToArrayAsync();
+    if (sessions.Length != 2 || sessions.Any(x => x.EndedAtUtc == null)
+        || await db.Deliveries.CountAsync(x => x.DriverId == firstDriver && x.Status == DeliveryStatus.Delivered) != 6)
+        throw new InvalidOperationException("Expected two stopped tracking sessions and six completed deliveries for the tracking driver.");
+    var samples = await db.TrackingSamples.CountAsync(x => x.DriverId == firstDriver);
+    Console.WriteLine($"Verified two ended tracking sessions and six completed deliveries; {samples} real-device GPS samples received. Coordinates are not printed.");
+}
 else if (args is ["verify"])
 {
     var manifest = JsonSerializer.Deserialize<Fixture>(await File.ReadAllTextAsync(manifestPath), jsonOptions)!;
@@ -89,7 +103,7 @@ else if (args is ["verify"])
         throw new InvalidOperationException("Mobile E2E verification failed: expected two plans/four routes, two delivered, one picked up, five receipts and two photos.");
     Console.WriteLine("Verified: 2 plans, 4 driver routes, 12 deliveries, 2 completed proofs, 1 additional pickup and exactly 5 event receipts after replay.");
 }
-else throw new ArgumentException("Use seed or verify.");
+else throw new ArgumentException("Use seed, verify or verify-tracking.");
 
 static void Require(IdentityResult result)
 {

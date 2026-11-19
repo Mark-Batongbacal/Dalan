@@ -15,6 +15,8 @@
     This is the approved route. Delivery statuses below reflect their current state.
 </div>
 
+<partial name="_PlanningMap" model="PlanningMapViewModel.ForPlan(Model)" />
+@section Scripts { <partial name="_PlanningMapAssets" /> }
 @foreach (var route in Model.Plan.Routes)
 {
     <div class="content-card mb-4">
@@ -22,8 +24,9 @@
         <p>Driver: @(Model.DriverNames.GetValueOrDefault(route.DriverId) ?? route.DriverId.ToString())</p>
         <p>
             Start: @route.StartLatitude, @route.StartLongitude<br />
-            Distance: @(route.DistanceMeters / 1000).ToString("N1") km;
-            duration: @(route.DurationSeconds / 60).ToString("N0") minutes
+            Distance: @((route.DistanceMeters / 1000).ToString("N1")) km;
+            new driving time: @((route.DurationSeconds / 60).ToString("N0")) minutes<br />
+            Existing work estimate at confirmation: @((route.ExistingWorkloadSeconds / 60).ToString("N1")) minutes (outside this plan).
         </p>
         @if (route.Stops.Count == 0)
         {

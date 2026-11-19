@@ -29,8 +29,11 @@ namespace Dalan.IntegrationTests;
 [Collection("SQL Server")]
 public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
 {
-    [Fact]
-    public async Task Dispatcher_http_workflow_persists_one_plan()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1800)]
+    [InlineData(-1)]
+    public async Task Dispatcher_http_workflow_persists_one_plan(double existingWorkload)
     {
         var suffix = Guid.NewGuid().ToString("N")[..12];
         var vehicle = Vehicle.Register("HTTP-" + suffix, "Van", 100);
@@ -87,12 +90,21 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
         var vehicles = new[]
         {
             new DispatchVehicleStartRequest(
-                vehicle.Id, new CoordinateRequest(7.0, 125.6))
+                vehicle.Id, new CoordinateRequest(7.0, 125.6), existingWorkload)
         };
 
         using var previewResponse = await client.PostAsJsonAsync(
             "/api/dispatch-plans/preview",
-            new PreviewDispatchRequest(vehicles, [delivery.Id]));
+            new PreviewDispatchRequest(vehicles, [delivery.Id], DispatchStrategy.WorkloadEquity));
+
+        if (existingWorkload < 0)
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, previewResponse.StatusCode);
+            await using var unchanged = fixture.CreateContext();
+            Assert.Equal(DeliveryStatus.Pending, (await unchanged.Deliveries.SingleAsync(d => d.Id == delivery.Id)).Status);
+            Assert.False(await unchanged.DispatchStops.AnyAsync(s => s.DeliveryId == delivery.Id));
+            return;
+        }
 
         Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
         var preview = await previewResponse.Content
@@ -100,6 +112,8 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
         Assert.NotNull(preview);
         Assert.Empty(preview.UnassignedDeliveryIds);
         Assert.Single(preview.Routes);
+        Assert.Equal(existingWorkload, preview.Routes[0].ExistingWorkloadSeconds);
+        Assert.Equal(existingWorkload + preview.Routes[0].DurationSeconds, preview.Metrics!.Routes[0].EstimatedWorkloadSeconds);
 
         using var confirmResponse = await client.PostAsJsonAsync(
             "/api/dispatch-plans",
@@ -113,17 +127,20 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
                             new(delivery.Id, "Dropoff")
                         ])
                 ],
-                preview.DeliveryVersions));
+                preview.DeliveryVersions, DispatchStrategy.WorkloadEquity));
 
         Assert.Equal(HttpStatusCode.Created, confirmResponse.StatusCode);
         var confirmed = await confirmResponse.Content
             .ReadFromJsonAsync<DispatchPlanResponse>();
         Assert.NotNull(confirmed);
         Assert.Equal(vehicle.Id, Assert.Single(confirmed.Routes).VehicleId);
+        Assert.Equal(existingWorkload, confirmed.Routes[0].ExistingWorkloadSeconds);
 
         using var getResponse = await client.GetAsync(
             confirmResponse.Headers.Location);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var loaded = await getResponse.Content.ReadFromJsonAsync<DispatchPlanResponse>();
+        Assert.Equal(existingWorkload, loaded!.Routes[0].ExistingWorkloadSeconds);
 
         await using (var verify = fixture.CreateContext())
         {
@@ -133,6 +150,7 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
                 .SingleAsync(plan => plan.Id == confirmed.Id);
 
             Assert.Equal(2, Assert.Single(saved.Routes).Stops.Count);
+            Assert.Equal(existingWorkload, saved.Routes[0].ExistingWorkloadSeconds);
 
             var assigned = await verify.Deliveries.AsNoTracking()
                 .SingleAsync(item => item.Id == delivery.Id);
@@ -243,6 +261,8 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             ["Deliveries[0].Id"] = delivery.Id.ToString(),
             ["Deliveries[0].Selected"] = "true"
         };
+        choices["Settings.WarehouseLatitude"] = "7.0";
+        choices["Settings.WarehouseLongitude"] = "125.6";
 
         using (var previewPage = await client.PostAsync(
             "/DispatchBoard", new FormUrlEncodedContent(choices)))
@@ -264,6 +284,8 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             {
                 ["__RequestVerificationToken"] = token,
                 ["Vehicles[0].VehicleId"] = vehicle.Id.ToString(),
+                ["Settings.WarehouseLatitude"] = "7.0",
+                ["Settings.WarehouseLongitude"] = "125.6",
                 ["Vehicles[0].StartLatitude"] = "7.0",
                 ["Vehicles[0].StartLongitude"] = "125.6",
                 ["Stops[0].DeliveryId"] = delivery.Id.ToString(),
@@ -296,6 +318,8 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             {
                 ["__RequestVerificationToken"] = token,
                 ["Vehicles[0].VehicleId"] = vehicle.Id.ToString(),
+                ["Settings.WarehouseLatitude"] = "7.0",
+                ["Settings.WarehouseLongitude"] = "125.6",
                 ["Vehicles[0].StartLatitude"] = "7.0",
                 ["Vehicles[0].StartLongitude"] = "125.6",
                 ["Stops[0].DeliveryId"] = delivery.Id.ToString(),

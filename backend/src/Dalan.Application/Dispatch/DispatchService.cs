@@ -29,7 +29,7 @@ public sealed class DispatchService(
                 vehicle is null ||
                 vehicle.VehicleId == Guid.Empty ||
                 vehicle.Start is null ||
-                !vehicle.Start.IsValid) ||
+                !vehicle.Start.IsValid || !double.IsFinite(vehicle.ExistingWorkloadSeconds) || vehicle.ExistingWorkloadSeconds < 0) ||
             request.Vehicles.Select(vehicle => vehicle.VehicleId)
                 .Distinct().Count() != request.Vehicles.Count)
         {
@@ -110,7 +110,7 @@ public sealed class DispatchService(
         var options = Options(request.Settings);
         var fleetRequest = new FleetOptimizationRequest(
             request.Vehicles.Select(vehicle => new FleetVehicle(vehicle.VehicleId, vehicle.Start,
-                vehiclesById[vehicle.VehicleId].PayloadCapacityKg)).ToArray(), jobs, request.Strategy, options);
+                vehiclesById[vehicle.VehicleId].PayloadCapacityKg, vehicle.ExistingWorkloadSeconds)).ToArray(), jobs, request.Strategy, options);
         FleetOptimizer.ValidateOptions(fleetRequest);
         DispatchRotation? rotation = null;
         if (request.Strategy == DispatchStrategy.WarehouseClusterRotation)
@@ -137,12 +137,12 @@ public sealed class DispatchService(
                         : Dalan.Domain.Dispatch.DispatchStopKind.Dropoff,
                     stop.Point)).ToArray(),
                 route.DistanceMeters,
-                route.DurationSeconds)).ToArray(),
+                route.DurationSeconds, request.Vehicles.Single(v => v.VehicleId == route.VehicleId).ExistingWorkloadSeconds)).ToArray(),
             optimized.UnassignedJobIds.Select(Guid.Parse).ToArray(),
             candidates.Deliveries.Select(delivery =>
                 new DispatchDeliveryVersion(
                     delivery.Id, delivery.RowVersion.ToArray())).ToArray(), request.Strategy,
-            Metrics(optimized, request.Strategy, options), rotation?.Version);
+            Metrics(optimized, request.Strategy, options, request.Vehicles), rotation?.Version);
     }
 
     public async Task<DispatchPlan?> ConfirmAsync(
@@ -164,7 +164,7 @@ public sealed class DispatchService(
                 vehicle is null ||
                 vehicle.VehicleId == Guid.Empty ||
                 vehicle.Start is null ||
-                !vehicle.Start.IsValid) ||
+                !vehicle.Start.IsValid || !double.IsFinite(vehicle.ExistingWorkloadSeconds) || vehicle.ExistingWorkloadSeconds < 0) ||
             request.Routes.Any(route =>
                 route is null ||
                 route.VehicleId == Guid.Empty ||
@@ -243,7 +243,7 @@ public sealed class DispatchService(
         var vehicles = candidates.Vehicles.ToDictionary(vehicle => vehicle.Id);
         var options = Options(request.Settings);
         FleetOptimizer.ValidateOptions(new FleetOptimizationRequest(
-            request.Vehicles.Select(x => new FleetVehicle(x.VehicleId, x.Start, vehicles[x.VehicleId].PayloadCapacityKg)).ToArray(),
+            request.Vehicles.Select(x => new FleetVehicle(x.VehicleId, x.Start, vehicles[x.VehicleId].PayloadCapacityKg, x.ExistingWorkloadSeconds)).ToArray(),
             candidates.Deliveries.Select(x => new FleetJob(x.Id.ToString("N"),
                 new GeoPoint(x.PickupLatitude, x.PickupLongitude), new GeoPoint(x.DropoffLatitude, x.DropoffLongitude))).ToArray(),
             request.Strategy, options));
@@ -366,7 +366,7 @@ public sealed class DispatchService(
                 points[0].Longitude,
                 distance,
                 duration,
-                stops));
+                stops, request.Vehicles.Single(x => x.VehicleId == vehicle.Id).ExistingWorkloadSeconds));
         }
 
         if (options.MaxFleetTravelSeconds is double budget && confirmedRoutes.Sum(x => x.DurationSeconds) > budget + 0.001)
@@ -389,13 +389,17 @@ public sealed class DispatchService(
             settings.Warehouse is null ? null : new GeoPoint(settings.Warehouse.Latitude, settings.Warehouse.Longitude),
             settings.ServiceSecondsPerStop, settings.MaxFleetTravelSeconds);
 
-    private static DispatchPlanMetrics Metrics(FleetOptimizationResult result, DispatchStrategy strategy, FleetOptimizationOptions options)
+    private static DispatchPlanMetrics Metrics(FleetOptimizationResult result, DispatchStrategy strategy,
+        FleetOptimizationOptions options, IReadOnlyList<DispatchVehicleStart> vehicles)
     {
         var routes = result.Routes.Select(x => new DispatchRouteMetrics(x.VehicleId,
-            x.Stops.Count / 2, x.DurationSeconds, x.DurationSeconds + x.Stops.Count * options.ServiceSecondsPerStop)).ToArray();
+            x.Stops.Count / 2, x.DurationSeconds,
+            vehicles.Single(v => v.VehicleId == x.VehicleId).ExistingWorkloadSeconds + x.DurationSeconds + x.Stops.Count * options.ServiceSecondsPerStop,
+            vehicles.Single(v => v.VehicleId == x.VehicleId).ExistingWorkloadSeconds)).ToArray();
         var warnings = new List<string>
         {
-            "Estimates exclude existing work outside this batch, shift availability, traffic changes and deadlines.",
+            "Existing workload is a dispatcher-supplied estimate outside this batch, not measured or inferred from delivery history. Omitted values assume zero.",
+            "Estimates exclude shift availability, traffic changes and deadlines. Only workload equity and earliest completion use existing workload for allocation.",
             options.ServiceSecondsPerStop == 0 ? "Handling time is set to zero: workload estimates include driving only."
                 : $"Workload assumes {options.ServiceSecondsPerStop} seconds of handling at each pickup and drop-off."
         };

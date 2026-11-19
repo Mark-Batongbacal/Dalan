@@ -1,0 +1,68 @@
+@using System.Text.Json
+@using Microsoft.Extensions.Options
+@inject IOptions<PlanningMapOptions> MapOptions
+@model PlanningMapViewModel
+@{
+    var json = JsonSerializer.Serialize(new { model = Model, styleUrl = MapOptions.Value.StyleUrl, darkStyleUrl = MapOptions.Value.DarkStyleUrl },
+        new JsonSerializerOptions(JsonSerializerDefaults.Web));
+}
+<link rel="stylesheet" href="~/lib/maplibre/maplibre-gl.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/planning-map.css" asp-append-version="true" />
+<section class="content-card planning-map mb-4" data-planning-map
+         data-route-url="@Url.Action("Route", "PlanningMap")" data-search-url="@Url.Action("Search", "PlanningMap")"
+         aria-label="@Model.Title">
+    <div class="planning-map-heading">
+        <div><span class="page-kicker">Location workspace</span><h2 class="h5 mt-2">@Model.Title</h2></div>
+        <button type="button" class="btn btn-outline-secondary" data-map-fit>Fit stops</button>
+        <button type="button" class="btn btn-outline-secondary" data-map-retry>Retry map</button>
+    </div>
+    <p class="text-muted">@Model.Description</p>
+    @Html.AntiForgeryToken()
+    <script type="application/json" data-map-model>@Html.Raw(json)</script>
+    <div class="planning-map-controls">
+        @if (Model.Targets.Count > 0)
+        {
+            <div>
+                <label class="form-label" for="map-target">Location to set</label>
+                <select id="map-target" class="form-select" data-map-target aria-describedby="map-pick-help">
+                    @for (var i = 0; i < Model.Targets.Count; i++)
+                    { <option value="@i">@Model.Targets[i].Label</option> }
+                </select>
+            </div>
+            <div class="planning-map-search">
+                <label class="form-label" for="map-search">Search OpenStreetMap addresses</label>
+                <div class="input-group">
+                    <input id="map-search" class="form-control" data-map-search minlength="3" maxlength="200" autocomplete="off" />
+                    <button type="button" class="btn btn-outline-primary" data-map-search-button>Search</button>
+                </div>
+            </div>
+        }
+        @if (Model.Routes.Count > 0)
+        {
+            <div class="planning-map-route-control">
+                <label class="form-label" for="map-route">Route to display</label>
+                <select id="map-route" class="form-select" data-map-route>
+                    <option value="">All stop locations</option>
+                    @foreach (var route in Model.Routes)
+                    { <option value="@route.Id">@route.Label</option> }
+                </select>
+            </div>
+            <button type="button" class="btn btn-outline-primary planning-map-road-button" data-map-roads>Load road route</button>
+        }
+    </div>
+    @if (Model.Targets.Count > 0)
+    {
+        <p id="map-pick-help" class="text-muted mt-2">Click the map to set the selected location, or move it with the arrow keys and use “Use map center”. Coordinate fields remain editable.</p>
+        <button type="button" class="btn btn-outline-secondary mb-3" data-map-use-center>Use map center</button>
+        <ul class="planning-map-results list-unstyled" data-map-results aria-label="Address search results"></ul>
+    }
+    <p class="planning-map-status" data-map-status role="status" aria-live="polite">Loading map. Coordinate fields and stop lists remain available if the map cannot load.</p>
+    <div class="planning-map-canvas" data-map-canvas tabindex="0" aria-label="Interactive planning map. Arrow keys move the map; plus and minus change zoom."></div>
+    <p class="planning-map-attribution mb-0">
+        Map: <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> ·
+        <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> ·
+        © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>.
+        Road geometry: Valhalla. Markers show confirmed inputs, not live vehicle positions.
+    </p>
+    <noscript><p class="text-muted">JavaScript is required for the map. Use coordinate inputs and ordered stop lists instead.</p></noscript>
+</section>

@@ -35,7 +35,8 @@ public sealed record DispatchStrategySettings(
     double? MaxFleetTravelSeconds = null);
 
 public sealed record DispatchRouteMetrics(
-    Guid VehicleId, int DeliveryCount, double TravelSeconds, double EstimatedWorkloadSeconds);
+    Guid VehicleId, int DeliveryCount, double TravelSeconds, double EstimatedWorkloadSeconds,
+    double ExistingWorkloadSeconds = 0);
 
 public sealed record DispatchPlanMetrics(
     double TotalTravelSeconds, double LongestWorkloadSeconds, double WorkloadSpreadSeconds,

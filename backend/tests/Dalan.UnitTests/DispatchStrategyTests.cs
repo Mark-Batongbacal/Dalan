@@ -15,6 +15,52 @@ public sealed class DispatchStrategyTests
     [Theory]
     [InlineData(DispatchStrategy.WorkloadEquity)]
     [InlineData(DispatchStrategy.EarliestFleetCompletion)]
+    public async Task Existing_work_shifts_flexible_jobs_to_idle_vehicle_but_preserves_fixed_assignments(DispatchStrategy strategy)
+    {
+        var busy = new FleetVehicle(Guid.NewGuid(), P(0), 20, 3600);
+        var idle = new FleetVehicle(Guid.NewGuid(), P(0), 20);
+        var matrix = new RoadMatrix();
+        var result = await new FleetOptimizer(matrix).OptimizeAsync(new([busy, idle],
+            [Job("fixed", 1, busy.Id), Job("flexible", 2)], strategy, new(ServiceSecondsPerStop: 60)));
+        Assert.Contains(result.Routes.Single(r => r.VehicleId == busy.Id).Stops, s => s.JobId == "fixed");
+        Assert.DoesNotContain(result.Routes.Single(r => r.VehicleId == busy.Id).Stops, s => s.JobId == "flexible");
+        Assert.Contains(result.Routes.Single(r => r.VehicleId == idle.Id).Stops, s => s.JobId == "flexible");
+        Assert.All(result.Routes, route => Assert.True(route.DurationSeconds < 3600));
+        Assert.Equal(1, matrix.Calls);
+        AssertValid(result, [Job("fixed", 1, busy.Id), Job("flexible", 2)], [busy, idle]);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public async Task Invalid_existing_work_is_rejected_before_routing(double existing)
+    {
+        var matrix = new RoadMatrix();
+        await Assert.ThrowsAsync<ArgumentException>(() => new FleetOptimizer(matrix).OptimizeAsync(new(
+            [new(Guid.NewGuid(), P(0), 20, existing)], [Job("A", 1)], DispatchStrategy.WorkloadEquity)));
+        Assert.Equal(0, matrix.Calls);
+    }
+
+    [Fact]
+    public async Task Offline_benchmark_reports_existing_work_without_charging_it_as_new_travel()
+    {
+        var batch = new FleetOptimizationRequest([new(Guid.NewGuid(), P(0), 20, 3600)],
+            [Job("A", 1)], Options: new(P(0), ServiceSecondsPerStop: 60));
+        var matrix = await new RoadMatrix().GetMatrixAsync([P(0), P(0), P(1)]);
+        var results = await DispatchStrategyBenchmark.CompareAsync(batch, matrix);
+        Assert.All(results, result =>
+        {
+            Assert.True(result.Compatible);
+            var run = Assert.Single(result.Runs);
+            Assert.Equal(run.TotalTravelSeconds + 3600 + 120, run.MakespanSeconds);
+            Assert.Equal(0, run.WorkloadSpreadSeconds);
+        });
+    }
+
+    [Theory]
+    [InlineData(DispatchStrategy.WorkloadEquity)]
+    [InlineData(DispatchStrategy.EarliestFleetCompletion)]
     public async Task Handling_time_balances_work_without_running_competing_strategies(DispatchStrategy strategy)
     {
         var vehicles = new FleetVehicle[] { new(Guid.NewGuid(), P(0), 20), new(Guid.NewGuid(), P(0), 20) };

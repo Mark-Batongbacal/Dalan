@@ -8,6 +8,7 @@ using Dalan.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.EnvironmentName, builder.Environment.ContentRootPath);
 
 // Add services to the container.
 

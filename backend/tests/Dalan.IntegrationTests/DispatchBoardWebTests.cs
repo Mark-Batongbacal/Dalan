@@ -54,23 +54,49 @@ public sealed class DispatchBoardWebTests
         {
             Strategy = strategy,
             Settings = new() { ServiceSecondsPerStop = 75, WarehouseLatitude = 14.6, WarehouseLongitude = 121 },
-            Vehicles = [new() { Id = service.VehicleId, Selected = true, StartLatitude = 14.6, StartLongitude = 121 }],
+            Vehicles = [new() { Id = service.VehicleId, Selected = true, StartLatitude = 0, StartLongitude = 0, ExistingWorkloadSeconds = 600 }],
             Deliveries = [new() { Id = service.DeliveryId, Selected = true }]
         };
 
         await controller.Index(board, CancellationToken.None);
         Assert.NotNull(board.Preview);
         Assert.Equal(board.Strategy, service.LastPreview!.Strategy);
+        Assert.Equal(600, service.LastPreview.Vehicles[0].ExistingWorkloadSeconds);
+        Assert.Equal(new GeoPoint(14.6, 121), service.LastPreview.Vehicles[0].Start);
         var result = Assert.IsType<ViewResult>(await controller.Review(board, CancellationToken.None));
         var review = Assert.IsType<DispatchReviewViewModel>(result.Model);
         Assert.Equal(2, service.PreviewCalls);
         Assert.Equal(board.Strategy, review.Strategy);
         Assert.Equal(75, review.Settings.ServiceSecondsPerStop);
         Assert.Equal(17, review.RotationVersion);
+        Assert.Equal(600, review.Vehicles[0].ExistingWorkloadSeconds);
+        review.Vehicles[0].StartLatitude = -45;
+        review.Vehicles[0].StartLongitude = -90;
         await controller.Confirm(review, CancellationToken.None);
         Assert.Equal(review.Strategy, service.LastConfirm!.Strategy);
         Assert.Equal(75, service.LastConfirm.Settings!.ServiceSecondsPerStop);
         Assert.Equal(17, service.LastConfirm.RotationVersion);
+        Assert.Equal(600, service.LastConfirm.Vehicles[0].ExistingWorkloadSeconds);
+        Assert.Equal(new GeoPoint(14.6, 121), service.LastConfirm.Vehicles[0].Start);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(91d, 0d)]
+    [InlineData(0d, 181d)]
+    public async Task Invalid_warehouse_stops_preview_before_service_call(double? latitude, double? longitude)
+    {
+        var service = new RecordingDispatchService();
+        var controller = CreateController(service);
+        var board = new DispatchBoardViewModel
+        {
+            Settings = new() { WarehouseLatitude = latitude, WarehouseLongitude = longitude },
+            Vehicles = [new() { Id = service.VehicleId, Selected = true }],
+            Deliveries = [new() { Id = service.DeliveryId, Selected = true }]
+        };
+        await controller.Index(board, CancellationToken.None);
+        Assert.Null(service.LastPreview);
+        Assert.Contains("warehouse", board.Error!);
     }
 
     [Fact]

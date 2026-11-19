@@ -97,6 +97,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                         }, enabled = !state.busy) { Text("Sign out") }
                     }
                 }
+                item { TrackingControls(state) }
                 if (task == null) {
                     item {
                         Text("Assigned deliveries", style = MaterialTheme.typography.titleLarge)
@@ -143,6 +144,38 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                 if (state.busy) CircularProgressIndicator(Modifier.padding(8.dp))
                 state.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             }
+        }
+    }
+}
+
+@Composable
+private fun TrackingControls(workspace: DriverWorkspace) {
+    val context = LocalContext.current
+    val tracking by DriverLocationService.state.collectAsState()
+    var note by remember { mutableStateOf<String?>(null) }
+    fun start() {
+        val location = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val notifications = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (!location || !notifications) { note = "Allow location and notifications to start visible delivery tracking."; return }
+        try { DriverLocationService.start(context); note = null }
+        catch (_: Exception) { note = "Couldn’t start sharing. Keep the app open and try again." }
+    }
+    val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { start() }
+    val active = tracking.active && tracking.driverId == workspace.driverId
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Delivery location sharing", style = MaterialTheme.typography.titleMedium)
+            Text("Share your vehicle’s location with dispatch during active deliveries, including while minimized. A persistent notification lets you stop sharing. GPS samples are retained for up to 30 days when cleanup is running.")
+            if (active) Button(onClick = { DriverLocationService.stop(context) }) { Text("Stop sharing location") }
+            else Button(onClick = {
+                val requested = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                if (android.os.Build.VERSION.SDK_INT >= 33) requested.add(Manifest.permission.POST_NOTIFICATIONS)
+                permissions.launch(requested.toTypedArray())
+            }, enabled = !tracking.stopping && !workspace.needsLogin && workspace.tasks.any { it.status == "Assigned" || it.status == "PickedUp" }) {
+                Text("Start sharing location")
+            }
+            if (tracking.driverId == workspace.driverId) tracking.message?.let { Text(it) }
+            note?.let { Text(it) }
         }
     }
 }

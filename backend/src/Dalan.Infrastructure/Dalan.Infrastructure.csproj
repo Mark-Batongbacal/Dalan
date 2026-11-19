@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="DotNetEnv" Version="3.2.0" />
     <ProjectReference Include="..\Dalan.Application\Dalan.Application.csproj" />
     <ProjectReference Include="..\Dalan.Domain\Dalan.Domain.csproj" />
   </ItemGroup>

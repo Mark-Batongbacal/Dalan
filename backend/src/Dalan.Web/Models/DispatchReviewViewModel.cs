@@ -14,6 +14,7 @@ public sealed class DispatchReviewViewModel
     // Filled from current records for display, never trusted from the form.
     public Dictionary<Guid, string> VehicleNames { get; set; } = [];
     public Dictionary<Guid, string> DeliveryNames { get; set; } = [];
+    public Dictionary<Guid, PlanningMapDelivery> DeliveryLocations { get; set; } = [];
 
     public string? Error { get; set; }
 }
@@ -23,6 +24,8 @@ public sealed class DispatchReviewVehicle
     public Guid VehicleId { get; set; }
     public double StartLatitude { get; set; }
     public double StartLongitude { get; set; }
+    [System.ComponentModel.DataAnnotations.Range(0, double.MaxValue)]
+    public double ExistingWorkloadSeconds { get; set; }
 }
 
 public sealed class DispatchReviewStop

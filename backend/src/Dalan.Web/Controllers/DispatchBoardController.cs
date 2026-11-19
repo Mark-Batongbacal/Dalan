@@ -76,11 +76,15 @@ public sealed class DispatchBoardController(
             return View(model);
         }
 
-        if (selectedVehicles.Any(x =>
-                x.StartLatitude is null || x.StartLongitude is null))
+        if (!TryWarehouse(model.Settings, out var warehouse))
         {
-            model.Error = "Enter a start coordinate for every selected vehicle.";
+            model.Error = "Select a warehouse with valid latitude and longitude.";
             return View(model);
+        }
+        foreach (var vehicle in selectedVehicles)
+        {
+            vehicle.StartLatitude = warehouse!.Latitude;
+            vehicle.StartLongitude = warehouse.Longitude;
         }
 
         var dispatch = services.GetService<IDispatchService>();
@@ -98,7 +102,7 @@ public sealed class DispatchBoardController(
                         x.Id,
                         new GeoPoint(
                             x.StartLatitude!.Value,
-                            x.StartLongitude!.Value))).ToArray(),
+                            x.StartLongitude!.Value), x.ExistingWorkloadSeconds)).ToArray(),
                     selectedDeliveries.Select(x => x.Id).ToArray(), model.Strategy, model.Settings.ToContract()),
                 cancellationToken);
         }
@@ -133,12 +137,20 @@ public sealed class DispatchBoardController(
         var selectedDeliveries = board.Deliveries.Where(x => x.Selected).ToArray();
 
         if (selectedVehicles.Length is < 1 or > 8 ||
-            selectedDeliveries.Length is < 1 or > 15 ||
-            selectedVehicles.Any(x =>
-                x.StartLatitude is null || x.StartLongitude is null))
+            selectedDeliveries.Length is < 1 or > 15)
         {
-            board.Error = "Select 1–8 vehicles and 1–15 deliveries, with a start for each vehicle.";
+            board.Error = "Select 1–8 vehicles and 1–15 deliveries.";
             return View("Index", board);
+        }
+        if (!TryWarehouse(board.Settings, out var warehouse))
+        {
+            board.Error = "Select a warehouse with valid latitude and longitude.";
+            return View("Index", board);
+        }
+        foreach (var vehicle in selectedVehicles)
+        {
+            vehicle.StartLatitude = warehouse!.Latitude;
+            vehicle.StartLongitude = warehouse.Longitude;
         }
 
         var dispatch = services.GetService<IDispatchService>();
@@ -156,7 +168,7 @@ public sealed class DispatchBoardController(
                         x.Id,
                         new GeoPoint(
                             x.StartLatitude!.Value,
-                            x.StartLongitude!.Value))).ToArray(),
+                            x.StartLongitude!.Value), x.ExistingWorkloadSeconds)).ToArray(),
                     selectedDeliveries.Select(x => x.Id).ToArray(), board.Strategy, board.Settings.ToContract()),
                 cancellationToken);
 
@@ -190,7 +202,8 @@ public sealed class DispatchBoardController(
                 {
                     VehicleId = x.Id,
                     StartLatitude = x.StartLatitude!.Value,
-                    StartLongitude = x.StartLongitude!.Value
+                    StartLongitude = x.StartLongitude!.Value,
+                    ExistingWorkloadSeconds = x.ExistingWorkloadSeconds
                 }).ToList(),
                 Stops = preview.Routes
                     .SelectMany(route => route.Stops.Select((stop, order) =>
@@ -265,6 +278,13 @@ public sealed class DispatchBoardController(
         }
 
         var vehicleIds = model.Vehicles.Select(x => x.VehicleId).ToArray();
+        if (!TryWarehouse(model.Settings, out var warehouse))
+            return await ReviewError("Select a warehouse with valid latitude and longitude, then preview again.");
+        foreach (var vehicle in model.Vehicles)
+        {
+            vehicle.StartLatitude = warehouse!.Latitude;
+            vehicle.StartLongitude = warehouse.Longitude;
+        }
         if (vehicleIds.Any(x => x == Guid.Empty) ||
             vehicleIds.Distinct().Count() != vehicleIds.Length ||
             model.Stops.Any(x =>
@@ -288,7 +308,7 @@ public sealed class DispatchBoardController(
         {
             var starts = model.Vehicles.Select(x => new DispatchVehicleStart(
                 x.VehicleId,
-                new GeoPoint(x.StartLatitude, x.StartLongitude))).ToArray();
+                new GeoPoint(x.StartLatitude, x.StartLongitude), x.ExistingWorkloadSeconds)).ToArray();
 
             var routes = model.Vehicles.Select(vehicle => new DispatchReviewedRoute(
                 vehicle.VehicleId,
@@ -380,14 +400,24 @@ public sealed class DispatchBoardController(
                 .ToDictionary(x => x.Id, x => x.RegistrationNumber)));
     }
 
+    private static bool TryWarehouse(DispatchStrategyInput settings, out GeoPoint? warehouse)
+    {
+        warehouse = settings.WarehouseLatitude is double latitude && settings.WarehouseLongitude is double longitude
+            ? new GeoPoint(latitude, longitude) : null;
+        return warehouse?.IsValid == true;
+    }
+
     private async Task PopulateReviewNames(
         DispatchReviewViewModel model, CancellationToken cancellationToken)
     {
         model.VehicleNames = (await vehicles.ListAsync(cancellationToken))
             .ToDictionary(x => x.Id, x => x.RegistrationNumber);
 
-        model.DeliveryNames = (await deliveries.ListAsync(cancellationToken))
-            .ToDictionary(x => x.Id, x => x.RecipientName);
+        var currentDeliveries = await deliveries.ListAsync(cancellationToken);
+        model.DeliveryNames = currentDeliveries.ToDictionary(x => x.Id, x => x.RecipientName);
+        model.DeliveryLocations = currentDeliveries.ToDictionary(x => x.Id,
+            x => new PlanningMapDelivery(new GeoPoint(x.PickupLatitude, x.PickupLongitude),
+                new GeoPoint(x.DropoffLatitude, x.DropoffLongitude)));
     }
 
     private async Task PopulateChoices(
@@ -414,7 +444,8 @@ public sealed class DispatchBoardController(
                     RegistrationNumber = x.RegistrationNumber,
                     Selected = submitted?.Selected ?? false,
                     StartLatitude = submitted?.StartLatitude,
-                    StartLongitude = submitted?.StartLongitude
+                    StartLongitude = submitted?.StartLongitude,
+                    ExistingWorkloadSeconds = submitted?.ExistingWorkloadSeconds ?? 0
                 };
             }).ToList();
 
@@ -427,6 +458,10 @@ public sealed class DispatchBoardController(
                 RecipientName = x.RecipientName,
                 PickupAddress = x.PickupAddress,
                 DropoffAddress = x.DropoffAddress,
+                PickupLatitude = x.PickupLatitude,
+                PickupLongitude = x.PickupLongitude,
+                DropoffLatitude = x.DropoffLatitude,
+                DropoffLongitude = x.DropoffLongitude,
                 Status = x.Status.ToString(),
                 Selected = submittedDeliveries.Contains(x.Id)
             }).ToList();

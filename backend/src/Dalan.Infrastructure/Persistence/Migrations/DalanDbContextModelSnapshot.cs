@@ -191,6 +191,9 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                     b.Property<double>("DurationSeconds")
                         .HasColumnType("float");
 
+                    b.Property<double>("ExistingWorkloadSeconds")
+                        .HasColumnType("float");
+
                     b.Property<Guid>("PlanId")
                         .HasColumnType("uniqueidentifier");
 
@@ -295,6 +298,105 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                     b.ToTable("Drivers", (string)null);
                 });
 
+            modelBuilder.Entity("Dalan.Domain.Tracking.VehicleTrackingSample", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SampleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("AccuracyMeters")
+                        .HasColumnType("float");
+
+                    b.Property<DateTimeOffset>("CapturedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<double>("DistanceMeters")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("IntervalStartUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<bool>("Moving")
+                        .HasColumnType("bit");
+
+                    b.Property<double>("ObservedSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("VehicleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("SessionId", "SampleId");
+
+                    b.HasIndex("CapturedAtUtc");
+
+                    b.HasIndex("VehicleId", "CapturedAtUtc");
+
+                    b.ToTable("TrackingSamples");
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Tracking.VehicleTrackingSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double?>("AccuracyMeters")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("EndedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("LastCapturedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("StartedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("VehicleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId")
+                        .IsUnique()
+                        .HasFilter("[EndedAtUtc] IS NULL");
+
+                    b.HasIndex("VehicleId", "StartedAtUtc");
+
+                    b.ToTable("TrackingSessions");
+                });
+
             modelBuilder.Entity("Dalan.Domain.Vehicles.Vehicle", b =>
                 {
                     b.Property<Guid>("Id")
@@ -394,6 +496,70 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                     b.HasIndex("DeliveryId");
 
                     b.ToTable("DriverEventReceipts");
+                });
+
+            modelBuilder.Entity("Dalan.Infrastructure.Persistence.NotificationDelivery", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset?>("AcceptedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("Claim")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateOnly>("DayUtc")
+                        .HasColumnType("date");
+
+                    b.Property<string>("From")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("LeaseUntilUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("NeedsReview")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ProviderId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ToJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcceptedAtUtc", "NeedsReview", "NextAttemptAtUtc");
+
+                    b.ToTable("NotificationDeliveries");
                 });
 
             modelBuilder.Entity("Dalan.Infrastructure.Persistence.OperationsSnapshot", b =>
@@ -676,6 +842,30 @@ namespace Dalan.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AssignedVehicleId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Tracking.VehicleTrackingSample", b =>
+                {
+                    b.HasOne("Dalan.Domain.Tracking.VehicleTrackingSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Dalan.Domain.Tracking.VehicleTrackingSession", b =>
+                {
+                    b.HasOne("Dalan.Domain.Drivers.Driver", null)
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Dalan.Domain.Vehicles.Vehicle", null)
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Dalan.Infrastructure.Persistence.DriverAccount", b =>
