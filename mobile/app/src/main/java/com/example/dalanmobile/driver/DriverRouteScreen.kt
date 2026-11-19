@@ -1,6 +1,8 @@
 package com.example.dalanmobile.driver
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -94,11 +99,12 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
     }
 
     Scaffold { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(16.dp),
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = close) { Text("Back to delivery") }
-            Text("Pickup to drop-off", style = MaterialTheme.typography.titleLarge)
+            TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back to delivery") }
+            Text("Pickup to drop-off", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
             Text(task.recipientName)
+            Text("Road estimate between the assigned stops. This view does not show your live position or turn-by-turn navigation.")
             route?.let {
                 val distance = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }
                     .format(it.distanceMeters / 1000)
@@ -108,7 +114,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
             if (status.isNotEmpty()) Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             if (pickup != null && dropoff != null) {
                 key(task.id, attempt) {
-                    DeliveryMap(pickup, dropoff, line, Modifier.fillMaxWidth().weight(1f)) { mapLoaded = it }
+                    DeliveryMap(pickup, dropoff, line, Modifier.fillMaxWidth().height(320.dp)) { mapLoaded = it }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     MapStopLegend("Pickup", Color(0xFF23664C))
@@ -118,7 +124,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                 else Text("© OpenStreetMap contributors · OpenFreeMap",
                     style = MaterialTheme.typography.labelMedium)
                 if ((status.isNotEmpty() && status != "Loading road route…") || mapLoaded == false) {
-                    TextButton(onClick = { mapLoaded = null; attempt++ }) { Text("Retry map") }
+                    TextButton(onClick = { mapLoaded = null; attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Retry map") }
                 }
             }
         }

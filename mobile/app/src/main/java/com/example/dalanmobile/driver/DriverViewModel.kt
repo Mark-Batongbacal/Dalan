@@ -27,7 +27,11 @@ data class DriverWorkspace(
     val message: String? = null,
     val needsLogin: Boolean = false,
     val driverId: String? = null,
+    val syncing: Boolean = false,
+    val lastSyncedAt: Instant? = null,
 )
+
+private data class SyncProgress(val active: Boolean = false, val owner: String? = null, val refreshedAt: Instant? = null)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DriverViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,6 +43,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     private val busy = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
     private val needsLogin = MutableStateFlow(false)
+    private val syncProgress = MutableStateFlow(SyncProgress())
     private val operation = Mutex()
 
     private val workspace = session.flatMapLatest { account ->
@@ -55,8 +60,10 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
                 }), events, driverId = account.driverId)
         }
     }
-    val state = combine(workspace, busy, message, needsLogin) { data, working, notice, expired ->
-        data.copy(busy = working, message = notice, needsLogin = expired)
+    val state = combine(workspace, busy, message, needsLogin, syncProgress) { data, working, notice, expired, progress ->
+        data.copy(busy = working, message = notice, needsLogin = expired,
+            syncing = progress.active && progress.owner == data.driverId,
+            lastSyncedAt = progress.refreshedAt.takeIf { progress.owner == data.driverId })
     }.stateIn(viewModelScope, SharingStarted.Eagerly, DriverWorkspace(signedIn = session.value != null))
 
     fun login(email: String, password: String) = runOperation {
@@ -73,6 +80,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
         sessions.clear()
         session.value = null
         needsLogin.value = false
+        syncProgress.value = SyncProgress()
     }
 
     fun sync() = runOperation {
@@ -117,29 +125,36 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun synchronize(account: DriverSession) {
-        val blocked = mutableSetOf<Pair<String, String>>()
-        for (entry in dao.queued(account.driverId)) {
-            val delivery = entry.deliveryId to entry.assignment
-            if (entry.failure != null) blocked.add(delivery)
-            if (delivery in blocked) continue
-            val event = driverJson.decodeFromString<TaskEvent>(entry.payload)
-            when (val status = api.submit(account, entry.deliveryId, event)) {
-                204 -> acknowledge(entry)
-                400, 404, 409, 413 -> {
-                    blocked.add(delivery)
-                    val reason = if (status == 400 || status == 413) "Proof or event time rejected"
-                        else "Assignment or delivery status changed"
-                    dao.fail(entry.sequence, reason)
+        syncProgress.value = if (syncProgress.value.owner == account.driverId) syncProgress.value.copy(active = true)
+            else SyncProgress(active = true, owner = account.driverId)
+        try {
+            val blocked = mutableSetOf<Pair<String, String>>()
+            for (entry in dao.queued(account.driverId)) {
+                val delivery = entry.deliveryId to entry.assignment
+                if (entry.failure != null) blocked.add(delivery)
+                if (delivery in blocked) continue
+                val event = driverJson.decodeFromString<TaskEvent>(entry.payload)
+                when (val status = api.submit(account, entry.deliveryId, event)) {
+                    204 -> acknowledge(entry)
+                    400, 404, 409, 413 -> {
+                        blocked.add(delivery)
+                        val reason = if (status == 400 || status == 413) "Proof or event time rejected"
+                            else "Assignment or delivery status changed"
+                        dao.fail(entry.sequence, reason)
+                    }
+                    else -> throw DriverHttpException(status)
                 }
-                else -> throw DriverHttpException(status)
             }
+            val remote = api.list(account)
+            database.withTransaction {
+                dao.clearTasks(account.driverId)
+                dao.saveTasks(remote.map { SavedTask(account.driverId, it.id, driverJson.encodeToString(it)) })
+            }
+            message.value = if (blocked.isEmpty()) "Up to date" else "Review the updates that failed to sync."
+            syncProgress.value = SyncProgress(active = true, owner = account.driverId, refreshedAt = Instant.now())
+        } finally {
+            syncProgress.value = syncProgress.value.copy(active = false)
         }
-        val remote = api.list(account)
-        database.withTransaction {
-            dao.clearTasks(account.driverId)
-            dao.saveTasks(remote.map { SavedTask(account.driverId, it.id, driverJson.encodeToString(it)) })
-        }
-        message.value = if (blocked.isEmpty()) "Up to date" else "Review the updates that failed to sync."
     }
 
     private suspend fun acknowledge(entry: PendingEvent) = database.withTransaction {
@@ -171,7 +186,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
                 } else message.value = "Server unavailable. Try again shortly."
             } catch (_: IOException) {
                 message.value = if (session.value == null) "Can’t connect. Check your connection and try again."
-                    else "Offline. Saved updates will retry when you reconnect."
+                    else "Offline. Updates stay on this device. Open the app and use Sync now when connected."
             } catch (_: Exception) {
                 message.value = "Couldn’t complete the action. Try again."
             } finally {
