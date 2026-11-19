@@ -95,6 +95,7 @@ public sealed class DriverCredentialEmailOutbox(
             if (now - row.CreatedAtUtc >= AutomaticRetryLimit)
             {
                 row.NeedsReview = true;
+                row.Text = string.Empty; // Destroy expired credential material.
                 await db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return;
@@ -140,7 +141,8 @@ public sealed class DriverCredentialEmailOutbox(
                     .SetProperty(x => x.NextAttemptAtUtc,
                         providerId is null && !corrupted
                             ? (DateTimeOffset?)clock.GetUtcNow().Add(RetryDelay) : null)
-                    .SetProperty(x => x.NeedsReview, corrupted), CancellationToken.None);
+                    .SetProperty(x => x.NeedsReview, corrupted)
+                    .SetProperty(x => x.Text, x => providerId != null || corrupted ? "" : x.Text), CancellationToken.None);
             db.ChangeTracker.Clear();
         }
     }
