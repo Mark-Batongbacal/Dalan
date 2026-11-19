@@ -1,0 +1,30 @@
+@model Dalan.Web.Controllers.PlaceSearchViewModel
+@{ ViewData["Title"] = "Place search"; }
+<div class="page-heading"><span class="page-kicker">Location reference</span><h1>Place search</h1><p>Find place names and addresses with Google Places. Open a result in Google Maps for more information.</p></div>
+<div class="content-card mb-4">
+    <form asp-action="Index" method="post">
+        <div asp-validation-summary="All" class="text-danger"></div>
+        <label asp-for="Query" class="form-label">Place or address</label>
+        <input asp-for="Query" class="form-control mb-3" autocomplete="off" maxlength="200" />
+        <button class="btn btn-primary" type="submit">Search Google Places</button>
+    </form>
+    <p class="mt-3 mb-0">For delivery and warehouse map pins, use the separate map selection or OpenStreetMap address search on those forms.</p>
+</div>
+@if (Model.Error is not null) { <div class="alert alert-warning" role="alert">@Model.Error</div> }
+@if (Model.Results is not null)
+{
+    <section class="content-card" aria-label="Google Places results">
+        <h2 class="h5">Search results</h2>
+        <div class="google-attribution"><img src="~/lib/google/google-maps-logo.svg" alt="Google Maps" height="18" /></div>
+        @if (Model.Results.Count == 0) { <p>No matching places found.</p> }
+        @foreach (var place in Model.Results)
+        {
+            <article class="border-top pt-3 mt-3"><h3 class="h6">@place.Name</h3><p>@place.Address</p>
+                @if (place.GoogleMapsUri is not null) { <a href="@place.GoogleMapsUri" target="_blank" rel="noopener noreferrer">Open in Google Maps</a> }
+                @foreach (var credit in place.Attributions)
+                { <p class="mt-2 mb-0">@if (credit.Uri is not null) { <a href="@credit.Uri" target="_blank" rel="noopener noreferrer">@credit.Provider</a> } else { @credit.Provider }</p> }
+            </article>
+        }
+    </section>
+}
+<p class="mt-3"><a asp-controller="Home" asp-action="Privacy">Privacy</a> · <a asp-controller="Home" asp-action="Terms">Terms of use</a></p>

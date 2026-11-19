@@ -27,12 +27,17 @@ PHASES = [
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", required=True, help="Authorized adb serial")
+    parser.add_argument("--package", default=PACKAGE, help="Isolated application ID; must end in .e2e")
     sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
     if not sdk:
         sdk = str(Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "Android/Sdk") if os.name == "nt" else str(Path.home() / "Android/Sdk")
     parser.add_argument("--adb", default=shutil.which("adb") or str(Path(sdk) / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")))
     parser.add_argument("--skip-build", action="store_true", help="Requires existing isolated E2E APKs and built backend tools")
+    parser.add_argument("--tracking-only", action="store_true", help="Run foreground location/minimized/stop checks on the isolated app")
     args = parser.parse_args()
+    package = args.package
+    if not package.startswith("com.example.dalanmobile.") or not package.endswith(".e2e") or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789._" for c in package):
+        parser.error("Use an isolated com.example.dalanmobile.*.e2e application ID.")
     sql = os.environ.get("DALAN_MOBILE_E2E_SQL")
     provider = os.environ.get("DALAN_MOBILE_E2E_VALHALLA_URL")
     if not sql or not provider:
@@ -64,7 +69,7 @@ def main():
         run(["dotnet", "build", "backend/Dalan.sln", "--verbosity", "quiet"])
         gradle = str(ROOT / "mobile" / "gradlew.bat") if os.name == "nt" else "./gradlew"
         subprocess.run([gradle, ":app:assembleDebug", ":app:assembleDebugAndroidTest",
-            "-PdalanE2E=true", "-PdalanDriverDebugApiUrl=" + API_URL, "--console=plain"],
+            "-PdalanE2E=true", "-PdalanE2EApplicationSuffix=" + package.removeprefix("com.example.dalanmobile"), "-PdalanDriverDebugApiUrl=" + API_URL, "--console=plain"],
             check=True, cwd=ROOT / "mobile")
     run(adb + ["install", "--user", "0", "-r", str(ROOT / "mobile/app/build/outputs/apk/debug/app-debug.apk")])
     run(adb + ["install", "--user", "0", "-r", str(ROOT / "mobile/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk")])
@@ -79,6 +84,7 @@ def main():
         api_env = env.copy()
         api_env.update({"ASPNETCORE_URLS": API_URL.rstrip("/"), "ASPNETCORE_ENVIRONMENT": "Testing",
             "ConnectionStrings__Dalan": sql, "Valhalla__BaseUrl": provider,
+            "Tracking__Enabled": "true" if args.tracking_only else "false",
             "Logging__LogLevel__Default": "Warning"})
         api = None
 
@@ -111,13 +117,13 @@ def main():
                         time.sleep(.1)
                 raise RuntimeError("The isolated API did not become ready.")
 
-            def phase(method):
+            def phase(method, test_class="DriverMultiRouteE2ETest"):
                 shell("input keyevent KEYCODE_WAKEUP", capture_output=True)
                 shell("wm dismiss-keyguard", capture_output=True)
-                shell(f"am force-stop --user 0 {PACKAGE}", capture_output=True)
+                shell(f"am force-stop --user 0 {package}", capture_output=True)
                 result = shell("am instrument --user 0 -w -r -e class "
-                    f"com.example.dalanmobile.DriverMultiRouteE2ETest#{method} "
-                    f"{PACKAGE}.test/androidx.test.runner.AndroidJUnitRunner", capture_output=True, text=True)
+                    f"com.example.dalanmobile.{test_class}#{method} "
+                    f"{package}.test/androidx.test.runner.AndroidJUnitRunner", capture_output=True, text=True)
                 if ("OK (1 test)" not in result.stdout or "AssumptionViolatedException" in result.stdout
                     or "INSTRUMENTATION_STATUS_CODE: -3" in result.stdout):
                     raise RuntimeError(result.stdout + result.stderr)
@@ -139,11 +145,17 @@ def main():
                         "deliveryVersions": preview["deliveryVersions"], "strategy": preview["strategy"],
                         "settings": settings, "rotationVersion": preview["rotationVersion"]}, staff)
                 run(adb + ["reverse", "tcp:5072", "tcp:5072"])
-                shell(f"run-as {PACKAGE} mkdir -p files/dalan-e2e", capture_output=True)
+                shell(f"run-as {package} mkdir -p files/dalan-e2e", capture_output=True)
                 mobile = {"apiBaseUrl": API_URL, "driverEmail": fixture["driverEmails"][0],
                     "otherDriverEmail": fixture["driverEmails"][1], "password": fixture["password"], "initialTasks": 6}
-                shell(f'run-as {PACKAGE} sh -c "cat > files/dalan-e2e/fixture.json"',
+                shell(f'run-as {package} sh -c "cat > files/dalan-e2e/fixture.json"',
                     input=json.dumps(mobile).encode(), capture_output=True)
+                if args.tracking_only:
+                    for permission in ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "POST_NOTIFICATIONS"]:
+                        shell(f"pm grant {package} android.permission.{permission}", capture_output=True)
+                    phase("minimized_sharing_notification_stop_and_completion_end_the_session", "DriverTrackingE2ETest")
+                    run(["dotnet", "run", "--project", "backend/tools/Dalan.MobileE2E", "--no-build", "--", "verify-tracking"], env=env)
+                    return
                 phase(PHASES[0])
                 stop()
                 phase(PHASES[1])
@@ -154,7 +166,7 @@ def main():
             finally:
                 stop()
                 subprocess.run(adb + ["reverse", "--remove", "tcp:5072"], capture_output=True)
-                subprocess.run(adb + ["shell", f"run-as {PACKAGE} rm -rf files/dalan-e2e"], capture_output=True)
+                subprocess.run(adb + ["shell", f"run-as {package} rm -rf files/dalan-e2e"], capture_output=True)
 
 
 if __name__ == "__main__":

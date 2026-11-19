@@ -34,6 +34,9 @@
                     @if (User.IsInRole("Admin") || User.IsInRole("Dispatcher"))
                     {
                         <a class="@(controller == "Analytics" ? "active" : "")" asp-controller="Analytics" asp-action="Index">Analytics</a>
+                        <a class="@(controller == "Places" ? "active" : "")" asp-controller="Places" asp-action="Index">Place search</a>
+                        <a class="@(controller == "Notifications" ? "active" : "")" asp-controller="Notifications" asp-action="Index">Operations email</a>
+                        <a class="@(controller == "FleetTracking" ? "active" : "")" asp-controller="FleetTracking" asp-action="Index">Live fleet</a>
                     }
                     @if (User.IsInRole("Dispatcher"))
                     {

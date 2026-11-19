@@ -7,6 +7,9 @@ using Dalan.Application.Vehicles;
 using Dalan.Infrastructure.Persistence;
 using Dalan.Infrastructure.Repositories;
 using Dalan.Infrastructure.Routing;
+using Dalan.Application.Notifications;
+using Dalan.Infrastructure.Notifications;
+using Dalan.Application.Tracking;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +35,29 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
         services.AddScoped<Dalan.Application.Analytics.IAnalyticsRepository, AnalyticsRepository>();
+        services.AddSingleton(new TrackingOptions { Enabled = bool.TryParse(configuration["Tracking:Enabled"], out var trackingEnabled) && trackingEnabled });
+        services.AddScoped<IFleetTrackingRepository, FleetTrackingRepository>();
+        services.AddScoped<IFleetTrackingService, FleetTrackingService>();
+        var email = new ResendOptions { Enabled = bool.TryParse(configuration["Resend:Enabled"], out var sendEnabled) && sendEnabled,
+            ApiKey = configuration["Resend:ApiKey"] ?? "", From = configuration["Resend:From"] ?? "", Recipients = configuration["Resend:Recipients"] ?? "" };
+        if (email.Enabled && (string.IsNullOrWhiteSpace(email.ApiKey)
+            || !System.Net.Mail.MailAddress.TryCreate(email.From, out _)
+            || email.Recipients.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is not { Length: >= 1 and <= 50 } recipients
+            || recipients.Any(address => !System.Net.Mail.MailAddress.TryCreate(address, out _))))
+            throw new InvalidOperationException("Enabled Resend notifications require an API key, a valid sender and 1–50 valid recipient addresses.");
+        services.AddSingleton(email);
+        services.AddHttpClient<IEmailSender, ResendEmailSender>(client => { client.BaseAddress = new Uri("https://api.resend.com/"); client.Timeout = TimeSpan.FromSeconds(15); })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<IOperationsNotificationRepository, OperationsNotificationRepository>();
+        services.AddScoped<IOperationsNotificationService, OperationsNotificationService>();
+        var googleKey = configuration["GooglePlaces:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(googleKey))
+            services.AddHttpClient("GooglePlaces", client =>
+            {
+                client.BaseAddress = new Uri("https://places.googleapis.com/");
+                client.Timeout = TimeSpan.FromSeconds(10);
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+                .AddTypedClient<IGooglePlacesSearch>((client, _) => new GooglePlacesTextSearch(client, googleKey));
         var photonUrl = configuration["Geocoding:PhotonBaseUrl"];
         if (!string.IsNullOrWhiteSpace(photonUrl))
         {
