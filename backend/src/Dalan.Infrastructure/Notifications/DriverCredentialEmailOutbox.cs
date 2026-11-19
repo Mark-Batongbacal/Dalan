@@ -136,10 +136,10 @@ public sealed class DriverCredentialEmailOutbox(
                 .Where(x => x.Id == id && x.Claim == claim && x.AcceptedAtUtc == null)
                 .ExecuteUpdateAsync(update => update
                     .SetProperty(x => x.LeaseUntilUtc, (DateTimeOffset?)null)
-                    .SetProperty(x => x.AcceptedAtUtc, providerId is null ? (DateTimeOffset?)null : clock.GetUtcNow())
+                    .SetProperty(x => x.AcceptedAtUtc, providerId == null ? (DateTimeOffset?)null : clock.GetUtcNow())
                     .SetProperty(x => x.ProviderId, providerId)
                     .SetProperty(x => x.NextAttemptAtUtc,
-                        providerId is null && !corrupted
+                        providerId == null && !corrupted
                             ? (DateTimeOffset?)clock.GetUtcNow().Add(RetryDelay) : null)
                     .SetProperty(x => x.NeedsReview, corrupted)
                     .SetProperty(x => x.Text, x => providerId != null || corrupted ? "" : x.Text), CancellationToken.None);
