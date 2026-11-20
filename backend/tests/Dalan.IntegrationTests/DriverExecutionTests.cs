@@ -97,6 +97,16 @@ public sealed class DriverExecutionTests(SqlServerFixture fixture)
         Assert.Equal(routing.Result, roadRoute);
         Assert.Equal(new GeoPoint(14, 121), routing.Origin);
         Assert.Equal(new GeoPoint(15, 122), routing.Destination);
+        using var navigationResponse = await client.PostAsJsonAsync("/api/driver/navigation", new {
+            origin = new { latitude = 14.01, longitude = 121.01 }, capturedAtUtc = DateTimeOffset.UtcNow,
+            accuracyMeters = 8, includeRemainingStops = true
+        });
+        Assert.Equal(HttpStatusCode.OK, navigationResponse.StatusCode);
+        var navigation = await navigationResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, navigation.GetProperty("stops").GetArrayLength());
+        Assert.All(navigation.GetProperty("stops").EnumerateArray(), stop => Assert.Equal(delivery.Id, stop.GetProperty("deliveryId").GetGuid()));
+        Assert.Equal("Pickup", navigation.GetProperty("stops")[0].GetProperty("stopKind").GetString());
+        Assert.Equal("Drop-off", navigation.GetProperty("stops")[1].GetProperty("stopKind").GetString());
         routing.Result = null;
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync(ownRoute)).StatusCode);
         routing.Fail = true;

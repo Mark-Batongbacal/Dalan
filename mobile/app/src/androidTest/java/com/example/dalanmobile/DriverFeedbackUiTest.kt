@@ -28,16 +28,15 @@ class DriverFeedbackUiTest {
     private val rejected = PendingEvent(owner = "fixture-driver", deliveryId = "fixture-delivery", assignment = "fixture",
         kind = "Pickup", payload = "", failure = "Assignment or delivery status changed")
 
-    @Test fun navigation_legend_identifies_the_current_position_and_next_stop() {
+    @Test fun navigation_legend_keeps_pickup_and_dropoff_visible_with_current_position() {
         val navigating = mutableStateOf(false)
         compose.setContent { DalanMobileTheme(true) { DriverRouteLegend(navigating.value) } }
         compose.onNodeWithText("Pickup").assertExists()
         compose.onNodeWithText("Drop-off").assertExists()
         compose.runOnIdle { navigating.value = true }
         compose.onNodeWithText("Current position").assertExists()
-        compose.onNodeWithText("Next stop").assertExists()
-        compose.onNodeWithText("Pickup").assertDoesNotExist()
-        compose.onNodeWithText("Drop-off").assertDoesNotExist()
+        compose.onNodeWithText("Pickup").assertExists()
+        compose.onNodeWithText("Drop-off").assertExists()
     }
 
     @Test fun rejected_assignment_requires_explicit_discard_confirmation() {

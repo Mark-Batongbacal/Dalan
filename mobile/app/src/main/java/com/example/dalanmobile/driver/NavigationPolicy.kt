@@ -5,6 +5,18 @@ import kotlin.math.*
 internal object NavigationPolicy {
     const val COOLDOWN_MS = 30_000L
     const val OFF_ROUTE_METERS = 60.0
+    fun remainingStops(tasks: List<TaskInfo>): List<DriverNavigationStop> = tasks
+        .filter { it.status == "Assigned" || it.status == "PickedUp" }
+        .flatMap { task ->
+            listOfNotNull(
+                if (task.status == "Assigned" && task.pickupLatitude != null && task.pickupLongitude != null)
+                    task.pickupPosition to DriverNavigationStop(task.id, "Pickup", task.pickupAddress, NavigationPoint(task.pickupLatitude, task.pickupLongitude)) else null,
+                if (task.dropoffLatitude != null && task.dropoffLongitude != null)
+                    task.dropoffPosition to DriverNavigationStop(task.id, "Drop-off", task.dropoffAddress, NavigationPoint(task.dropoffLatitude, task.dropoffLongitude)) else null
+            ).map { (position, stop) -> Triple(task, position, stop) }
+        }.sortedWith(compareBy<Triple<TaskInfo, Int?, DriverNavigationStop>> { it.first.assignedAtUtc }
+            .thenBy { it.first.routeId }.thenBy { it.second ?: Int.MAX_VALUE }.thenBy { it.first.id })
+        .map { it.third }
     fun distance(a: NavigationPoint, b: NavigationPoint): Double {
         val lat = Math.toRadians(b.latitude - a.latitude)
         val lon = Math.toRadians(b.longitude - a.longitude)
