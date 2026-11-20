@@ -154,3 +154,11 @@ internal fun ProofRequirement(label: String, ready: Boolean) {
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }
+
+@Composable
+internal fun DalanBrand() {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.example.dalanmobile.R.drawable.dalan_logo), null, Modifier.size(44.dp))
+        Text("Dalan", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
+    }
+}

@@ -66,7 +66,7 @@ class DriverAppearanceTest {
             scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             compose.waitUntil(15_000) { compose.onAllNodes(hasText(recipient, substring = true)).fetchSemanticsNodes().isNotEmpty() }
             for (theme in listOf("Light", "Dark", "System")) {
-                compose.onNodeWithText("Account").performClick()
+                compose.onNodeWithText("Profile").performClick()
                 tap(theme)
                 capture("account-$theme")
                 compose.onNodeWithText("Home").performClick()
@@ -93,7 +93,7 @@ class DriverAppearanceTest {
                 compose.onNodeWithText("Assigned deliveries").assertExists()
             }
             scenario.recreate()
-            compose.onNodeWithText("Account").performClick()
+            compose.onNodeWithText("Profile").performClick()
             scrollTo("System")
             compose.onNodeWithText("System").assertIsSelected()
 
@@ -128,6 +128,24 @@ class DriverAppearanceTest {
             compose.onNodeWithText("Sync now").assertExists()
             capture("empty-route")
         }
+    }
+
+    @Test fun sign_out_is_available_only_from_profile_and_keeps_saved_updates() {
+        seed()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            compose.waitUntil(15_000) { compose.onAllNodes(hasText(recipient, substring = true)).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Sign out").assertDoesNotExist()
+            compose.onNodeWithText("Profile").performClick()
+            scrollTo("Sign out")
+            compose.onNodeWithText("Sign out").assertIsEnabled()
+            capture("profile-sign-out")
+            compose.onNodeWithText("Sign out").performClick()
+            compose.waitUntil(15_000) { compose.onAllNodes(hasText("Sign in to workspace")).fetchSemanticsNodes().isNotEmpty() }
+        }
+        val database = Room.databaseBuilder(context, DriverDatabase::class.java, "driver.db").build()
+        try { runBlocking { assertEquals(1, database.driverDao().queued("visual-fixture").size) } }
+        finally { database.close() }
     }
 
     @Test fun map_gestures_keep_page_still_until_touching_outside() {

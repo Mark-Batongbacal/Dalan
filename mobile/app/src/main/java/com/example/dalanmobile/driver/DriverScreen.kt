@@ -83,9 +83,9 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
             if (authenticated && expanded) NavigationRail(
                 containerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxHeight(),
-                header = { Text("D", Modifier.padding(16.dp), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary) }
+                header = { androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.example.dalanmobile.R.drawable.dalan_logo), "Dalan", Modifier.padding(12.dp).size(48.dp)) }
             ) {
-                listOf("Home", "Deliveries", "Route", "Account").forEach { item ->
+                listOf("Home", "Deliveries", "Route", "Profile").forEach { item ->
                     NavigationRailItem(selected = destination == item, onClick = { goTo(item) },
                         colors = NavigationRailItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
                         icon = { DriverWorkspaceIcon(item) }, label = { Text(item) })
@@ -96,7 +96,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                 containerColor = MaterialTheme.colorScheme.background,
                 bottomBar = {
                     if (authenticated && !expanded) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                        listOf("Home", "Deliveries", "Route", "Account").forEach { item ->
+                        listOf("Home", "Deliveries", "Route", "Profile").forEach { item ->
                             NavigationBarItem(selected = destination == item, onClick = { goTo(item) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
                                 icon = { DriverWorkspaceIcon(item) }, label = { Text(item) })
@@ -117,15 +117,16 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                             Row(Modifier.widthIn(max = 760.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(if (!authenticated || destination == "Home") "Dalan" else if (task != null) "Delivery details" else destination,
+                                    if (!authenticated || destination == "Home") DalanBrand()
+                                    else Text(if (task != null) "Delivery details" else destination,
                                         style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
 
                                 }
                                 if (task != null) TextButton(onClick = { selected = null; destination = "Deliveries" }, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text("Back to deliveries")
                                 }
-                                else if (authenticated && destination == "Home") FilledTonalIconButton(onClick = { goTo("Account") }, modifier = Modifier.size(48.dp)) {
-                                    Box(Modifier.semantics { contentDescription = "Open account" }) { DriverWorkspaceIcon("Account") }
+                                else if (authenticated && destination == "Home") FilledTonalIconButton(onClick = { goTo("Profile") }, modifier = Modifier.size(48.dp)) {
+                                    Box(Modifier.semantics { contentDescription = "Open profile" }) { DriverWorkspaceIcon("Profile") }
                                 }
                             }
                         }
@@ -145,7 +146,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                                 state.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error) }
                             } }
                         } else {
-                            if (destination == "Account") {
+                            if (destination == "Profile") {
                                 item { WorkspacePanel {
                                     Text("Appearance", style = MaterialTheme.typography.titleLarge)
                                     Text("System follows your device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -161,7 +162,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                             }
                             if (task == null) item { Box(Modifier.widthIn(max = 760.dp).fillMaxWidth()) { SyncStatusCard(state, model::sync) } }
                             when {
-                                destination == "Account" -> {
+                                destination == "Profile" -> {
                                     item { Box(Modifier.widthIn(max = 760.dp).fillMaxWidth()) { TrackingControls(state) } }
                                     item { WorkspacePanel {
                                         Text("Saved updates stay yours", style = MaterialTheme.typography.titleMedium)

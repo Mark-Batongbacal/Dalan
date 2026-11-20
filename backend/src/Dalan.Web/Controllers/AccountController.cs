@@ -43,6 +43,10 @@ public sealed class AccountController(SignInManager<IdentityUser> signInManager,
     }
 
     [Authorize]
+    [HttpGet]
+    public IActionResult Profile() => View();
+
+    [Authorize]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()

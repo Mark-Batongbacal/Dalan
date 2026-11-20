@@ -4,9 +4,9 @@
 }
 
 <div class="page-heading">
-    <span class="page-kicker">Dispatch operations</span>
+
     <h1>Create delivery</h1><p>Step 3 · <a href="/DeliveryBatch">Create multiple deliveries instead</a></p>
-    <p>Select the warehouse pickup, then enter the recipient and delivery destination.</p>
+
 </div>
 
 <div class="location-editor-shell">
@@ -44,7 +44,7 @@
             </div>
         </div></details>
 
-        <p class="form-text" data-warehouse-status aria-live="polite">Your saved warehouse is the pickup and fleet start. <a href="/Warehouse">Change your default warehouse in step 1</a>.</p>
+        <p class="form-text" data-warehouse-status aria-live="polite">Pickup uses your warehouse. <a href="/Warehouse">Change your default warehouse in step 1</a>.</p>
 
         <div class="mb-3">
             <label asp-for="DropoffAddress" class="form-label">Drop-off address</label>
@@ -79,7 +79,7 @@
                     <button type="button" class="btn btn-outline-secondary" data-time-step="-30" aria-label="−30 min: expected delivery time 30 minutes earlier">−30 min</button>
                     <button type="button" class="btn btn-outline-secondary" data-time-step="30" aria-label="+30 min: expected delivery time 30 minutes later">+30 min</button>
                 </div>
-                <small class="form-text text-muted" data-time-zone>Defaults to the next half-hour from now. Adjust in 30-minute steps.</small>
+                <small class="form-text text-muted" data-time-zone>Next half-hour by default; adjust in 30-minute steps.</small>
             </div>
         </div>
 

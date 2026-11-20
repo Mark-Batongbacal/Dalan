@@ -4,7 +4,7 @@
     var map=new PlanningMapViewModel { Title="Choose your warehouse", Description="Click the map or search a street address, then confirm your own pin.",
         Targets=[new("Warehouse","Latitude","Longitude","SearchAddress")], Overview=[new("Warehouse",LatitudeInputId:"Latitude",LongitudeInputId:"Longitude")] };
 }
-<div class="page-heading"><span class="page-kicker">Step 1 · Your default</span><h1>Set your warehouse</h1><p>Save it once for your Dispatcher account. New deliveries and plans use it on any signed-in device until you change it.</p></div>
+<div class="page-heading"><h1>Set your warehouse</h1><p>Your default pickup for new deliveries and plans.</p></div>
 <form method="post" class="location-editor-shell"><input asp-for="ReturnToDispatch" type="hidden" /><div class="location-workspace">
     <aside class="location-workspace-map" aria-label="Warehouse location"><partial name="_PlanningMap" model="map" /></aside>
     <section class="content-card location-workspace-fields"><div asp-validation-summary="All" class="text-danger" role="alert"></div>
@@ -12,7 +12,8 @@
         <input asp-for="SearchAddress" type="hidden" />
         <details data-map-coordinate-fields><summary>Advanced coordinates</summary><label asp-for="Latitude" class="form-label">Latitude</label><input asp-for="Latitude" type="number" step="any" class="form-control" /><label asp-for="Longitude" class="form-label">Longitude</label><input asp-for="Longitude" type="number" step="any" class="form-control" /></details>
         <p>Confirm the warehouse pin on the map before saving.</p><p class="form-text">Existing deliveries keep their recorded pickup. Changing this default applies to new work.</p>
-        <button type="submit" class="btn btn-primary">Save warehouse &amp; continue</button><a href='@(Model.ReturnToDispatch ? "/DispatchBoard" : "/DeliveryWorkflow")' class="btn btn-link">@(Model.ReturnToDispatch ? "Back to dispatch" : "Back to workflow")</a>
+        <button type="submit" class="btn btn-primary">Save warehouse &amp; continue</button>
+        @if (Model.ReturnToDispatch) { <a href="/DispatchBoard" class="btn btn-link">Back to dispatch</a> }
     </section>
 </div></form>
 @section Scripts { <partial name="_PlanningMapAssets" /><partial name="_ValidationScriptsPartial" /> }
