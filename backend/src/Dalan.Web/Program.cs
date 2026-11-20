@@ -14,7 +14,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.EnvironmentName, builder.Environment.ContentRootPath);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews(options => options.Filters.AddService<AccountAccessAuditFilter>());
+builder.Services.AddControllersWithViews(options => {
+    options.Filters.AddService<AccountAccessAuditFilter>();
+    options.Filters.Add<Dalan.Web.Navigation.WorkflowNavigation>();
+});
 builder.Services.AddScoped<AccountAccessAuditFilter>();
 // Conservative per-instance throttle on the public Driver recovery endpoints.
 // Keep the feature disabled until the recovery UI/email integration is verified.

@@ -15,7 +15,7 @@
 }
 <div class="dispatch-workflow unified-dispatch" data-dispatch-workspace>
 <div class="workspace-header page-heading">
-    <div><span class="page-kicker">Operations / Dispatch</span><h1>Dispatch workspace</h1><p>Prepare deliveries. Preview routes. Confirm when ready.</p></div>
+    <div><h1>Dispatch workspace</h1><p>Preview routes, review, then confirm.</p></div>
     <div class="workspace-header-actions"><a href="/Warehouse?workspace=true" class="warehouse-switch"><span aria-hidden="true">⌖</span><span data-workspace-warehouse>Choose your warehouse</span><span aria-hidden="true">↗</span></a><button type="submit" form="dispatch-preparation" class="btn btn-primary" data-preview-submit>Preview routes</button></div>
 </div>
 <partial name="_DispatchNavigation" model='@("prepare")' />
@@ -76,8 +76,8 @@
 
     <details class="content-card mb-4 dispatch-vehicles" open="@(Model.Error is not null ? "open" : null)"><summary>Fleet readiness <span data-fleet-count>@Model.Vehicles.Count available</span></summary>
         <div class="fleet-options" tabindex="0" role="region" aria-label="Vehicle readiness and existing work estimates"><h2 class="h6">Choose 1 to 8 available vehicles</h2>
-        <p class="text-muted">Every selected vehicle starts at the warehouse above. An available vehicle still needs an available driver with a current license; eligibility is checked when planning.</p>
-        <p class="form-text">Existing work is remaining driving and handling outside this batch. Zero assumes no other work; equity and completion strategies use this estimate.</p>
+        <p class="text-muted">Vehicles start at your warehouse. Each needs an available driver with a valid license.</p>
+        <p class="form-text">Existing work: remaining driving and handling outside this batch. Zero means none.</p>
         @if (Model.Vehicles.Count == 0)
         {
             <div class="alert alert-info mb-0" role="status">
@@ -142,7 +142,7 @@
         </div>
         <fieldset>
             <legend class="h6">Warehouse</legend>
-            <p class="text-muted">Select the warehouse for this dispatch. All selected vehicles start here. Your default is saved per Dispatcher. <a href="/Warehouse?workspace=true">Change saved warehouse</a>. Typed text does not confirm a map pin.</p>
+            <p class="text-muted">All vehicles start here. Default saved to your account. <a href="/Warehouse?workspace=true">Change saved warehouse</a>. Typed text does not confirm a map pin.</p>
             <div class="mb-3">
                 <label asp-for="Settings.WarehouseAddress" class="form-label">Warehouse address or name</label>
                 <input asp-for="Settings.WarehouseAddress" class="form-control" maxlength="500" />
@@ -230,7 +230,7 @@
         }
         @if (Model.Preview.UnassignedDeliveryIds.Count > 0)
         {
-            <p>These deliveries will not be dispatched. Check driver availability, assignments, capacity and reachable locations, or deselect them and preview again before reviewing a plan.</p>
+            <p>Not dispatched. Check drivers, assignments, capacity and locations, or deselect and preview again.</p>
         }
         else if (Model.Preview.Routes.Any(route => route.Stops.Count > 0))
         {

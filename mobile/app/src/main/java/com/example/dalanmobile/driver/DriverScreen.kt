@@ -83,9 +83,9 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
             if (authenticated && expanded) NavigationRail(
                 containerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxHeight(),
-                header = { Text("D", Modifier.padding(16.dp), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary) }
+                header = { androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.example.dalanmobile.R.drawable.dalan_logo), "Dalan", Modifier.padding(12.dp).size(48.dp)) }
             ) {
-                listOf("Home", "Deliveries", "Route", "Account").forEach { item ->
+                listOf("Home", "Deliveries", "Route", "Profile").forEach { item ->
                     NavigationRailItem(selected = destination == item, onClick = { goTo(item) },
                         colors = NavigationRailItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
                         icon = { DriverWorkspaceIcon(item) }, label = { Text(item) })
@@ -96,7 +96,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                 containerColor = MaterialTheme.colorScheme.background,
                 bottomBar = {
                     if (authenticated && !expanded) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                        listOf("Home", "Deliveries", "Route", "Account").forEach { item ->
+                        listOf("Home", "Deliveries", "Route", "Profile").forEach { item ->
                             NavigationBarItem(selected = destination == item, onClick = { goTo(item) },
                                 colors = NavigationBarItemDefaults.colors(selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary, indicatorColor = MaterialTheme.colorScheme.primaryContainer),
                                 icon = { DriverWorkspaceIcon(item) }, label = { Text(item) })
@@ -117,20 +117,16 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                             Row(Modifier.widthIn(max = 760.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(if (!authenticated || destination == "Home") "Dalan" else if (task != null) "Delivery details" else destination,
+                                    if (!authenticated || destination == "Home") DalanBrand()
+                                    else Text(if (task != null) "Delivery details" else destination,
                                         style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
-                                    Text(if (!authenticated) "Your delivery day, in order." else when (destination) {
-                                        "Home" -> "Ready for the next stop."
-                                        "Account" -> "Your workspace, your preferences."
-                                        "Route" -> "Routes for your assigned deliveries."
-                                        else -> "Follow your confirmed stop order."
-                                    }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
                                 }
                                 if (task != null) TextButton(onClick = { selected = null; destination = "Deliveries" }, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text("Back to deliveries")
                                 }
-                                else if (authenticated && destination == "Home") FilledTonalIconButton(onClick = { goTo("Account") }, modifier = Modifier.size(48.dp)) {
-                                    Box(Modifier.semantics { contentDescription = "Open account" }) { DriverWorkspaceIcon("Account") }
+                                else if (authenticated && destination == "Home") FilledTonalIconButton(onClick = { goTo("Profile") }, modifier = Modifier.size(48.dp)) {
+                                    Box(Modifier.semantics { contentDescription = "Open profile" }) { DriverWorkspaceIcon("Profile") }
                                 }
                             }
                         }
@@ -150,10 +146,10 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                                 state.message?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error) }
                             } }
                         } else {
-                            if (destination == "Account") {
+                            if (destination == "Profile") {
                                 item { WorkspacePanel {
                                     Text("Appearance", style = MaterialTheme.typography.titleLarge)
-                                    Text("Choose a theme, or follow your device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("System follows your device.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     AppearanceChoice(appearance, onAppearance)
                                 } }
                             }
@@ -166,11 +162,11 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                             }
                             if (task == null) item { Box(Modifier.widthIn(max = 760.dp).fillMaxWidth()) { SyncStatusCard(state, model::sync) } }
                             when {
-                                destination == "Account" -> {
+                                destination == "Profile" -> {
                                     item { Box(Modifier.widthIn(max = 760.dp).fillMaxWidth()) { TrackingControls(state) } }
                                     item { WorkspacePanel {
                                         Text("Saved updates stay yours", style = MaterialTheme.typography.titleMedium)
-                                        Text("Sync before signing out. Unsent updates stay on this device with the Driver account that created them.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Sync first. Unsent updates stay on this device with your Driver account.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         OutlinedButton(onClick = { selected = null; model.logout() }, enabled = !state.busy,
                                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Sign out") }
                                     } }
@@ -181,12 +177,12 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                                 else -> {
                                     item { Column(Modifier.widthIn(max = 760.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Text(if (destination == "Home") "Coming up" else "Assigned deliveries", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
-                                        Text("${state.tasks.size} saved ${if (state.tasks.size == 1) "delivery" else "deliveries"} · confirmed dispatch order", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("${state.tasks.size} saved ${if (state.tasks.size == 1) "delivery" else "deliveries"} · saved on device", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     } }
                                     if (state.tasks.isEmpty()) item { WorkspacePanel {
                                         DriverWorkspaceIcon("Deliveries")
                                         Text("No deliveries saved", style = MaterialTheme.typography.titleLarge)
-                                        Text("Sync to check for new assignments. An empty saved list does not confirm there is no new work.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Sync to check for new assignments.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     } }
                                     items(if (destination == "Home") state.tasks.drop(1) else state.tasks, key = { it.id }) { delivery ->
                                         Box(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
@@ -198,7 +194,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                             if (state.events.isNotEmpty()) {
                                 item { Column(Modifier.widthIn(max = 760.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Text("Sync queue · ${state.events.size} updates", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-                                    Text("Saved on this device until the server accepts them.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Saved locally. Awaiting server acceptance.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 } }
                                 items(state.events.filter { it.failure != null }.distinctBy { it.deliveryId to it.assignment }, key = { it.sequence }) { failed ->
                                     Column(Modifier.widthIn(max = 760.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -244,7 +240,7 @@ private fun TrackingControls(workspace: DriverWorkspace) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Location sharing", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Share your vehicle’s location with dispatch during active deliveries, including while minimized. A persistent notification lets you stop sharing. GPS samples are retained for up to 30 days when cleanup is running.",
+                "Share with dispatch during deliveries, including in the background. Stop via the notification. GPS history: up to 30 days when cleanup runs.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -346,16 +342,16 @@ private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolea
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error)
             events.any { it.kind == "Deliver" } ->
-                Text("Delivery confirmation queued. It will leave your active list after server acceptance. You do not need to submit it again.",
+                Text("Confirmation queued. Removed after server acceptance; don’t resubmit.",
                     style = MaterialTheme.typography.bodyMedium)
             pickedUp -> {
                 if (task.status != "PickedUp")
-                    Text("Pickup is queued locally. You may capture delivery proof now; the queue sends pickup before delivery.",
+                    Text("Pickup saved locally. Proof will sync after pickup.",
                         style = MaterialTheme.typography.bodySmall)
                 ProofForm(task, busy, gpsProofEnabled, model)
             }
             else -> {
-                Text("Confirm only after collecting the delivery at the pickup address. When offline, this saves an update for later sync.",
+                Text("Confirm after collecting at pickup. Offline updates sync later.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(
@@ -405,12 +401,12 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, gpsProofEnabled: Boolean, m
     }
     Text("Proof of delivery", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
     Text(
-        "At drop-off, add the recipient name, photo and location. Offline proof stays queued until server acceptance.",
+        "Add recipient, photo and location. Offline proof awaits server acceptance.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Text(
-        "Confirm to save your proof. Leaving this delivery clears any unsaved name, photo and location.",
+        "Confirm to save. Leaving clears unsaved proof.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -430,7 +426,7 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, gpsProofEnabled: Boolean, m
     if (gpsProofEnabled) {
         OutlinedTextField(exceptionReason, { exceptionReason = it.take(500) },
             label = { Text("GPS exception reason (optional, 8–500 characters)") }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-        Text("Explain missing or inaccurate GPS. The photo and reason stay pending until dispatch explicitly reviews them.", style = MaterialTheme.typography.bodySmall)
+        Text("No accurate GPS? Add a reason. Proof awaits dispatcher review.", style = MaterialTheme.typography.bodySmall)
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(

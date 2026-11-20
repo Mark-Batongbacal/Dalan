@@ -88,7 +88,7 @@ class DeployedDeliveryFlowTest {
         val model = model()
         val task = task(model)
         assertEquals("Assigned", task.status)
-        compose.onNodeWithText("Account").performClick()
+        compose.onNodeWithText("Profile").performClick()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Start sharing location"))
         compose.onNodeWithText("Start sharing location").assertIsEnabled()
         openTask(task)

@@ -6,6 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -21,6 +24,7 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.SystemClock
+import android.view.MotionEvent
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -32,12 +36,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -74,6 +86,11 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
     var status by remember(task.id) { mutableStateOf("Loading road route…") }
     var mapLoaded by remember(task.id) { mutableStateOf<Boolean?>(null) }
     var attempt by remember(task.id) { mutableIntStateOf(0) }
+    var mapFocused by remember(task.id) { mutableStateOf(false) }
+    var mapBounds by remember { mutableStateOf(Rect.Zero) }
+    var screenOrigin by remember { mutableStateOf(Offset.Zero) }
+    val pageScroll = rememberScrollState()
+    LaunchedEffect(mapFocused) { if (mapFocused) pageScroll.stopScroll() }
     val context = LocalContext.current
     val workspace by model.state.collectAsState()
     val navigationLifecycle = LocalLifecycleOwner.current.lifecycle
@@ -101,7 +118,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                 val fix = currentLocation(context)
                 if (fix == null || !fix.hasAccuracy() || fix.accuracy > 50 ||
                     java.time.Instant.now().toEpochMilli() - fix.time !in 0..120_000) {
-                    status = "Navigation paused: allow precise location and capture a fresh accurate position. Last route, if shown, is only a preview."
+                    status = "Navigation paused. Get a fresh, precise location. Shown route is a preview."
                     guidance = ""; position = null
                 } else {
                     val point = NavigationPoint(fix.latitude, fix.longitude)
@@ -127,7 +144,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                     guidance = if (distance > NavigationPolicy.OFF_ROUTE_METERS) "Off route. Waiting for the reroute cooldown."
                         else route?.maneuvers?.firstOrNull { it.endShapeIndex >= shapeProgress }?.instruction
                             ?: "No turn instructions available. Follow the route preview carefully."
-                    status = "Current-position guidance. Route ETA is an estimate; follow road signs and conditions."
+                    status = "ETA estimated. Follow road signs."
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
@@ -136,7 +153,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                     401,403 -> "Sign in again to navigate."
                     422 -> "No route or fresh accurate position. Check location and retry."
                     429 -> "Routing request limit reached. Wait before retrying."
-                    else -> "Navigation unavailable. Last geometry is a preview; offline road guidance is not available."
+                    else -> "Navigation unavailable. Shown route is a preview; no offline guidance."
                 }
             }
             delay(15_000)
@@ -165,15 +182,23 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                 401, 403 -> "Sign in again to load the road route."
                 404 -> "This delivery is no longer assigned to you."
                 422 -> "No road route was found between these stops."
-                else -> "Road route unavailable. Check your connection or retry."
+                else -> "Road route unavailable. Check connection and retry."
             }
         }
     }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)
+            .onGloballyPositioned { screenOrigin = it.positionInRoot() }
+            .pointerInput(task.id) {
+                // Observe before the native map handles the gesture, without consuming its pan/pinch events.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    mapFocused = mapBounds.contains(down.position + screenOrigin)
+                }
+            }) {
             val mapHeight = (maxHeight * .53f).coerceIn(240.dp, 560.dp)
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            Column(Modifier.fillMaxSize().verticalScroll(pageScroll, enabled = !mapFocused).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back to delivery") }
                 Text(if (navigating) "Current route" else "Pickup to drop-off", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
@@ -183,20 +208,21 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                     key(task.id, attempt) {
                         DeliveryMap(if (navigating) null else pickup,
                             navigation?.destination?.let { Point.fromLngLat(it.longitude, it.latitude) } ?: dropoff,
-                            line, Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.extraLarge), position) { mapLoaded = it }
+                            line, Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.extraLarge)
+                                .onGloballyPositioned { mapBounds = it.boundsInRoot() }, position, mapFocused) { mapLoaded = it }
                     }
                     DriverRouteLegend(navigating)
                     if (mapLoaded == false) {
-                        Text("Basemap unavailable. Stops and road geometry are shown without street detail.", style = MaterialTheme.typography.bodySmall)
+                        Text("Basemap unavailable · street detail hidden.", style = MaterialTheme.typography.bodySmall)
                     }
                     if (mapLoaded == false || (route == null && status != "Loading road route…")) {
-                        TextButton(onClick = { mapLoaded = null; attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        TextButton(onClick = { mapFocused = false; mapLoaded = null; attempt++ }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(if (route == null) "Retry route" else "Retry map")
                         }
                     }
                 }
                 WorkspacePanel {
-                    Text(navigation?.let { "${it.stopKind}: ${it.address}" } ?: "Assigned-stop preview", style = MaterialTheme.typography.titleLarge)
+                    Text(navigation?.let { "${it.stopKind}: ${it.address}" } ?: "Assigned stops", style = MaterialTheme.typography.titleLarge)
                     route?.let {
                         val distance = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(it.distanceMeters / 1000)
                         val minutes = (it.durationSeconds / 60).roundToInt().coerceAtLeast(1)
@@ -207,10 +233,11 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                     }
                     if (guidance.isNotBlank()) Text(guidance, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.titleMedium)
                     if (status.isNotEmpty()) Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
-                    Text(if (navigating) "Follow confirmed dispatch order and road signs. Location is used while this map is open. Sharing with dispatch is separate."
-                        else "Preview between assigned stops. Use navigation for a route from your current position.",
+                    Text(if (navigating) "Uses location while this map is open. Dispatch sharing is separate."
+                        else "Start navigation from your location.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick = {
+                        mapFocused = false
                         if (navigating) { navigating = false; navigation = null; position = null; guidance = "" }
                         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) navigating = true
                         else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
@@ -253,7 +280,7 @@ private fun stopPoint(latitude: Double?, longitude: Double?): Point? =
 
 @Composable
 private fun DeliveryMap(pickup: Point?, dropoff: Point, line: LineString?, modifier: Modifier,
-                        currentPosition: Point? = null, basemapLoaded: (Boolean) -> Unit) {
+                        currentPosition: Point? = null, focused: Boolean = false, basemapLoaded: (Boolean) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < .5f
     val routeColor = "#%06X".format(colors.primary.toArgb() and 0xFFFFFF)
@@ -266,7 +293,12 @@ private fun DeliveryMap(pickup: Point?, dropoff: Point, line: LineString?, modif
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val view = remember(context, dark) {
         MapLibre.getInstance(context)
-        MapView(context).apply { onCreate(null) }
+        object : MapView(context) {
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) parent?.requestDisallowInterceptTouchEvent(true)
+                return super.dispatchTouchEvent(event)
+            }
+        }.apply { onCreate(null) }
     }
     var readyMap by remember(view) { mutableStateOf<MapLibreMap?>(null) }
     var readyStyle by remember(view) { mutableStateOf<Style?>(null) }
@@ -349,7 +381,10 @@ private fun DeliveryMap(pickup: Point?, dropoff: Point, line: LineString?, modif
         }
     }
     Box(modifier) {
-        key(view) { AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "Delivery route map. Use the stop details for accessible addresses." }) }
+        key(view) { AndroidView(factory = { view }, modifier = Modifier.fillMaxSize().semantics {
+            contentDescription = "Delivery route map. Use the stop details for accessible addresses."
+            stateDescription = if (focused) "Map active. Tap outside to scroll." else "Page scrolling available."
+        }) }
         FilledTonalIconButton(onClick = { frameRequest++ }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 48.dp).size(48.dp)) {
             Box(Modifier.semantics { contentDescription = "Fit route to map" }) { DriverWorkspaceIcon("Recenter") }
         }

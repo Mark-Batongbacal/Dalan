@@ -94,11 +94,11 @@ internal fun DriverHomeSummary(count: Int, next: TaskInfo?, events: List<Pending
                 val dropoff = next.status == "PickedUp" || events.any { it.kind == "Pickup" && it.failure == null }
                 Text("${if (dropoff) "Drop-off" else "Pickup"} · ${if (dropoff) next.dropoffAddress else next.pickupAddress}",
                     style = MaterialTheme.typography.bodyLarge)
-                Text("$count assigned ${if (count == 1) "delivery" else "deliveries"} saved on this device", style = MaterialTheme.typography.bodySmall)
+                Text("$count assigned · saved on device", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = openNext, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = CircleShape) {
                     Text("Open next delivery")
                 }
-            } else Text("Your next assignment will appear here after sync.", style = MaterialTheme.typography.bodyLarge)
+            } else Text("Sync for new assignments.", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
@@ -152,5 +152,13 @@ internal fun ProofRequirement(label: String, ready: Boolean) {
             Box(contentAlignment = Alignment.Center) { if (ready) DriverWorkspaceIcon("Check") else Text("–") }
         }
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+internal fun DalanBrand() {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.example.dalanmobile.R.drawable.dalan_logo), null, Modifier.size(44.dp))
+        Text("Dalan", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
     }
 }

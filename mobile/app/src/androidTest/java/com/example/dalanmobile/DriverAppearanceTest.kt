@@ -3,6 +3,8 @@ package com.example.dalanmobile
 import android.graphics.Bitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.room.Room
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -64,7 +66,7 @@ class DriverAppearanceTest {
             scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             compose.waitUntil(15_000) { compose.onAllNodes(hasText(recipient, substring = true)).fetchSemanticsNodes().isNotEmpty() }
             for (theme in listOf("Light", "Dark", "System")) {
-                compose.onNodeWithText("Account").performClick()
+                compose.onNodeWithText("Profile").performClick()
                 tap(theme)
                 capture("account-$theme")
                 compose.onNodeWithText("Home").performClick()
@@ -91,7 +93,7 @@ class DriverAppearanceTest {
                 compose.onNodeWithText("Assigned deliveries").assertExists()
             }
             scenario.recreate()
-            compose.onNodeWithText("Account").performClick()
+            compose.onNodeWithText("Profile").performClick()
             scrollTo("System")
             compose.onNodeWithText("System").assertIsSelected()
 
@@ -125,6 +127,58 @@ class DriverAppearanceTest {
             compose.onNodeWithText("No deliveries saved").assertExists()
             compose.onNodeWithText("Sync now").assertExists()
             capture("empty-route")
+        }
+    }
+
+    @Test fun sign_out_is_available_only_from_profile_and_keeps_saved_updates() {
+        seed()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            compose.waitUntil(15_000) { compose.onAllNodes(hasText(recipient, substring = true)).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Sign out").assertDoesNotExist()
+            compose.onNodeWithText("Profile").performClick()
+            scrollTo("Sign out")
+            compose.onNodeWithText("Sign out").assertIsEnabled()
+            capture("profile-sign-out")
+            compose.onNodeWithText("Sign out").performClick()
+            compose.waitUntil(15_000) { compose.onAllNodes(hasText("Sign in to workspace")).fetchSemanticsNodes().isNotEmpty() }
+        }
+        val database = Room.databaseBuilder(context, DriverDatabase::class.java, "driver.db").build()
+        try { runBlocking { assertEquals(1, database.driverDao().queued("visual-fixture").size) } }
+        finally { database.close() }
+    }
+
+    @Test fun map_gestures_keep_page_still_until_touching_outside() {
+        seed()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            compose.waitUntil(15_000) { compose.onAllNodes(hasText(recipient, substring = true)).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("Deliveries", useUnmergedTree = true).performClick()
+            val card = hasText(recipient) and hasClickAction()
+            compose.onNode(hasScrollAction()).performScrollToNode(card)
+            compose.onNode(card).performClick()
+            tap("View route map")
+            compose.waitUntil(30_000) { compose.onAllNodes(hasText("Road route unavailable", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+            val map = compose.onNodeWithContentDescription("Delivery route map. Use the stop details for accessible addresses.")
+            val initialTop = map.fetchSemanticsNode().boundsInRoot.top
+            val scroll = generateSequence(map.fetchSemanticsNode()) { it.parent }
+                .first { it.config.contains(SemanticsProperties.VerticalScrollAxisRange) }
+                .config[SemanticsProperties.VerticalScrollAxisRange]
+            val canScroll = scroll.maxValue() > 0f
+            map.performTouchInput { swipeUp() }
+            compose.waitForIdle()
+            assertEquals("First map drag must not scroll the page", initialTop, map.fetchSemanticsNode().boundsInRoot.top, 2f)
+            map.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Map active. Tap outside to scroll."))
+            map.performTouchInput { swipeDown() }
+            compose.waitForIdle()
+            assertEquals("Map drags must not scroll the page", initialTop, map.fetchSemanticsNode().boundsInRoot.top, 2f)
+            capture("map-gesture-locked")
+            compose.onNodeWithText("Pickup to drop-off").performTouchInput { click() }
+            map.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Page scrolling available."))
+            compose.onNodeWithText("Pickup to drop-off").performTouchInput { swipe(center, center - Offset(0f, 200f)) }
+            compose.waitForIdle()
+            if (canScroll) assertTrue("Touching outside restores page scrolling", map.fetchSemanticsNode().boundsInRoot.top < initialTop - 2f)
+            capture("map-gesture-unlocked")
         }
     }
 }
