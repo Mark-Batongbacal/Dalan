@@ -327,7 +327,7 @@ public sealed class DispatchBoardWebTests
             => Task.FromResult<DispatchPlan?>(null);
     }
 
-    private static WebApplicationFactory<WebAssemblyMarker> CreateFactory(IDispatchService? dispatch = null)
+    internal static WebApplicationFactory<WebAssemblyMarker> CreateFactory(IDispatchService? dispatch = null)
         => new WebApplicationFactory<WebAssemblyMarker>()
             .WithWebHostBuilder(builder =>
             {

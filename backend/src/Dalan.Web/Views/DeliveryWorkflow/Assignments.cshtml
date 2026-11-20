@@ -1,10 +1,10 @@
 @model DeliveryAssignmentsViewModel
 @{ ViewData["Title"]="Delivery assignments"; }
-<div class="page-heading"><span class="page-kicker">Step 4 · Allocate work</span><h1>Assign drivers &amp; vehicles</h1><p>Select a registered driver and their assigned vehicle for each delivery, or let fleet planning allocate unassigned work.</p></div>
+<div class="page-heading"><h1>Assign drivers &amp; vehicles</h1><p>Assign drivers and linked vehicles, or leave allocation to planning.</p></div>
 @if(TempData["WorkflowNotice"] is string notice) { <p class="alert alert-success" role="status">@notice</p> }
 @if(TempData["DeliveryError"] is string error) { <p class="alert alert-danger" role="alert">@error</p> }
 <div class="workflow-actions mb-4"><a href="/Deliveries/Create" class="btn btn-outline-secondary">Add a delivery</a><a href="/DeliveryBatch" class="btn btn-outline-secondary">Add multiple deliveries</a><a href="/DispatchBoard" class="btn btn-primary">Continue to fleet dispatch →</a></div>
-@if(Model.Deliveries.Count==0) { <section class="content-card"><h2 class="h5">No deliveries to assign</h2><p>Create deliveries in step 3, then return here. Picked-up or completed work stays in the delivery queue.</p></section> }
+@if(Model.Deliveries.Count==0) { <section class="content-card"><h2 class="h5">No deliveries to assign</h2><p>Create deliveries first. Active and completed work stays in the queue.</p></section> }
 @foreach(var delivery in Model.Deliveries) {
     <section class="content-card mb-3"><div class="card-header"><div><h2 class="h5">@delivery.RecipientName</h2><p class="form-text">@delivery.PickupAddress → @delivery.DropoffAddress</p></div><span class="status-chip">@delivery.Status</span></div>
     <form asp-controller="Deliveries" asp-action="Assign" asp-route-id="@delivery.Id" method="post">

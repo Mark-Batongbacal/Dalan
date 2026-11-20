@@ -1,29 +1,15 @@
 package com.example.dalanmobile.driver
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+
+import androidx.compose.material3.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -45,7 +31,7 @@ internal fun deliveryNextAction(task: TaskInfo, events: List<PendingEvent>): Str
 }
 
 @Composable
-internal fun SyncStatusCard(state: DriverWorkspace) {
+internal fun SyncStatusCard(state: DriverWorkspace, sync: (() -> Unit)? = null) {
     val failed = state.events.count { it.failure != null && it.failure != "Awaiting dispatcher GPS review" }
     val awaitingReview = state.events.count { it.failure == "Awaiting dispatcher GPS review" }
     val title = when {
@@ -76,22 +62,27 @@ internal fun SyncStatusCard(state: DriverWorkspace) {
     ) {
         Column(
             Modifier
-                .padding(20.dp)
+                .padding(16.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+                if (sync != null) TextButton(onClick = sync, enabled = !state.busy && !state.needsLogin,
+                    colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
+                    modifier = Modifier.heightIn(min = 48.dp)) { Text("Sync now") }
+            }
             if (state.events.isNotEmpty())
-                Text("${state.events.size} saved updates · $failed rejected. A saved update is not yet accepted by the server.",
+                Text("${state.events.size} saved · $failed rejected · not yet accepted",
                     style = MaterialTheme.typography.bodySmall)
             if (state.needsLogin)
-                Text("Sign in again to sync. Saved updates remain with the Driver account that created them.",
+                Text("Sign in to sync this account’s saved updates.",
                     style = MaterialTheme.typography.bodySmall)
             else if (failed > 0)
-                Text("Rejected assignments stay blocked. Sync now refreshes other work; review the reason below before discarding anything.",
+                Text("Review blocked updates below. Sync refreshes other work.",
                     style = MaterialTheme.typography.bodySmall)
             else if (state.events.isNotEmpty())
-                Text("Keep this app open and use Sync now when connected. Do not clear app storage or uninstall while updates are pending.",
+                Text("Sync when connected. Don’t clear storage or uninstall with unsent updates.",
                     style = MaterialTheme.typography.bodySmall)
             state.lastSyncedAt?.let {
                 Text(
@@ -133,11 +124,12 @@ internal fun FailedUpdateCard(
             Text(recipient, style = MaterialTheme.typography.bodyMedium)
             Text(event.failure.orEmpty(), style = MaterialTheme.typography.bodySmall)
             Text(
-                "$updateCount saved updates for this assignment are blocked. Contact dispatch if the assignment or proof needs correction; Sync now will not force rejected updates through.",
+                "$updateCount updates blocked. Contact dispatch; sync cannot force acceptance.",
                 style = MaterialTheme.typography.bodySmall
             )
             TextButton(
                 onClick = { confirming = true },
+                colors = ButtonDefaults.textButtonColors(contentColor = LocalContentColor.current),
                 enabled = !busy,
                 modifier = Modifier.heightIn(min = 48.dp)
             ) {

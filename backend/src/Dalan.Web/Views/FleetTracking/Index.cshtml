@@ -2,7 +2,7 @@
 @inject Microsoft.Extensions.Options.IOptions<PlanningMapOptions> MapOptions
 @{ ViewData["Title"] = "Live fleet"; }
 @if (User.IsInRole("Dispatcher")) { <partial name="_DispatchNavigation" model='@("active")' /> }
-<div class="page-heading"><span class="page-kicker">Observed vehicle activity</span><h1>Live fleet</h1><p>Driver-shared GPS locations and measured movement during active delivery tracking.</p></div>
+<div class="page-heading"><h1>Live fleet</h1><p>Driver-shared locations and observed movement.</p></div>
 @if (Model.Error is not null) { <div class="alert alert-danger" role="alert">@Model.Error</div> }
 @if (Model.Report is { } report)
 {
@@ -23,7 +23,7 @@
             <p>Utilization is moving seconds divided by observed seconds across tracked vehicles. Only consecutive valid samples at most two minutes apart count; longer gaps are excluded. Motion uses displacement above GPS accuracy and at least 0.5 m/s. These are GPS estimates, not full-shift capacity or odometer readings. No samples means unavailable.</p>
         </div>
         <section class="content-card" data-fleet-tracking data-feed-url="@Url.Action("Positions")" data-style-url="@MapOptions.Value.StyleUrl" data-dark-style-url="@MapOptions.Value.DarkStyleUrl" aria-label="Current vehicle locations">
-            <h2 class="h5">Current vehicle locations</h2><p>Refreshes every 15 seconds. Samples older than 90 seconds are stale. Up to 200 current registered vehicles are shown; period metrics include all tracked vehicles.</p>
+            <h2 class="h5">Current vehicle locations</h2><p>Refresh: 15s. Stale after 90s. Up to 200 vehicles shown; metrics include all tracked vehicles.</p>
             <p data-fleet-status role="status">Loading current positions…</p>
             <div data-fleet-map style="height:420px;max-height:60vh;border-radius:12px" tabindex="0" aria-label="Vehicle location map"></div>
             <p class="map-interaction-hint" data-map-interaction role="status" aria-live="polite">Click the map or press Enter to enable wheel zoom. Escape or click outside to return to page scrolling.</p>

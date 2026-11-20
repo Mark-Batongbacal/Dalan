@@ -5,7 +5,7 @@
     var map=new PlanningMapViewModel { Title="Set delivery destinations",Description="Choose a delivery, search its address and confirm your own destination pin. Every pickup uses your saved warehouse.",Targets=targets,
         Overview=(Model.Warehouse is null ? Array.Empty<PlanningMapPoint>() : new[]{new PlanningMapPoint(Model.Warehouse.Name,Model.Warehouse.Latitude,Model.Warehouse.Longitude)}).Concat(targets.Select(t=>new PlanningMapPoint(t.Label,LatitudeInputId:t.LatitudeInputId,LongitudeInputId:t.LongitudeInputId))).ToArray() };
 }
-<div class="page-heading"><span class="page-kicker">Step 3 · Multiple deliveries</span><h1>Create a delivery batch</h1><p>Add up to 15 deliveries. Review all destinations before saving; the batch is created together.</p></div>
+<div class="page-heading"><h1>Create a delivery batch</h1><p>Up to 15 deliveries, saved together. Review destinations first.</p></div>
 @if(Model.Warehouse is null) { <section class="content-card"><h2 class="h5">Set your warehouse first</h2><p>The batch needs your saved default pickup location.</p><a href="/Warehouse" class="btn btn-primary">Go to step 1</a></section> }
 else {
 <form method="post"><div class="location-workspace">

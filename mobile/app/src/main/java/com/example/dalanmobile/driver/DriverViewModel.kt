@@ -211,7 +211,7 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
                 } else message.value = "Server unavailable. Try again shortly."
             } catch (_: IOException) {
                 message.value = if (session.value == null) "Can’t connect. Check your connection and try again."
-                    else "Offline. Updates stay on this device. Open the app and use Sync now when connected."
+                    else "Offline. Updates saved on this device."
             } catch (_: Exception) {
                 message.value = "Couldn’t complete the action. Try again."
             } finally {

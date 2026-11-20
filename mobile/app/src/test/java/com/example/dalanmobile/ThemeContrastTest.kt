@@ -21,4 +21,13 @@ class ThemeContrastTest {
         assertTrue(ratio(ControlOutline,WarmIvory)>=3.0)
         assertTrue(ratio(DarkControlOutline,DarkCard)>=3.0)
     }
+    @Test fun workspace_text_and_status_labels_have_AA_contrast() {
+        listOf(WarmMuted to Color.White, WarmMuted to WarmIvory,
+            DarkMuted to DarkCard, SoftOrangeDeep to AccentSubtle,
+            DarkAccent to DarkAccentSubtle, SemanticSuccess to SemanticSuccessBg,
+            DarkSuccess to DarkSuccessBg, SemanticError to SemanticErrorBg,
+            DarkError to DarkErrorBg).forEach { (text, surface) ->
+            assertTrue("Text $text must be readable on $surface", ratio(text, surface) >= 4.5)
+        }
+    }
 }

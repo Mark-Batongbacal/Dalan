@@ -3,6 +3,7 @@
     var signedIn = User.Identity?.IsAuthenticated == true;
     var controller = ViewContext.RouteData.Values["controller"]?.ToString();
     var action = ViewContext.RouteData.Values["action"]?.ToString();
+    var workflowOrigin = Dalan.Web.Navigation.WorkflowNavigation.IsActive(Context);
     var name = User.Identity?.Name ?? "";
     var initials = name.Length > 0 ? name[..1].ToUpperInvariant() : "D";
 }
@@ -12,6 +13,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@pageTitle · Dalan</title>
+    <link rel="icon" type="image/png" href="~/images/dalan-logo.png" asp-append-version="true" />
     <script>
         (function () {
             var choice = 'system';
@@ -30,6 +32,8 @@
 
     @if (signedIn)
     {
+        <!-- AJAX actions need a token independently of the profile's sign-out form. -->
+        <div hidden>@Html.AntiForgeryToken()</div>
         <!-- Sidebar overlay for mobile -->
         <div id="sidebar-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:39;" aria-hidden="true"></div>
     }
@@ -39,8 +43,8 @@
         {
             <aside class="sidebar" id="main-navigation" aria-label="Main navigation">
                 <a class="brand" asp-controller="Home" asp-action="Index">
-                    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 40" width="32" height="40"><path fill="currentColor" d="M16 1C7.7 1 1 7.7 1 16c0 10.8 15 23 15 23s15-12.2 15-23C31 7.7 24.3 1 16 1Z"/><circle cx="16" cy="15" r="6" fill="#FFFAF6"/></svg></span>
-                    <span>Dalan<small>Fleet workspace</small></span>
+                    <img class="brand-logo" src="~/images/dalan-logo.png" alt="" width="44" height="44" />
+                    <span>Dalan</span>
                 </a>
 
                 <nav class="sidebar-nav" aria-label="Primary">
@@ -175,6 +179,10 @@
                             Staff accounts
                         </a>
                     }
+                    <a class="@(controller == "Account" && action == "Profile" ? "active" : "")" asp-controller="Account" asp-action="Profile">
+                        <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="6" r="3"/><path d="M3 18c0-4 3-6 7-6s7 2 7 6"/></svg>
+                        Profile
+                    </a>
                 </nav>
 
                 <div class="sidebar-foot">Internal operations</div>
@@ -193,24 +201,24 @@
                     </button>
                     <span class="topbar-title">@pageTitle</span>
                     <div class="topbar-actions">
-                        <div class="account-badge">
+                        <a class="account-badge" asp-controller="Account" asp-action="Profile" aria-label="Open profile">
                             <span class="account-avatar" aria-hidden="true">@initials</span>
                             <span class="account-name">@name</span>
-                        </div>
-                        <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0">
-                            <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
-                        </form>
+                        </a>
                     </div>
                 }
                 else
                 {
-                    <a class="topbar-brand" asp-controller="Home" asp-action="Index">Dalan</a>
-                    <span class="topbar-title">Fleet workspace</span>
+                    <a class="topbar-brand" asp-controller="Home" asp-action="Index"><img class="brand-logo" src="~/images/dalan-logo.png" alt="" width="36" height="36" />Dalan</a>
+
                 }
             </header>
 
-            <main class="main-content" id="main-content" tabindex="-1">
-                @if (User.IsInRole("Dispatcher") && controller == "DeliveryWorkflow")
+            <main class="main-content" id="main-content" tabindex="-1" data-workflow-origin="@(workflowOrigin ? "true" : null)">
+                @if (workflowOrigin && !(controller == "DeliveryWorkflow" && action == "Index")) {
+                    <a class="workflow-back" href="/DeliveryWorkflow">Back to workflow guide</a>
+                }
+                @if (User.IsInRole("Dispatcher") && controller == "DeliveryWorkflow" && (action == "Index" || workflowOrigin))
                 {
                     var step = controller switch { "Warehouse" => 1, "Vehicles" or "Drivers" => 2, "Deliveries" when action=="Create" => 3, "DeliveryBatch" => 3, "DeliveryWorkflow" when action=="Assignments" => 4, "Deliveries" => 4, "DispatchBoard" when action=="Drivers" => 2, "DispatchBoard" or "FleetPlanner" => 5, "FleetTracking" => 6, _ => 0 };
                     <partial name="_DeliverySteps" model="step" />
@@ -219,7 +227,7 @@
             </main>
 
             <footer class="app-footer">
-                <span>Dalan · Internal fleet operations · <a asp-controller="Home" asp-action="Privacy">Privacy</a></span>
+                <span>Dalan · <a asp-controller="Home" asp-action="Privacy">Privacy</a></span>
                 <label>Appearance
                     <select id="theme-select" aria-label="Appearance">
                         <option value="system">System default</option>
@@ -246,6 +254,7 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @if (workflowOrigin) { <script src="~/js/workflow-navigation.js" asp-append-version="true"></script> }
     @if(User.IsInRole("Dispatcher")) { <script src="~/js/warehouse-selection.js" asp-append-version="true"></script> }
     @await RenderSectionAsync("Scripts", required: false)
 </body>

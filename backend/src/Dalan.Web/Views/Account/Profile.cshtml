@@ -1,0 +1,9 @@
+@{ ViewData["Title"] = "Profile"; }
+<div class="page-heading"><h1>Profile</h1></div>
+<section class="content-card profile-card" aria-label="Your account">
+    <h2 class="h5">@(User.Identity?.Name ?? "Signed-in account")</h2>
+    <p>@(User.IsInRole("Admin") ? "Administrator" : User.IsInRole("Dispatcher") ? "Dispatcher" : "Signed-in account")</p>
+    <form asp-controller="Account" asp-action="Logout" method="post">
+        <button type="submit" class="btn btn-outline-secondary">Sign out</button>
+    </form>
+</section>
