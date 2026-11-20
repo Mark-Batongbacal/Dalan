@@ -3,6 +3,7 @@ package com.example.dalanmobile
 import android.graphics.Bitmap
 import android.util.Base64
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -58,8 +59,10 @@ class DeployedDeliveryFlowTest {
     }
 
     private fun openTask(task: TaskInfo) {
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText(task.recipientName))
-        compose.onNodeWithText(task.recipientName).performClick()
+        compose.onNodeWithText("Deliveries", useUnmergedTree = true).performClick()
+        val card = hasText(task.recipientName) and hasClickAction()
+        compose.onNode(hasScrollAction()).performScrollToNode(card)
+        compose.onNode(card).performClick()
     }
 
     @Test fun target_delivery_route_opens_in_mobile_ui(): Unit = runBlocking {
@@ -85,6 +88,7 @@ class DeployedDeliveryFlowTest {
         val model = model()
         val task = task(model)
         assertEquals("Assigned", task.status)
+        compose.onNodeWithText("Account").performClick()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Start sharing location"))
         compose.onNodeWithText("Start sharing location").assertIsEnabled()
         openTask(task)

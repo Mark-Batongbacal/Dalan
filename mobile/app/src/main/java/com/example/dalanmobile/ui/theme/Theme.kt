@@ -8,13 +8,13 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ShapeDefaults
+
 
 // Soft Orange — DLN-40 Material 3 colour scheme
 private val lightScheme = lightColorScheme(
     // Primary: CTA orange
     primary             = SoftOrangeDark,
-    onPrimary           = WarmIvory,
+    onPrimary           = androidx.compose.ui.graphics.Color.White,
     primaryContainer    = AccentSubtle,
     onPrimaryContainer  = SoftOrangeDeep,
 
@@ -33,11 +33,11 @@ private val lightScheme = lightColorScheme(
     // Backgrounds & surfaces
     background          = WarmIvory,
     onBackground        = WarmInk,
-    surface             = WarmIvory,
+    surface             = androidx.compose.ui.graphics.Color.White,
     onSurface           = WarmInk,
     surfaceVariant      = SoftPeach,
     onSurfaceVariant    = WarmMuted,
-    surfaceContainer    = SoftPeach,
+    surfaceContainer    = PeachSubtle,
     surfaceContainerHigh = PeachSubtle,
     surfaceContainerHighest = PeachSubtle,
     surfaceBright       = WarmIvory,
@@ -112,7 +112,7 @@ private val DalanShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small      = RoundedCornerShape(12.dp),
     medium     = RoundedCornerShape(16.dp),
-    large      = RoundedCornerShape(20.dp),
+    large      = RoundedCornerShape(24.dp),
     extraLarge = RoundedCornerShape(24.dp),
 )
 
