@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Dalan.Web.Controllers;
 
-[Authorize(Roles = "Dispatcher")]
+[Authorize(Roles = "Admin,Dispatcher")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PlanningMapController(IServiceProvider services) : Controller
 {
@@ -12,6 +12,7 @@ public sealed class PlanningMapController(IServiceProvider services) : Controlle
     public sealed record SearchRequest(string? Query);
 
     [HttpPost, ValidateAntiForgeryToken, RequestSizeLimit(16_384)]
+    [Authorize(Roles = "Dispatcher")]
     public async Task<IActionResult> Route([FromBody] RouteRequest? request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid || request?.Points is not { Count: >= 2 and <= 31 } points ||
@@ -40,7 +41,22 @@ public sealed class PlanningMapController(IServiceProvider services) : Controlle
         { return Problem(statusCode: 502, title: "Road routing is unavailable. The stop markers are still available."); }
     }
 
+    [Authorize(Roles = "Admin,Dispatcher")]
     [HttpPost, ValidateAntiForgeryToken, RequestSizeLimit(4096)]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("staff-address-search")]
+    public async Task<IActionResult> Addresses([FromBody] SearchRequest? request, CancellationToken cancellationToken)
+    {
+        if (request?.Query?.Trim() is not { Length: >= 3 and <= 200 } query)
+            return Problem(statusCode: 400, title: "Enter 3–200 characters of a street address.");
+        var provider = services.GetService<IGoogleAddressSearch>();
+        if (provider is null) return Problem(statusCode: 503, title: "Google address search is not configured. Keep your address and select a map pin manually.");
+        try { return Json(new { results = await provider.SearchAsync(query, cancellationToken) }); }
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested && error is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException or InvalidDataException)
+        { return Problem(statusCode: 502, title: "Google address search is unavailable. Keep your address and select a map pin manually."); }
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, RequestSizeLimit(4096)]
+    [Authorize(Roles = "Dispatcher")]
     public async Task<IActionResult> Search([FromBody] SearchRequest? request, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid || request?.Query?.Trim() is not { Length: >= 3 and <= 200 } query)
@@ -50,8 +66,11 @@ public sealed class PlanningMapController(IServiceProvider services) : Controlle
             return Problem(statusCode: 503, title: "Address search is not configured. Select a map point or enter coordinates.");
         try
         {
-            return Json(new { results = await search.SearchAsync(query, cancellationToken),
-                attribution = "© OpenStreetMap contributors · Photon" });
+            return Json(new
+            {
+                results = await search.SearchAsync(query, cancellationToken),
+                attribution = "© OpenStreetMap contributors · Photon"
+            });
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { return Problem(statusCode: 504, title: "Address search timed out. Select a map point or try again."); }

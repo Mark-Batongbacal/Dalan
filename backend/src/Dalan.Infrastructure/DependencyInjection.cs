@@ -11,6 +11,7 @@ using Dalan.Application.Notifications;
 using Dalan.Infrastructure.Notifications;
 using Dalan.Application.Tracking;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,25 +30,60 @@ public static class DependencyInjection
         }
 
         services.AddDbContext<DalanDbContext>(options => options.UseSqlServer(connectionString));
+        services.AddScoped<Dalan.Application.Identity.IDriverAccountsRepository, DriverAccountsRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverAccountsService, Dalan.Application.Identity.DriverAccountsService>();
+        services.AddScoped<Dalan.Application.Identity.IDriverInvitationsRepository, DriverInvitationsRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverInvitationsService, Dalan.Application.Identity.DriverInvitationsService>();
+        services.AddScoped<Dalan.Application.Identity.IDriverRecoveryRepository, DriverRecoveryRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverRecoveryService, Dalan.Application.Identity.DriverRecoveryService>();
+        services.AddScoped<Dalan.Application.Identity.IDriverAccessRepository, DriverAccessRepository>();
+        services.AddScoped<Dalan.Application.Identity.IDriverAccessService, Dalan.Application.Identity.DriverAccessService>();
+        services.AddScoped<Dalan.Application.Identity.IAccountAuditRepository, AccountAuditRepository>();
+        services.AddScoped<Dalan.Application.Identity.IAccountAuditService, Dalan.Application.Identity.AccountAuditService>();
         services.AddScoped<IVehicleRepository, VehicleRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
-        services.AddScoped<IDriverTasks, DriverTasksRepository>();
+        services.AddScoped<DriverTasksRepository>();
+        services.AddScoped<IDriverTasks>(sp => sp.GetRequiredService<DriverTasksRepository>());
+        services.AddScoped<IGpsExceptionRepository, GpsExceptionRepository>();
+        services.AddScoped<IGpsExceptionService, GpsExceptionService>();
+        services.AddScoped<IDriverNavigationService, DriverNavigationService>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
+        services.AddScoped<IDeliveryBatchRepository, DeliveryRepository>();
+        services.AddScoped<IDeliveryBatchService, DeliveryBatchService>();
+        services.AddScoped<IWarehousePreferenceRepository, WarehousePreferenceRepository>();
+        services.AddScoped<IWarehousePreferenceService, WarehousePreferenceService>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
         services.AddScoped<Dalan.Application.Analytics.IAnalyticsRepository, AnalyticsRepository>();
         services.AddSingleton(new TrackingOptions { Enabled = bool.TryParse(configuration["Tracking:Enabled"], out var trackingEnabled) && trackingEnabled });
         services.AddScoped<IFleetTrackingRepository, FleetTrackingRepository>();
         services.AddScoped<IFleetTrackingService, FleetTrackingService>();
-        var email = new ResendOptions { Enabled = bool.TryParse(configuration["Resend:Enabled"], out var sendEnabled) && sendEnabled,
-            ApiKey = configuration["Resend:ApiKey"] ?? "", From = configuration["Resend:From"] ?? "", Recipients = configuration["Resend:Recipients"] ?? "" };
+        var email = new ResendOptions
+        {
+            Enabled = bool.TryParse(configuration["Resend:Enabled"], out var sendEnabled) && sendEnabled,
+            ApiKey = configuration["Resend:ApiKey"] ?? "",
+            From = configuration["Resend:From"] ?? "",
+            Recipients = configuration["Resend:Recipients"] ?? ""
+        };
         if (email.Enabled && (string.IsNullOrWhiteSpace(email.ApiKey)
             || !System.Net.Mail.MailAddress.TryCreate(email.From, out _)
             || email.Recipients.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is not { Length: >= 1 and <= 50 } recipients
             || recipients.Any(address => !System.Net.Mail.MailAddress.TryCreate(address, out _))))
             throw new InvalidOperationException("Enabled Resend notifications require an API key, a valid sender and 1–50 valid recipient addresses.");
         services.AddSingleton(email);
-        services.AddHttpClient<IEmailSender, ResendEmailSender>(client => { client.BaseAddress = new Uri("https://api.resend.com/"); client.Timeout = TimeSpan.FromSeconds(15); })
+        var credentialEnabled = bool.TryParse(configuration["DriverCredentialEmail:Enabled"], out var credentialsOn) && credentialsOn;
+        var keyRingPath = configuration["DriverCredentialEmail:KeyRingPath"] ?? "";
+        if (credentialEnabled && (!email.Enabled || string.IsNullOrWhiteSpace(keyRingPath)
+            || !Path.IsPathFullyQualified(keyRingPath)))
+            throw new InvalidOperationException(
+                "Driver credential email requires Resend and a shared absolute DriverCredentialEmail:KeyRingPath.");
+        var protection = services.AddDataProtection().SetApplicationName("Dalan.DriverCredentialEmail");
+        if (credentialEnabled)
+            protection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+        services.AddSingleton(new DriverCredentialEmailOptions(credentialEnabled, keyRingPath));
+        services.AddScoped<IDriverCredentialEmailOutbox, DriverCredentialEmailOutbox>();
+        services.AddHttpClient<ResendEmailSender>(client => { client.BaseAddress = new Uri("https://api.resend.com/"); client.Timeout = TimeSpan.FromSeconds(15); })
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<IEmailSender, OutboxRoutedEmailSender>();
         services.AddScoped<IOperationsNotificationRepository, OperationsNotificationRepository>();
         services.AddScoped<IOperationsNotificationService, OperationsNotificationService>();
         var googleKey = configuration["GooglePlaces:ApiKey"];
@@ -58,6 +94,8 @@ public static class DependencyInjection
                 client.Timeout = TimeSpan.FromSeconds(10);
             }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
                 .AddTypedClient<IGooglePlacesSearch>((client, _) => new GooglePlacesTextSearch(client, googleKey));
+        if (!string.IsNullOrWhiteSpace(googleKey))
+            services.AddScoped<IGoogleAddressSearch>(sp => new GoogleAddressSearch(sp.GetRequiredService<IHttpClientFactory>().CreateClient("GooglePlaces"), googleKey));
         var photonUrl = configuration["Geocoding:PhotonBaseUrl"];
         if (!string.IsNullOrWhiteSpace(photonUrl))
         {

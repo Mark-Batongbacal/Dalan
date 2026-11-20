@@ -1,6 +1,8 @@
-﻿@model DispatchBoardViewModel
+@model DispatchBoardViewModel
 @{
-    ViewData["Title"] = "Dispatch board";
+    ViewData["Title"] = "Dispatch workspace";
+    ViewData["ImmersiveMap"] = true;
+    ViewData["MapSummaryDetail"] = Model.Preview is null ? null : $"{Model.Preview.Routes.Sum(r => r.DistanceMeters) / 1000:N1} km · {Model.Preview.Routes.Sum(r => r.DurationSeconds) / 60:N0} min total planned driving";
     var deliveryNames = Model.Deliveries.ToDictionary(
         x => x.Id, x => x.RecipientName);
     var vehicleNames = Model.Vehicles.ToDictionary(
@@ -8,82 +10,74 @@
 }
 
 @section Scripts {
-    <script src="~/js/warehouse-selection.js" asp-append-version="true"></script>
+    <script src="~/js/warehouse-selection.js" asp-append-version="true"></script><script src="~/js/dispatch-workspace.js" asp-append-version="true"></script>
     <partial name="_PlanningMapAssets" />
 }
-<div class="page-heading">
-    <span class="page-kicker">Dispatch operations</span>
-    <h1>Dispatch board</h1>
-    <p>Select deliveries and vehicles to preview a route plan.</p>
+<div class="dispatch-workflow unified-dispatch" data-dispatch-workspace>
+<div class="workspace-header page-heading">
+    <div><span class="page-kicker">Operations / Dispatch</span><h1>Dispatch workspace</h1><p>Prepare deliveries. Preview routes. Confirm when ready.</p></div>
+    <div class="workspace-header-actions"><a href="/Warehouse?workspace=true" class="warehouse-switch"><span aria-hidden="true">⌖</span><span data-workspace-warehouse>Choose your warehouse</span><span aria-hidden="true">↗</span></a><button type="submit" form="dispatch-preparation" class="btn btn-primary" data-preview-submit>Preview routes</button></div>
 </div>
+<partial name="_DispatchNavigation" model='@("prepare")' />
+<div class="workspace-view-switch" role="group" aria-label="Workspace view"><button type="button" class="filter-chip active" data-workspace-view="deliveries" aria-pressed="true">Deliveries &amp; fleet</button><button type="button" class="filter-chip" data-workspace-view="map" aria-pressed="false">Map &amp; routes</button></div>
+@if (ViewData["PreserveDispatchSelection"] is true) { <p role="status">Selections restored from review. Preview again to calculate a fresh plan.</p> }
 
 @if (Model.Error is not null)
 {
-    <div class="alert alert-danger" role="alert">@Model.Error</div>
+    <div class="alert alert-danger" role="alert" tabindex="-1" data-dispatch-error>@Model.Error<p class="mb-0">Check your selections and warehouse below, then preview again. Nothing has been dispatched.</p></div>
 }
 
-<form asp-action="Index" method="post" data-warehouse-selection
+    <div class="location-workspace dispatch-reference-workspace">
+        <aside class="location-workspace-map" data-map-form="dispatch-preparation" aria-label="Dispatch warehouse and route map">
+            <partial name="_PlanningMap" model="PlanningMapViewModel.ForBoard(Model)" />
+        </aside>
+        <div class="location-workspace-fields">
+<form id="dispatch-preparation" asp-action="Index" method="post" data-warehouse-selection
       data-warehouse-owner="@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)"
       data-warehouse-latitude="Settings_WarehouseLatitude" data-warehouse-longitude="Settings_WarehouseLongitude"
-      data-warehouse-address="Settings_WarehouseAddress" data-warehouse-restore="@(ViewData.ModelState.Count == 0 ? "true" : "false")">
-    <partial name="_PlanningMap" model="PlanningMapViewModel.ForBoard(Model)" />
-    <div class="content-card mb-4">
-        <label asp-for="Strategy" class="form-label">Optimization strategy</label>
-        <select asp-for="Strategy" class="form-select" aria-describedby="strategy-help">
-            <option value="MinimumTotalTravelTime">Minimum total fleet travel time (default policy)</option>
-            <option value="WorkloadEquity">Workload equity</option>
-            <option value="WarehouseClusterRotation">Warehouse proximity clusters with rider rotation</option>
-            <option value="EarliestFleetCompletion">Earliest fleet completion</option>
-        </select>
-        <p id="strategy-help" class="text-muted mt-2 mb-0">
-            Travel time minimizes total driving; equity reduces the spread of rider work;
-            warehouse mode groups nearby destinations and rotates rider priority after confirmation;
-            earliest completion minimizes the longest rider workload.
-            Only the selected heuristic runs when you preview. The default policy does not guarantee an optimal plan.
-        </p>
-        @if (Model.Advice is { } advice)
+      data-warehouse-address="Settings_WarehouseAddress" data-warehouse-restore="@(ViewData.ModelState.Count == 0 && ViewData["PreserveDispatchSelection"] is not true ? "true" : "false")">
+    <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
+
+    <div class="workspace-progress" role="status" aria-live="polite" data-preview-progress hidden></div>
+    <div class="workspace-selection-status" role="status" aria-live="polite" data-selection-status></div>
+    <div class="content-card mb-4 dispatch-assignments">
+        <div class="workspace-section-title"><h2>Delivery queue</h2><a href="/Deliveries/Create" class="btn btn-outline-secondary btn-sm">+ New</a></div><a href="/DeliveryBatch" class="workspace-batch-link">Add multiple deliveries</a>
+        <div class="assignment-filters" role="group" aria-label="Filter eligible deliveries"><button type="button" class="filter-chip active" aria-pressed="true" data-delivery-filter="all">All (@Model.Deliveries.Count)</button><button type="button" class="filter-chip" aria-pressed="false" data-delivery-filter="Pending">Pending (@Model.Deliveries.Count(x => x.Status == "Pending"))</button><button type="button" class="filter-chip" aria-pressed="false" data-delivery-filter="Assigned">Assigned (@Model.Deliveries.Count(x => x.Status == "Assigned"))</button></div><label for="assignment-search" class="visually-hidden">Search eligible deliveries</label><input id="assignment-search" class="form-control" type="search" placeholder="Search recipient or address…" data-assignment-search /><p class="form-text" data-assignment-count role="status"></p>
+        <p class="form-text">Select up to 15. Existing assignments stay with their vehicle.</p>
+
+        @if (Model.Deliveries.Count == 0)
         {
-            <div class="alert alert-info mt-3" role="status">
-                <strong>Suggestion: @DispatchStrategyInput.Label(advice.Strategy)</strong>
-                <p class="mb-1">@advice.Basis</p>
-                <p class="mb-0">@advice.Confidence Select it above to use it for your preview.</p>
+            <div class="alert alert-info mb-0" role="status">
+                No pending or assigned deliveries are available.
             </div>
         }
-        <div class="row g-3 mt-1">
-            <div class="col-md-6">
-                <label asp-for="Settings.ServiceSecondsPerStop" class="form-label">Handling seconds per stop</label>
-                <input asp-for="Settings.ServiceSecondsPerStop" type="number" min="0" max="3600" step="any" class="form-control" aria-describedby="handling-help" />
-                <p id="handling-help" class="text-muted">Applied to each pickup and drop-off. Zero estimates driving time only.</p>
-            </div>
-            <div class="col-md-6">
-                <label asp-for="Settings.MaxFleetTravelSeconds" class="form-label">Optional fleet travel budget (seconds)</label>
-                <input asp-for="Settings.MaxFleetTravelSeconds" type="number" min="0" step="any" class="form-control" aria-describedby="budget-help" />
-                <p id="budget-help" class="text-muted">For the three new strategies. Leave blank for no cap; exceeding it may leave deliveries unassigned.</p>
-            </div>
-        </div>
-        <fieldset>
-            <legend class="h6">Warehouse</legend>
-            <p class="text-muted">Select the warehouse for this dispatch. All selected vehicles start here. The selection is shared with Create delivery in this browser for your account.</p>
-            <div class="mb-3">
-                <label asp-for="Settings.WarehouseAddress" class="form-label">Warehouse address or name</label>
-                <input asp-for="Settings.WarehouseAddress" class="form-control" maxlength="500" />
-            </div>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label asp-for="Settings.WarehouseLatitude" class="form-label">Warehouse latitude</label>
-                    <input asp-for="Settings.WarehouseLatitude" type="number" min="-90" max="90" step="any" class="form-control" />
+        else
+        {
+            <div class="assignment-list" tabindex="0" role="region" aria-label="Eligible delivery queue">
+            @for (var i = 0; i < Model.Deliveries.Count; i++)
+            {
+                <div class="form-check mb-3 assignment-card" data-assignment-card data-status="@Model.Deliveries[i].Status">
+                    <input asp-for="Deliveries[i].Id" type="hidden" />
+                    <input asp-for="Deliveries[i].Selected"
+                           class="form-check-input" />
+                    <label asp-for="Deliveries[i].Selected"
+                           class="form-check-label">
+                        <strong>@Model.Deliveries[i].RecipientName</strong>
+                        <span class="status-chip">@Model.Deliveries[i].Status</span>
+                        <span class="delivery-address">@Model.Deliveries[i].PickupAddress → @Model.Deliveries[i].DropoffAddress</span>
+                        @if (Model.Deliveries[i].AssignmentSummary is string assigned) { <span class="delivery-assignment">@assigned</span> }
+                        @if (!Model.Deliveries[i].LocationsValid) { <span class="text-danger">Missing or invalid location. Open delivery details.</span> }
+                    </label>
                 </div>
-                <div class="col-md-6">
-                    <label asp-for="Settings.WarehouseLongitude" class="form-label">Warehouse longitude</label>
-                    <input asp-for="Settings.WarehouseLongitude" type="number" min="-180" max="180" step="any" class="form-control" />
-                </div>
+            }
             </div>
-            <p class="form-text" data-warehouse-status aria-live="polite"></p>
-        </fieldset>
+        }
     </div>
-    <div class="content-card mb-4">
-        <h2 class="h5">Available vehicles</h2>
-        <p class="text-muted">Every selected vehicle starts at the warehouse above.</p>
+
+    <details class="content-card mb-4 dispatch-vehicles" open="@(Model.Error is not null ? "open" : null)"><summary>Fleet readiness <span data-fleet-count>@Model.Vehicles.Count available</span></summary>
+        <div class="fleet-options" tabindex="0" role="region" aria-label="Vehicle readiness and existing work estimates"><h2 class="h6">Choose 1 to 8 available vehicles</h2>
+        <p class="text-muted">Every selected vehicle starts at the warehouse above. An available vehicle still needs an available driver with a current license; eligibility is checked when planning.</p>
+        <p class="form-text">Existing work is remaining driving and handling outside this batch. Zero assumes no other work; equity and completion strategies use this estimate.</p>
         @if (Model.Vehicles.Count == 0)
         {
             <div class="alert alert-info mb-0" role="status">
@@ -102,7 +96,8 @@
                                    class="form-check-input" />
                             <label asp-for="Vehicles[i].Selected"
                                    class="form-check-label">
-                                @Model.Vehicles[i].RegistrationNumber
+                                <strong>@Model.Vehicles[i].RegistrationNumber</strong>
+                                <span class="fleet-readiness">Available · @Model.Vehicles[i].Readiness</span>
                             </label>
                         </div>
                     </div>
@@ -114,45 +109,65 @@
                 </div>
             }
         }
-    </div>
+        </div>
+    </details>
 
-    <div class="content-card mb-4">
-        <h2 class="h5">Eligible deliveries</h2>
-        <p class="text-secondary">Existing work estimates cover work outside this batch. Include its remaining driving and handling time once; do not include selected deliveries. Zero assumes no other work. Workload equity and earliest completion use this estimate; travel-first and warehouse rotation keep their allocation rules.</p>
-        @if (Model.Deliveries.Count == 0)
+    <section class="content-card workspace-strategy"><h2 class="h6">Planning strategy</h2>
+        <label asp-for="Strategy" class="form-label">Optimization strategy</label>
+        <select asp-for="Strategy" class="form-select" aria-describedby="strategy-help">
+            <option value="MinimumTotalTravelTime">Fastest fleet travel</option><option value="WorkloadEquity">Balanced workloads</option><option value="WarehouseClusterRotation">Nearby delivery groups</option><option value="EarliestFleetCompletion">Finish all routes sooner</option>
+        </select><p id="strategy-help" class="form-text" data-strategy-description>Minimize total fleet driving. Only your selected strategy runs.</p>
+    </section>
+    <details class="content-card dispatch-options" open="@(Model.Error is not null || Model.Advice is not null || ViewData["PreserveDispatchSelection"] is true ? "open" : null)"><summary>Advanced planning settings</summary>
+        <button type="submit" asp-action="SuggestStrategy" class="btn btn-outline-secondary">Suggest strategy without routing</button>
+        @if (Model.Advice is { } advice)
         {
-            <div class="alert alert-info mb-0" role="status">
-                No pending or assigned deliveries are available.
+            <div class="alert alert-info mt-3" role="status">
+                <strong>Optional suggestion: @DispatchStrategyInput.Label(advice.Strategy)</strong>
+                <p class="mb-1">@advice.Basis</p>
+                <p class="mb-0">@advice.Confidence Select it above to use it for your preview.</p>
             </div>
         }
-        else
-        {
-            @for (var i = 0; i < Model.Deliveries.Count; i++)
-            {
-                <div class="form-check mb-3">
-                    <input asp-for="Deliveries[i].Id" type="hidden" />
-                    <input asp-for="Deliveries[i].Selected"
-                           class="form-check-input" />
-                    <label asp-for="Deliveries[i].Selected"
-                           class="form-check-label">
-                        <strong>@Model.Deliveries[i].RecipientName</strong>
-                        (@Model.Deliveries[i].Status):
-                        @Model.Deliveries[i].PickupAddress
-                        → @Model.Deliveries[i].DropoffAddress
-                    </label>
+        <div class="row g-3 mt-1">
+            <div class="col-md-6">
+                <label asp-for="Settings.ServiceSecondsPerStop" class="form-label">Handling seconds per stop</label>
+                <input asp-for="Settings.ServiceSecondsPerStop" type="number" min="0" max="3600" step="any" class="form-control" aria-describedby="handling-help" />
+                <p id="handling-help" class="text-muted">Applied to each pickup and drop-off. Zero estimates driving time only.</p>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Settings.MaxFleetTravelSeconds" class="form-label">Optional fleet travel budget (seconds)</label>
+                <input asp-for="Settings.MaxFleetTravelSeconds" type="number" min="0" step="any" class="form-control" aria-describedby="budget-help" />
+                <p id="budget-help" class="text-muted">For the three new strategies. Leave blank for no cap; exceeding it may leave deliveries unassigned.</p>
+            </div>
+        </div>
+        <fieldset>
+            <legend class="h6">Warehouse</legend>
+            <p class="text-muted">Select the warehouse for this dispatch. All selected vehicles start here. Your default is saved per Dispatcher. <a href="/Warehouse?workspace=true">Change saved warehouse</a>. Typed text does not confirm a map pin.</p>
+            <div class="mb-3">
+                <label asp-for="Settings.WarehouseAddress" class="form-label">Warehouse address or name</label>
+                <input asp-for="Settings.WarehouseAddress" class="form-control" maxlength="500" />
+            </div>
+            <details data-map-coordinate-fields><summary>Advanced coordinates</summary><div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Settings.WarehouseLatitude" class="form-label">Warehouse latitude</label>
+                    <input asp-for="Settings.WarehouseLatitude" type="number" min="-90" max="90" step="any" class="form-control" />
                 </div>
-            }
-        }
-    </div>
+                <div class="col-md-6">
+                    <label asp-for="Settings.WarehouseLongitude" class="form-label">Warehouse longitude</label>
+                    <input asp-for="Settings.WarehouseLongitude" type="number" min="-180" max="180" step="any" class="form-control" />
+                </div>
+            </div></details>
+            <p class="form-text" data-warehouse-status aria-live="polite"></p>
+        </fieldset>
+    </details>
 
-    <button type="submit" class="btn btn-primary">Preview routes</button>
-    <button type="submit" asp-action="SuggestStrategy" class="btn btn-outline-secondary">Suggest strategy without routing</button>
+
 </form>
 
 @if (Model.Preview is not null)
 {
-    <div class="content-card mt-4">
-        <h2 class="h5">Proposed routes</h2>
+    <div class="content-card mt-4 dispatch-plan-results" id="dispatch-plan-results">
+        <div class="workspace-section-title"><h2 class="h5">Route preview</h2><span class="status-chip">Not dispatched</span></div>
         <p>This preview does not reserve deliveries or save a dispatch plan.</p>
         <p><strong>@DispatchStrategyInput.Label(Model.Preview.Strategy)</strong></p>
         @if (Model.Preview.Metrics is { } metrics)
@@ -160,26 +175,31 @@
             <p>Total travel: @((metrics.TotalTravelSeconds / 60).ToString("N1")) min;
                 longest workload: @((metrics.LongestWorkloadSeconds / 60).ToString("N1")) min;
                 workload spread: @((metrics.WorkloadSpreadSeconds / 60).ToString("N1")) min.</p>
-            <ul class="text-muted">
-                @foreach (var warning in metrics.Warnings) { <li>@warning</li> }
-            </ul>
+            @if (metrics.Warnings.Count > 0)
+            {
+                <details class="route-assumptions" open="@(Model.Preview.UnassignedDeliveryIds.Count > 0 ? "open" : null)"><summary>Planning assumptions (@metrics.Warnings.Count)</summary><ul class="text-muted">
+                    @foreach (var warning in metrics.Warnings) { <li>@warning</li> }
+                </ul></details>
+            }
         }
 
         @foreach (var route in Model.Preview.Routes)
         {
-            <section class="mb-4">
+            <section class="mb-4 planned-route-card" data-preview-route="@route.VehicleId">
+                <button type="button" class="btn btn-outline-secondary btn-sm route-focus" data-focus-route="@route.VehicleId">View route on map</button>
                 <h3 class="h6">
                     @(vehicleNames.GetValueOrDefault(route.VehicleId)
                         ?? route.VehicleId.ToString())
-                </h3>
-                <p>
-                    Start: @route.Start.Latitude, @route.Start.Longitude<br />
+                </h3><p>Driver: @(Model.Vehicles.FirstOrDefault(v => v.Id == route.VehicleId)?.DriverName ?? "Determined on review / confirmation")</p>
+                <div class="route-metrics"><strong>@((route.DistanceMeters / 1000).ToString("N1")) km</strong><span>@((route.DurationSeconds / 60).ToString("N0")) min driving</span><span>@route.Stops.Count stops</span></div>
+                <details class="route-assumptions"><summary>Workload &amp; warehouse</summary><p>
+                    Warehouse: @(Model.Settings.WarehouseAddress ?? "Confirmed map point")<br />
                     Estimated distance: @((route.DistanceMeters / 1000).ToString("N1")) km;
                     new driving time: @((route.DurationSeconds / 60).ToString("N0")) minutes<br />
                     Existing work: @((route.ExistingWorkloadSeconds / 60).ToString("N1")) minutes;
                     combined workload: @(((route.ExistingWorkloadSeconds + route.DurationSeconds + route.Stops.Count * Model.Settings.ServiceSecondsPerStop) / 60).ToString("N1")) minutes.
                     <br />Deliveries: @(route.Stops.Count / 2)
-                </p>
+                </p></details>
                 @if (route.Stops.Count == 0)
                 {
                     <p>No stops assigned to this vehicle.</p>
@@ -210,7 +230,7 @@
         }
         @if (Model.Preview.UnassignedDeliveryIds.Count > 0)
         {
-            <p>Deselect unassigned deliveries and preview again before reviewing a plan.</p>
+            <p>These deliveries will not be dispatched. Check driver availability, assignments, capacity and reachable locations, or deselect them and preview again before reviewing a plan.</p>
         }
         else if (Model.Preview.Routes.Any(route => route.Stops.Count > 0))
         {
@@ -220,14 +240,14 @@
                 <input name="Settings.MaxFleetTravelSeconds" type="hidden" value="@Model.Settings.MaxFleetTravelSeconds" />
                 <input name="Settings.WarehouseLatitude" type="hidden" value="@Model.Settings.WarehouseLatitude" />
                 <input name="Settings.WarehouseLongitude" type="hidden" value="@Model.Settings.WarehouseLongitude" />
-                <input asp-for="Settings.WarehouseAddress" type="hidden" />
+                <input name="Settings.WarehouseAddress" value="@Model.Settings.WarehouseAddress" type="hidden" />
                 @for (var i = 0; i < Model.Vehicles.Count; i++)
                 {
                     <input name="Vehicles[@i].Id"
                            type="hidden" value="@Model.Vehicles[i].Id" />
                     <input name="Vehicles[@i].Selected"
                            type="hidden" value="@Model.Vehicles[i].Selected.ToString().ToLowerInvariant()" />
-                    <input asp-for="Vehicles[i].ExistingWorkloadSeconds" type="hidden" />
+                    <input name="Vehicles[@i].ExistingWorkloadSeconds" value="@Model.Vehicles[i].ExistingWorkloadSeconds" type="hidden" />
                 }
                 @for (var i = 0; i < Model.Deliveries.Count; i++)
                 {
@@ -236,10 +256,15 @@
                     <input name="Deliveries[@i].Selected"
                            type="hidden" value="@Model.Deliveries[i].Selected.ToString().ToLowerInvariant()" />
                 }
-                <button type="submit" class="btn btn-primary">
+                <p role="status" data-preview-validity></p>
+                <button type="submit" class="btn btn-primary" data-review-preview>
                     Review this plan
                 </button>
             </form>
         }
     </div>
 }
+
+
+</div></div>
+</div>

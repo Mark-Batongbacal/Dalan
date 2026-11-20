@@ -5,8 +5,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dalan.Infrastructure.Repositories;
 
-public sealed class DeliveryRepository(DalanDbContext dbContext) : IDeliveryRepository
+public sealed class DeliveryRepository(DalanDbContext dbContext) : IDeliveryRepository, IDeliveryBatchRepository
 {
+    public async Task<IReadOnlyList<Delivery>> ListForPlanningAsync(CancellationToken token = default)
+        => await dbContext.Deliveries.AsNoTracking().Include(x=>x.Proof)
+            .Where(x=>(x.Status == DeliveryStatus.Pending || x.Status == DeliveryStatus.Assigned)
+                && !dbContext.DispatchStops.Any(stop=>stop.DeliveryId == x.Id))
+            .OrderByDescending(x=>x.CreatedAtUtc).ToArrayAsync(token);
+    public async Task AddRangeAsync(IReadOnlyList<Delivery> deliveries, CancellationToken token = default)
+    {
+        dbContext.Deliveries.AddRange(deliveries);
+        await dbContext.SaveChangesAsync(token);
+    }
     public async Task AddAsync(
         Delivery delivery, CancellationToken cancellationToken = default)
     {

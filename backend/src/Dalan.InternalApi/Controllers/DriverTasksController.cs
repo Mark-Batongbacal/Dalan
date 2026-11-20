@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Dalan.Application.DriverExecution;
+using Dalan.Infrastructure.Identity;
 using Dalan.Application.Routing;
 using Dalan.Contracts.DriverExecution;
 using Dalan.Contracts.Identity;
@@ -27,6 +28,7 @@ public sealed class DriverTasksController(
     {
         var user = await users.FindByEmailAsync(request.Email!);
         if (user is null || !await users.IsInRoleAsync(user, Role)
+            || DriverMobileAccess.IsSuspended(user)
             || await tasks.FindDriverAsync(user.Id, cancellationToken) is null)
             return Unauthorized();
 
@@ -38,8 +40,8 @@ public sealed class DriverTasksController(
     }
 
     [HttpGet("session")]
-    public async Task<IActionResult> Session(CancellationToken cancellationToken) =>
-        await CurrentDriver(cancellationToken) is Guid id ? Ok(new { driverId = id }) : Unauthorized();
+    public async Task<IActionResult> Session([FromServices] IConfiguration configuration, CancellationToken cancellationToken) =>
+        await CurrentDriver(cancellationToken) is Guid id ? Ok(new { driverId = id, gpsProofEnabled = bool.TryParse(configuration["DriverGpsProof:Enabled"], out var enabled) && enabled }) : Unauthorized();
 
     [HttpGet("tasks")]
     public async Task<IActionResult> List(CancellationToken cancellationToken) =>
@@ -81,14 +83,43 @@ public sealed class DriverTasksController(
             DriverEventResult.Applied => NoContent(),
             DriverEventResult.Missing => NotFound(),
             DriverEventResult.Conflict => Conflict(new { message = "The assignment or delivery status changed." }),
+            DriverEventResult.GpsRejected => UnprocessableEntity(new { message = "Delivery GPS is too far from the destination, stale, or inaccurate. Recapture location near the destination or contact the dispatcher." }),
             _ => BadRequest(new { message = "The event time or proof is invalid." })
         };
+    }
+
+    [HttpPost("tasks/{id:guid}/gps-exceptions")]
+    [RequestSizeLimit(704_096)]
+    public async Task<IActionResult> RequestGpsReview(Guid id, GpsExceptionRequest request,
+        [FromServices] IGpsExceptionService reviews, CancellationToken cancellationToken)
+    {
+        if (await CurrentDriver(cancellationToken) is not Guid driverId) return Unauthorized();
+        var result = await reviews.Submit(driverId, id, request, cancellationToken);
+        return StatusCode(result.StatusCode);
+    }
+
+    [HttpPost("navigation")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("driver-navigation")]
+    [RequestSizeLimit(4096)]
+    public async Task<IActionResult> Navigate(DriverNavigationRequest request,
+        [FromServices] IDriverNavigationService navigation, CancellationToken cancellationToken)
+    {
+        if (await CurrentDriver(cancellationToken) is not Guid driverId) return Unauthorized();
+        try
+        {
+            var result = await navigation.Navigate(driverId, request, cancellationToken);
+            return result is null ? NoContent() : Ok(result);
+        }
+        catch (ArgumentException) { return UnprocessableEntity(new { message = "A fresh accurate location and a reachable assigned stop are required." }); }
+        catch (Exception error) when (!cancellationToken.IsCancellationRequested && error is HttpRequestException or OperationCanceledException or JsonException or InvalidDataException or InvalidOperationException or KeyNotFoundException)
+        { return StatusCode(503); }
     }
 
     private async Task<Guid?> CurrentDriver(CancellationToken cancellationToken)
     {
         var user = await signInManager.ValidateSecurityStampAsync(User);
         return user is not null && await users.IsInRoleAsync(user, Role)
+            && !await users.IsLockedOutAsync(user)
             ? await tasks.FindDriverAsync(user.Id, cancellationToken)
             : null;
     }

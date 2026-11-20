@@ -7,41 +7,63 @@
 <div class="page-heading">
     <span class="page-kicker">Operational reporting</span>
     <h1>Delivery &amp; fleet analytics</h1>
-    <p>Explore delivery outcomes and confirmed fleet activity with a clear reporting period.</p>
+    <p>Review delivery cohorts and saved dispatch plans. Choose a UTC reporting period below.</p>
 </div>
 
 <section class="content-card analytics-filter mb-4" aria-label="Reporting period">
-    <form method="get" asp-action="Index">
+    <h2 class="h5" id="period-heading">Reporting period</h2>
+    <form method="get" asp-action="Index" data-analytics-filter aria-labelledby="period-heading">
         <div asp-validation-summary="All" class="text-danger" role="alert"></div>
         <div class="analytics-filter-fields">
             <div>
                 <label asp-for="From" class="form-label">From date (UTC)</label>
-                <input asp-for="From" asp-format="{0:yyyy-MM-dd}" class="form-control" type="date" required />
+                <input asp-for="From" asp-format="{0:yyyy-MM-dd}" class="form-control" type="date" required aria-describedby="period-help" />
             </div>
             <div>
                 <label asp-for="To" class="form-label">Through date (UTC)</label>
-                <input asp-for="To" asp-format="{0:yyyy-MM-dd}" class="form-control" type="date" required />
+                <input asp-for="To" asp-format="{0:yyyy-MM-dd}" class="form-control" type="date" required aria-describedby="period-help" />
             </div>
             <button type="submit" class="btn btn-primary">Apply period</button>
         </div>
-        <p class="analytics-help mb-0 mt-2">Both dates are inclusive, in UTC. Select up to 366 days. The default is the last 30 UTC calendar days.</p>
+        <p class="analytics-help mt-2" id="period-help">Both dates are inclusive, in UTC (not your local time). Select up to 366 days. Today's results stop at generation time.</p>
+        <a asp-action="Index" class="analytics-reset">Reset to last 30 UTC days</a>
     </form>
+    <p class="analytics-help mt-2 mb-0" data-analytics-loading role="status" aria-live="polite"></p>
 </section>
 
 @if (Model.Error is not null)
 {
-    <div class="alert alert-danger" role="alert">@Model.Error</div>
+    <div class="alert alert-danger" role="alert"><h2 class="h5">Report unavailable</h2><p>@Model.Error</p><p class="mb-0">Your selected dates are kept above. Apply the period again to retry; unavailable data is not a zero result.</p></div>
+}
+else if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-info" role="status"><h2 class="h5">Check the reporting period</h2><p class="mb-0">Correct the date errors above and apply the period. No report has been loaded for these dates.</p></div>
 }
 @if (Model.Report is { } report)
 {
     var delivery = report.Deliveries;
     var fleet = report.Fleet;
     var peak = Math.Max(1, report.DailyIntake.Max(day => day.Count));
+    <div class="content-card analytics-period mb-4" aria-label="Applied reporting period">
+        <strong>@report.Period.From.ToString("dd MMM yyyy") – @report.Period.To.ToString("dd MMM yyyy") UTC</strong>
+        <span>@report.Period.Days inclusive calendar @(report.Period.Days == 1 ? "day" : "days") · Generated <time datetime="@report.GeneratedAtUtc.ToString("O")">@report.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</time></span>
+        <nav aria-label="Report sections"><a href="#delivery-outcomes">Delivery outcomes</a><a href="#daily-intake">Daily intake</a><a href="#fleet-activity">Fleet participation</a></nav>
+    </div>
+    <details class="content-card analytics-definitions mb-4">
+        <summary>How to read this report</summary>
+        <dl>
+            <dt>Delivery cohort</dt><dd>Deliveries created on the selected UTC dates, through generation time. Counts use their current statuses, not historical statuses or deliveries completed during the period.</dd>
+            <dt>Confirmed plans</dt><dd>A separate cohort of plans confirmed on these dates, through generation time. Distance and driving time are saved planning estimates.</dd>
+            <dt>Fleet participation</dt><dd>Distinct vehicles in those plans divided by today's registered fleet, including inactive vehicles. Availability is current, independent of the period.</dd>
+            <dt>Unavailable averages</dt><dd>An em dash (—) means no qualifying deliveries or denominator, not zero.</dd>
+        </dl>
+        <p class="analytics-help mb-0">These figures do not measure GPS activity or time-based utilization. Queries run in sequence; this is not a frozen historical snapshot.</p>
+    </details>
     <section aria-labelledby="delivery-outcomes" data-analytics-report>
         <div class="analytics-section-heading">
-            <div><h2 class="h5" id="delivery-outcomes">Delivery outcomes</h2>
+            <div><h2 class="h5" id="delivery-outcomes" tabindex="-1">Delivery outcomes</h2>
                 <p class="analytics-help">Current status of deliveries created in the selected period, through the report generation time.</p></div>
-            <span class="analytics-help">Generated @report.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</span>
+            <span class="status-chip">Current statuses · creation-date cohort</span>
         </div>
         <div class="analytics-metrics mb-4">
             <div class="content-card"><span class="analytics-label">Open deliveries</span><strong data-metric="open">@delivery.Open.ToString("N0")</strong><span class="analytics-help">Pending, assigned, or picked up</span></div>
@@ -57,6 +79,7 @@
             <div class="content-card">
                 <h3 class="h6">Current status breakdown</h3>
                 <table class="table" aria-label="Current delivery status">
+                    <caption>@delivery.Total.ToString("N0") deliveries created in the applied period; statuses at generation time.</caption>
                     <thead><tr><th scope="col">Status</th><th scope="col" class="text-end">Deliveries</th></tr></thead>
                     <tbody>
                         <tr><th scope="row">Pending</th><td class="text-end">@delivery.Pending.ToString("N0")</td></tr>
@@ -70,24 +93,25 @@
                 <p class="analytics-help mb-0">@delivery.LateDelivered.ToString("N0") late of @delivery.DeliveredWithDeadline.ToString("N0") completed deliveries with a deadline. Completions exactly at the deadline are on time. Missing deadlines are excluded.</p>
             </div>
             <div class="content-card">
-                <h3 class="h6">Daily delivery intake</h3>
-                <p class="analytics-help">Deliveries created per UTC day, including days with no intake.</p>
-                <div class="analytics-chart-scroll" tabindex="0" aria-label="Scrollable delivery intake chart; exact values follow in the daily counts table">
+                <h3 class="h6" id="daily-intake" tabindex="-1">Daily delivery intake</h3>
+                <p class="analytics-help" id="intake-help">One bar per UTC date, including zero days. @report.Period.Days dates; peak @report.DailyIntake.Max(day => day.Count). Use the arrow keys to scroll the focused chart, or open the exact daily counts below.</p>
+                <div class="analytics-chart-scroll" tabindex="0" role="region" aria-label="Scrollable delivery intake chart; exact values follow in the daily counts table" aria-describedby="intake-help">
                     <div class="analytics-chart" aria-hidden="true">
                         @foreach (var day in report.DailyIntake)
                         {
                             var height = (100d * day.Count / peak).ToString("0.##", CultureInfo.InvariantCulture);
                             <div class="analytics-chart-column" title="@day.Day.ToString("yyyy-MM-dd"): @day.Count">
-                                <span style="height: @(height)%"></span>
+                                <div class="analytics-chart-bar"><span style="height: @(height)%"></span></div>
+                                <span class="analytics-chart-date">@day.Day.ToString("yyyy-MM-dd")</span>
                             </div>
                         }
                     </div>
                 </div>
-                <div class="analytics-chart-labels analytics-help"><span>@report.Period.From.ToString("yyyy-MM-dd")</span><span>@report.Period.To.ToString("yyyy-MM-dd")</span></div>
                 <details class="mt-3">
                     <summary>View daily counts</summary>
-                    <div class="analytics-daily-table" tabindex="0" aria-label="Daily counts">
+                    <div class="analytics-daily-table" tabindex="0" role="region" aria-label="Daily counts">
                         <table class="table">
+                            <caption>Exact delivery creation counts for every selected UTC date.</caption>
                             <thead><tr><th scope="col">UTC date</th><th scope="col" class="text-end">Created</th></tr></thead>
                             <tbody>
                                 @foreach (var day in report.DailyIntake)
@@ -101,13 +125,14 @@
     </section>
 
     <section class="content-card" aria-labelledby="fleet-activity">
-        <h2 class="h5" id="fleet-activity">Confirmed fleet activity</h2>
+        <h2 class="h5" id="fleet-activity" tabindex="-1">Confirmed fleet activity</h2>
+        <p class="status-chip">Saved plans · not GPS-measured utilization</p>
         <p class="analytics-help">Plans confirmed in the selected period, through generation time. Participation uses today's registered fleet as its denominator; it is not historical availability or time-based utilization.</p>
         <dl class="analytics-fleet-summary">
-            <div><dt>Fleet participation</dt><dd data-metric="participation">@Percent(report.FleetParticipationPercent)</dd><span class="analytics-help">@fleet.DispatchedVehicles of @fleet.TotalVehicles current vehicles</span></div>
-            <div><dt>Available now</dt><dd>@fleet.AvailableVehicles.ToString("N0")</dd><span class="analytics-help">Current availability, independent of the period</span></div>
+            <div><dt>Fleet participation</dt><dd data-metric="participation">@Percent(report.FleetParticipationPercent)</dd><dd class="analytics-help">@fleet.DispatchedVehicles of @fleet.TotalVehicles current vehicles</dd></div>
+            <div><dt>Available now</dt><dd>@fleet.AvailableVehicles.ToString("N0")</dd><dd class="analytics-help">Current availability, independent of the period</dd></div>
             <div><dt>Confirmed plans / routes</dt><dd>@fleet.ConfirmedPlans.ToString("N0") / @fleet.ConfirmedRoutes.ToString("N0")</dd></div>
-            <div><dt>Planned road distance</dt><dd>@((fleet.PlannedDistanceMeters / 1000).ToString("N1")) km</dd><span class="analytics-help">@Duration(fleet.PlannedDrivingSeconds) estimated driving</span></div>
+            <div><dt>Planned road distance</dt><dd>@((fleet.PlannedDistanceMeters / 1000).ToString("N1")) km</dd><dd class="analytics-help">@Duration(fleet.PlannedDrivingSeconds) estimated driving</dd></div>
         </dl>
         @if (fleet.TotalVehicles == 0)
         {
@@ -117,9 +142,10 @@
         {
             @if (fleet.ConfirmedRoutes == 0)
             { <p class="analytics-help" role="status">No confirmed routes in this period. Registered vehicles are still shown.</p> }
-            <p class="analytics-help">Up to 50 current vehicles, ranked by confirmed route count. Distances and times are saved planning estimates, not measured driving. Scroll the table horizontally on smaller screens.</p>
+            <p class="analytics-help" id="vehicle-limit">Showing @report.Vehicles.Count of @fleet.TotalVehicles.ToString("N0") current vehicles (up to 50), ranked by confirmed route count. Fleet totals include all vehicles. Distances and times are saved planning estimates, not measured driving. Scroll the table horizontally on smaller screens.</p>
             <div class="table-responsive analytics-vehicle-table" tabindex="0" role="region" aria-label="Scrollable vehicle activity table">
                 <table class="table align-middle" aria-label="Vehicle dispatch participation">
+                    <caption>Vehicle participation in plans confirmed during the applied period. Availability is current. Use arrow keys to scroll this table when focused.</caption>
                     <thead><tr><th scope="col">Vehicle</th><th scope="col">Availability now</th><th scope="col" class="text-end">Confirmed routes</th><th scope="col" class="text-end">Planned distance</th><th scope="col" class="text-end">Planned driving</th></tr></thead>
                     <tbody>
                         @foreach (var vehicle in report.Vehicles)
@@ -131,6 +157,9 @@
             </div>
         }
     </section>
+}
+@section Scripts {
+    <script src="~/js/analytics.js" asp-append-version="true"></script>
 }
 @functions {
     private static string Percent(double? value) => value is null ? "—" : value.Value.ToString("N1") + "%";

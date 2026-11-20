@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Dalan.Application.Deliveries;
@@ -26,6 +26,54 @@ namespace Dalan.IntegrationTests;
 
 public sealed class DispatchBoardWebTests
 {
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData("Admin", HttpStatusCode.Forbidden)]
+    [InlineData("Dispatcher", HttpStatusCode.BadRequest)]
+    public async Task Selection_return_requires_dispatcher_and_antiforgery(string? role, HttpStatusCode expected)
+    {
+        using var factory = CreateFactory();
+        using var client = CreateClient(factory, role);
+        using var response = await client.PostAsync("/DispatchBoard/EditSelection", new FormUrlEncodedContent(new Dictionary<string, string>()));
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Selection_return_rejects_malformed_collections_without_routing()
+    {
+        var service = new RecordingDispatchService();
+        var controller = CreateController(service);
+        Assert.IsType<BadRequestResult>(await controller.EditSelection(new() { Vehicles = null! }, CancellationToken.None));
+        Assert.IsType<BadRequestResult>(await controller.EditSelection(new() { Stops = [null!] }, CancellationToken.None));
+        Assert.Null(service.LastPreview);
+        Assert.Null(service.LastConfirm);
+    }
+
+    [Fact]
+    public async Task Editing_selection_from_review_preserves_inputs_without_routing()
+    {
+        var service = new RecordingDispatchService();
+        var controller = CreateController(service);
+        var review = new DispatchReviewViewModel
+        {
+            Strategy = DispatchStrategy.WorkloadEquity,
+            Settings = new() { WarehouseLatitude = 14.6, WarehouseLongitude = 121, ServiceSecondsPerStop = 75 },
+            Vehicles = [new() { VehicleId = service.VehicleId, ExistingWorkloadSeconds = 600 }],
+            Stops = [new() { DeliveryId = service.DeliveryId, VehicleId = service.VehicleId, Kind = "Pickup" },
+                     new() { DeliveryId = service.DeliveryId, VehicleId = service.VehicleId, Kind = "Dropoff", Order = 1 }]
+        };
+        var result = Assert.IsType<ViewResult>(await controller.EditSelection(review, CancellationToken.None));
+        var board = Assert.IsType<DispatchBoardViewModel>(result.Model);
+        Assert.Equal("Index", result.ViewName);
+        Assert.Equal(review.Strategy, board.Strategy);
+        Assert.Equal(75, board.Settings.ServiceSecondsPerStop);
+        Assert.True(Assert.Single(board.Vehicles).Selected);
+        Assert.Equal(600, board.Vehicles[0].ExistingWorkloadSeconds);
+        Assert.True(Assert.Single(board.Deliveries).Selected);
+        Assert.Null(service.LastPreview);
+        Assert.Null(service.LastConfirm);
+    }
+
     [Fact]
     public async Task Opening_selector_does_not_calculate_a_preview()
     {
@@ -37,7 +85,10 @@ public sealed class DispatchBoardWebTests
         var html = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Optimization strategy", html);
-        Assert.Contains("default policy", html);
+        Assert.Contains("Fastest fleet travel", html);
+        Assert.Contains("dispatch-preparation", html);
+        Assert.Contains("Fleet readiness", html);
+        Assert.DoesNotContain("class=\"delivery-steps\"", html);
         Assert.Null(service.LastPreview);
     }
 

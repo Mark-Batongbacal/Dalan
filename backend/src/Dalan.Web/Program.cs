@@ -5,14 +5,33 @@ using Dalan.Application.FleetOptimization;
 using Dalan.Application.Dispatch;
 using Dalan.Infrastructure;
 using Dalan.Infrastructure.Persistence;
+using Dalan.Infrastructure.Auditing;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddDalanDevelopmentEnvironment(builder.Environment.EnvironmentName, builder.Environment.ContentRootPath);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options => options.Filters.AddService<AccountAccessAuditFilter>());
+builder.Services.AddScoped<AccountAccessAuditFilter>();
+// Conservative per-instance throttle on the public Driver recovery endpoints.
+// Keep the feature disabled until the recovery UI/email integration is verified.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) => await context.HttpContext.Response.WriteAsJsonAsync(new { title = "Request limit reached. Wait before trying again." }, token);
+    options.AddPolicy("staff-address-search", context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous",
+        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddFixedWindowLimiter("driver-recovery", limiter =>
+    {
+        limiter.PermitLimit = 10;
+        limiter.Window = TimeSpan.FromMinutes(15);
+        limiter.QueueLimit = 0;
+    });
+});
 builder.Services.AddScoped<Dalan.Application.Analytics.IAnalyticsService, Dalan.Application.Analytics.AnalyticsService>();
 builder.Services.Configure<Dalan.Web.Models.PlanningMapOptions>(builder.Configuration.GetSection("PlanningMap"));
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -98,6 +117,7 @@ app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapStaticAssets();
 

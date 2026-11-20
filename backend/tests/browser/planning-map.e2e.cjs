@@ -65,10 +65,14 @@ function polyline(points) {
         await page.waitForSelector(".maplibregl-canvas");
         await page.locator("[data-map-use-center]").focus();
         await page.keyboard.press("Enter");
+        await page.locator("[data-map-confirm]").click();
         assert.equal(await page.locator("#PickupLatitude").inputValue(), "14.599500");
         await page.locator("#map-target").selectOption("1");
         await page.locator("[data-map-use-center]").click();
+        await page.locator("[data-map-confirm]").click();
+        await page.locator("#DropoffLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#DropoffLatitude").fill("14.6095");
+        await page.locator("#DropoffLongitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#DropoffLongitude").fill("120.9942");
         await page.locator("#map-route").selectOption("delivery");
         await draw();
@@ -89,39 +93,43 @@ function polyline(points) {
         await page.setViewportSize({ width: 1440, height: 1050 });
         console.log("PASS: Light/Dark/System styling and narrow viewport");
 
+        await page.locator("#DropoffLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
+
         await page.locator("#DropoffLatitude").fill("14.6100");
         assert.match(await page.locator("[data-map-status]").innerText(), /changed/);
         assert.equal(await page.evaluate(() => window.__dln14Map.getStyle()?.sources?.["dalan-road"]?.data?.features?.length || 0), 0);
         console.log("PASS: editing coordinates clears stale geometry");
 
-        // Deterministic empty, unsafe-label, provider failure and search-selection states.
-        await page.route("**/PlanningMap/Search", route => route.fulfill({ json: { results: [], attribution: "OpenStreetMap" } }));
+        // Address predictions are text only. The fixture chooses its own map pin independently.
+        await page.locator("[data-google-open]").click();
+        await page.route("**/PlanningMap/Addresses", route => route.fulfill({ json: { results: [] } }));
         await page.locator("[data-map-search]").fill("No such address");
-        await page.locator("[data-map-search]").press("Enter"); await settle("Searching");
-        assert.match(await page.locator("[data-map-status]").innerText(), /No matching addresses/);
-        await page.unroute("**/PlanningMap/Search");
-        await page.route("**/PlanningMap/Search", route => route.fulfill({ json: {
-            results: [{ label: "<img src=x onerror=alert(1)>", location: { latitude: 14.61, longitude: 120.99 } }],
-            attribution: "OpenStreetMap · Photon" } }));
-        await page.locator("[data-map-search]").fill("Test address");
-        await page.locator("[data-map-search-button]").click(); await settle("Searching");
-        assert.equal(await page.locator("[data-map-results] img").count(), 0);
-        await page.locator(".planning-map-result").click();
-        assert.equal(await page.locator("#DropoffLatitude").inputValue(), "14.610000");
-        await page.unroute("**/PlanningMap/Search");
-        await page.route("**/PlanningMap/Search", route => route.fulfill({ status: 503,
-            contentType: "application/problem+json", body: JSON.stringify({ title: "Address search is unavailable." }) }));
-        await page.locator("[data-map-search-button]").click(); await settle("Searching");
-        assert.match(await page.locator("[data-map-status]").innerText(), /unavailable/);
-        await page.unroute("**/PlanningMap/Search");
-        console.log("PASS: empty search, safe text labels, selected coordinates, provider failure");
-
+        await page.locator("[data-map-search]").press("Enter");
+        await page.locator("[data-google-status]").filter({hasText:"No matching street addresses"}).waitFor();
+        await page.unroute("**/PlanningMap/Addresses");
+        await page.route("**/PlanningMap/Addresses", route => route.fulfill({json:{results:[{address:"<img src=x onerror=alert(1)>"}]}}));
+        const beforeSearch = await page.locator("#DropoffLatitude").inputValue();
+        await page.locator("[data-map-search]").fill("Test street address");
+        await page.locator("[data-map-search-button]").click();
+        await page.locator(".planning-map-result").waitFor();
+        assert.equal(await page.locator("[data-map-results] img").count(),0);
+        await page.locator("[data-address-intended]").check(); await page.locator(".planning-map-result").click();
+        assert.equal(await page.locator("#DropoffLatitude").inputValue(),beforeSearch);
+        await page.evaluate(()=>window.__dln14Map.jumpTo({center:[120.99,14.61]}));
+        await page.locator("[data-map-use-center]").click(); await page.locator("[data-map-confirm]").click();
+        assert.equal(await page.locator("#DropoffLatitude").inputValue(),"14.610000");
+        await page.unroute("**/PlanningMap/Addresses");
+        await page.route("**/PlanningMap/Addresses", route=>route.fulfill({status:503,json:{title:"Search is unavailable."}}));
+        await page.locator("[data-google-open]").click(); await page.locator("[data-map-search-button]").click();
+        await page.locator("[data-google-status]").filter({hasText:"unavailable"}).waitFor();
+        await page.unroute("**/PlanningMap/Addresses");
+        console.log("PASS: empty search, safe address text, explicit independent pin, provider failure");
         if (live) {
-            await page.locator("[data-map-search]").fill("Manila City Hall");
-            await page.locator("[data-map-search-button]").click(); await settle("Searching");
-            assert.ok(await page.locator(".planning-map-result").count() > 0, await page.locator("[data-map-status]").innerText());
-            console.log("PASS: live Photon address results");
+            await page.locator("[data-map-search]").fill("123 Main Street, Los Angeles, CA");
+            await page.locator("[data-map-search-button]").click(); await page.locator(".planning-map-result").first().waitFor();
+            console.log("PASS: live Google street-address suggestions");
         }
+        await page.locator("[data-google-close]").click();
         await page.locator("#RecipientName").fill("DLN14 disposable browser delivery");
         await page.locator("#PickupAddress").fill("Temporary manual pickup");
         await page.locator("#DropoffAddress").fill("Temporary manual drop-off");
@@ -130,22 +138,28 @@ function polyline(points) {
         console.log("PASS: existing delivery creation saves map-selected form coordinates");
 
         await page.goto(base + "/DispatchBoard");
+        if (!await page.locator(".dispatch-options").getAttribute("open").then(x => x !== null)) await page.locator(".dispatch-options > summary").click();
+        if (!await page.locator(".planning-map-tools").getAttribute("open").then(x => x !== null)) await page.locator(".planning-map-tools > summary").click();
         const vehicle = page.locator('input[type=checkbox][name$=".Selected"][name^="Vehicles"]').first();
         const delivery = page.locator('input[type=checkbox][name$=".Selected"][name^="Deliveries"]').first();
         await vehicle.check(); await delivery.check();
+        await page.locator("#Settings_WarehouseLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLatitude").fill("14.6");
+        await page.locator("#Settings_WarehouseLongitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLongitude").fill("121.03");
         await page.getByRole("button", { name: "Preview routes", exact: true }).click();
-        await page.getByRole("heading", { name: "Proposed routes" }).waitFor({ timeout: 45000 });
+        await page.getByRole("heading", { name: "Selected-plan results" }).waitFor({ timeout: 45000 });
         await page.locator("[data-map-route]").selectOption({ index: 1 });
         await draw();
         await page.locator("[data-planning-map]").screenshot({ path: path.join(output, "dispatch-preview.png") });
+        await page.locator("#Settings_WarehouseLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLatitude").fill("14.6001");
         assert.match(await page.locator("[data-map-status]").innerText(), /Preview again/);
         assert.ok(await page.locator("[data-map-roads]").isDisabled());
+        await page.locator("#Settings_WarehouseLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLatitude").fill("14.6");
         await page.getByRole("button", { name: "Preview routes", exact: true }).click();
-        await page.getByRole("heading", { name: "Proposed routes" }).waitFor({ timeout: 45000 });
+        await page.getByRole("heading", { name: "Selected-plan results" }).waitFor({ timeout: 45000 });
         console.log("PASS: changed preview inputs disable stale routes until a fresh preview");
         await page.getByRole("button", { name: "Review this plan", exact: true }).click();
         await page.waitForURL(url => url.pathname.includes("/DispatchBoard/Review"));
@@ -167,6 +181,7 @@ function polyline(points) {
         await page.route("https://tiles.openfreemap.org/**", route => route.abort());
         await page.goto(base + "/Deliveries/Create");
         await page.waitForFunction(() => document.querySelector("[data-map-status]").textContent.includes("could not load"));
+        await page.locator("#PickupLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#PickupLatitude").fill("0");
         assert.equal(await page.locator("#PickupLatitude").inputValue(), "0");
         assert.ok(await page.locator("[data-map-retry]").isVisible());

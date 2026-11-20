@@ -1,0 +1,10 @@
+@model int
+@{
+    var steps = new[] { ("Warehouse","/Warehouse"), ("Drivers & vehicles","/DeliveryWorkflow#fleet"), ("Create deliveries","/DeliveryWorkflow#create"), ("Assign","/DeliveryWorkflow/Assignments"), ("Plan & dispatch","/DispatchBoard"), ("Track","/FleetTracking") };
+}
+<nav class="delivery-steps" aria-label="Delivery workflow"><ol>
+@for(var i=0;i<steps.Length;i++) {
+    <li><a href="@steps[i].Item2" aria-current="@(Model==i+1 ? "step" : null)"><span aria-hidden="true">@(i+1)</span>@steps[i].Item1</a></li>
+}
+</ol></nav>
+<div class="workflow-warehouse"><span data-warehouse-global role="status">Loading your default warehouse…</span><a href="/Warehouse">View or change</a><a href="/DeliveryWorkflow">Workflow guide</a></div>

@@ -43,9 +43,18 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || "playwright"
 
         await page.getByText("View daily counts", { exact: true }).click();
         assert.equal(await page.locator(".analytics-daily-table tbody tr").count(), 3);
+        assert.deepEqual(await page.locator(".analytics-daily-table tbody td").allTextContents(), ["3", "2", "3"]);
+        assert.match(await page.getByLabel("Applied reporting period").innerText(), /3 inclusive calendar days/);
+        await page.getByText("How to read this report", { exact: true }).click();
+        assert.match(await page.locator(".analytics-definitions").innerText(), /not historical statuses/);
+        assert.match(await page.locator(".analytics-definitions").innerText(), /not measure GPS activity/);
         await page.locator("#theme-select").selectOption("dark");
         await page.waitForFunction(() => getComputedStyle(document.querySelector(".content-card")).backgroundColor === "rgb(35, 38, 43)");
-        await page.waitForFunction(() => getComputedStyle(document.querySelector(".analytics-filter .btn-primary")).color === "rgb(37, 28, 19)");
+        await page.waitForFunction(() => {
+                const button = document.querySelector('.btn-primary'); if (!button) return true;
+                const probe = document.createElement('span'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--on-primary'); document.body.append(probe);
+                const expected = getComputedStyle(probe).color; probe.remove(); return getComputedStyle(button).color === expected;
+            });
         await page.locator("#main-content").screenshot({ path: path.join(output, "analytics-dark.png") });
         await page.emulateMedia({ colorScheme: "light" });
         await page.locator("#theme-select").selectOption("system");
@@ -71,6 +80,59 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || "playwright"
         assert.match(await page.locator(".validation-summary-errors").innerText(), /at most 366 days/);
         assert.equal(await page.locator("[data-analytics-report]").count(), 0);
         console.log("PASS: GET filters, truthful empty states and invalid-range handling");
+
+        const through = new Date(fixture.to + "T00:00:00Z");
+        const from = new Date(through); from.setUTCDate(from.getUTCDate() - 365);
+        await page.goto(base + "/Analytics?from=" + from.toISOString().slice(0, 10) + "&to=" + fixture.to);
+        assert.equal(await page.locator(".analytics-chart-column").count(), 366);
+        assert.match(await page.getByLabel("Applied reporting period").innerText(), /366 inclusive calendar days/);
+        const chart = page.locator(".analytics-chart-scroll");
+        await chart.focus();
+        await page.keyboard.press("ArrowRight");
+        await page.waitForFunction(() => document.querySelector(".analytics-chart-scroll").scrollLeft > 0);
+        await page.getByText("View daily counts", { exact: true }).click();
+        assert.equal(await page.locator(".analytics-daily-table tbody tr").count(), 366);
+        await page.getByRole("link", { name: "Daily intake", exact: true }).click();
+        assert.equal(await page.evaluate(() => document.activeElement.id), "daily-intake");
+        await page.setViewportSize({ width: 390, height: 844 });
+        const vehicleTable = page.locator(".analytics-vehicle-table");
+        await vehicleTable.focus();
+        await page.keyboard.press("ArrowRight");
+        await page.waitForFunction(() => document.querySelector(".analytics-vehicle-table").scrollLeft > 0);
+        for (const theme of ["light", "dark", "system"]) {
+            await page.locator("#theme-select").selectOption(theme);
+            if (theme === "system") await page.emulateMedia({ colorScheme: "dark" });
+            assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2));
+            await page.locator("#main-content").screenshot({ path: path.join(output, "analytics-long-mobile-" + theme + ".png") });
+        }
+        await page.setViewportSize({ width: 1440, height: 1100 });
+        await page.locator("#main-content").screenshot({ path: path.join(output, "analytics-long-desktop.png") });
+        console.log("PASS: 366-day exact data alternative, keyboard chart/table scrolling, section focus and mobile themes");
+
+        // Cancel one navigation after the real submit handler runs so its transient UI can be inspected.
+        await page.locator("[data-analytics-filter]").evaluate(form => form.addEventListener("submit", event => event.preventDefault(), { once: true }));
+        await page.getByRole("button", { name: "Apply period", exact: true }).click();
+        assert.match(await page.locator("[data-analytics-loading]").innerText(), /Loading the selected period/);
+        assert.equal(await page.locator("[data-analytics-filter]").getAttribute("aria-busy"), "true");
+        assert.ok(await page.getByRole("button", { name: "Apply period", exact: true }).isDisabled());
+        await page.reload();
+        assert.ok(await page.getByRole("button", { name: "Apply period", exact: true }).isEnabled());
+        await page.getByRole("link", { name: "Reset to last 30 UTC days", exact: true }).click();
+        await page.waitForURL(url => url.pathname === "/Analytics" && url.search === "");
+        assert.match(await page.getByLabel("Applied reporting period").innerText(), /30 inclusive calendar days/);
+        console.log("PASS: loading announcement, duplicate-submit protection, reset and ready state");
+
+        const noScriptContext = await browser.newContext({ javaScriptEnabled: false });
+        const noScript = await noScriptContext.newPage();
+        await login(noScript, fixture.adminEmail);
+        await noScript.goto(reportUrl);
+        await metric(noScript, "completed", "3");
+        await noScript.locator("#From").fill("2020-01-01");
+        await noScript.locator("#To").fill("2020-01-02");
+        await noScript.getByRole("button", { name: "Apply period", exact: true }).click();
+        assert.match(await noScript.locator("#main-content").innerText(), /No deliveries were created/);
+        await noScriptContext.close();
+        console.log("PASS: report and normal GET filtering work without JavaScript");
 
         const staffContext = await browser.newContext();
         const staff = await staffContext.newPage();

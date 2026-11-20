@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -22,7 +24,7 @@ public sealed class ProviderAndFleetWebTests
     [Theory]
     [InlineData("Admin")]
     [InlineData("Dispatcher")]
-    public async Task Staff_receive_real_metrics_and_separate_escaped_text_results(string role)
+    public async Task Staff_receive_real_metrics_and_embedded_address_results_without_coordinates(string role)
     {
         var repository = new Repository(); var provider = new Provider();
         using var factory = Factory(repository, provider);
@@ -37,15 +39,14 @@ public sealed class ProviderAndFleetWebTests
         using var positions = await client.GetAsync("/FleetTracking/Positions");
         Assert.Equal(HttpStatusCode.OK, positions.StatusCode); Assert.True(positions.Headers.CacheControl!.NoStore);
         Assert.Equal(reads, repository.ActivityCalls); // Polling does not scan historical samples.
-        var places = await client.GetStringAsync("/Places");
-        var token = Token(places);
-        using var results = await client.PostAsync("/Places", new FormUrlEncodedContent(new Dictionary<string, string>
-        { ["Query"] = "Manila", ["__RequestVerificationToken"] = token, ["Error"] = "forged" }));
-        var resultsHtml = await results.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/Places")).StatusCode);
+        var token = Token(html);
+        client.DefaultRequestHeaders.Add("RequestVerificationToken", token);
+        using var results = await client.PostAsJsonAsync("/PlanningMap/Addresses", new { query = "123 Manila Street" });
         Assert.Equal(HttpStatusCode.OK, results.StatusCode); Assert.True(results.Headers.CacheControl!.NoStore);
-        Assert.Contains("google-maps-logo.svg", resultsHtml);
-        Assert.Contains("&lt;script&gt;", resultsHtml); Assert.DoesNotContain("<script>injected", resultsHtml);
-        Assert.DoesNotContain("maplibre", resultsHtml); Assert.DoesNotContain(">forged<", resultsHtml);
+        var json = await results.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("123 Manila Street", json.GetProperty("results")[0].GetProperty("address").GetString());
+        Assert.False(json.GetProperty("results")[0].TryGetProperty("location", out _));
         Assert.Equal(1, provider.Calls);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/Notifications")).StatusCode);
     }
@@ -67,26 +68,27 @@ public sealed class ProviderAndFleetWebTests
     {
         var provider = new Provider(); using var factory = Factory(new(), provider); using var client = Client(factory, "Admin");
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/Places", new FormUrlEncodedContent(new Dictionary<string, string> { ["Query"] = "Manila" }))).StatusCode);
-        var token = Token(await client.GetStringAsync("/Places"));
-        var invalid = await client.PostAsync("/Places", new FormUrlEncodedContent(new Dictionary<string, string> { ["Query"] = "a", ["__RequestVerificationToken"] = token }));
-        Assert.Equal(HttpStatusCode.OK, invalid.StatusCode); Assert.Equal(0, provider.Calls);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/PlanningMap/Addresses", new { query = "Manila" })).StatusCode);
+        client.DefaultRequestHeaders.Add("RequestVerificationToken", Token(await client.GetStringAsync("/FleetTracking")));
+        var invalid = await client.PostAsJsonAsync("/PlanningMap/Addresses", new { query = "a" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode); Assert.Equal(0, provider.Calls);
         using var missing = Factory(new(), null); using var absentClient = Client(missing, "Dispatcher");
-        token = Token(await absentClient.GetStringAsync("/Places"));
-        var unavailable = await absentClient.PostAsync("/Places", new FormUrlEncodedContent(new Dictionary<string, string> { ["Query"] = "Manila", ["__RequestVerificationToken"] = token }));
+        absentClient.DefaultRequestHeaders.Add("RequestVerificationToken", Token(await absentClient.GetStringAsync("/FleetTracking")));
+        var unavailable = await absentClient.PostAsJsonAsync("/PlanningMap/Addresses", new { query = "Manila" });
         Assert.Equal(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
-        Assert.Contains("has not been configured", await unavailable.Content.ReadAsStringAsync());
+        Assert.Contains("not configured", await unavailable.Content.ReadAsStringAsync());
     }
 
     [Fact]
     public async Task Provider_errors_and_invalid_period_do_not_render_success()
     {
         var repository = new Repository(); using var factory = Factory(repository, new() { Fail = true }); using var client = Client(factory, "Admin");
-        var token = Token(await client.GetStringAsync("/Places"));
-        var failure = await client.PostAsync("/Places", new FormUrlEncodedContent(new Dictionary<string, string> { ["Query"] = "Manila", ["__RequestVerificationToken"] = token }));
+        client.DefaultRequestHeaders.Add("RequestVerificationToken", Token(await client.GetStringAsync("/FleetTracking")));
+        var failure = await client.PostAsJsonAsync("/PlanningMap/Addresses", new { query = "Manila" });
         Assert.Equal(HttpStatusCode.BadGateway, failure.StatusCode);
-        Assert.DoesNotContain("Search results", await failure.Content.ReadAsStringAsync());
+        Assert.DoesNotContain("results", await failure.Content.ReadAsStringAsync());
         var invalid = await client.GetStringAsync("/FleetTracking?from=2000-01-01&to=2000-01-02");
-        Assert.DoesNotContain("data-observed-utilization", invalid); Assert.Equal(0, repository.ActivityCalls);
+        Assert.DoesNotContain("data-observed-utilization", invalid); Assert.Equal(1, repository.ActivityCalls);
     }
 
     private static string Token(string html) => WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value);
@@ -97,7 +99,7 @@ public sealed class ProviderAndFleetWebTests
             .ConfigureTestServices(services =>
             {
                 services.RemoveAll<IFleetTrackingRepository>(); services.AddSingleton<IFleetTrackingRepository>(repository);
-                services.RemoveAll<IGooglePlacesSearch>(); if (provider is not null) services.AddSingleton<IGooglePlacesSearch>(provider);
+                services.RemoveAll<IGoogleAddressSearch>(); if (provider is not null) services.AddSingleton<IGoogleAddressSearch>(provider);
                 services.AddAuthentication(options => { options.DefaultAuthenticateScheme = "ProviderTest"; options.DefaultChallengeScheme = "ProviderTest"; options.DefaultForbidScheme = "ProviderTest"; })
                     .AddScheme<AuthenticationSchemeOptions, RoleHandler>("ProviderTest", _ => { });
             }));
@@ -107,13 +109,13 @@ public sealed class ProviderAndFleetWebTests
         if (role is not null) client.DefaultRequestHeaders.Add("X-Test-Role", role);
         return client;
     }
-    private sealed class Provider : IGooglePlacesSearch
+    private sealed class Provider : IGoogleAddressSearch
     {
         public int Calls; public bool Fail;
-        public Task<IReadOnlyList<PlaceTextResult>> SearchAsync(string query, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<StreetAddressSuggestion>> SearchAsync(string query, CancellationToken cancellationToken = default)
         {
             Calls++; if (Fail) throw new HttpRequestException();
-            return Task.FromResult<IReadOnlyList<PlaceTextResult>>([new("<script>injected</script>", "Manila", "https://maps.google.com/", [])]);
+            return Task.FromResult<IReadOnlyList<StreetAddressSuggestion>>([new("123 Manila Street")]);
         }
     }
     private sealed class Repository : IFleetTrackingRepository

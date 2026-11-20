@@ -3,22 +3,41 @@
 @inject IOptions<PlanningMapOptions> MapOptions
 @model PlanningMapViewModel
 @{
+    var immersive = ViewData["ImmersiveMap"] is true;
     var json = JsonSerializer.Serialize(new { model = Model, styleUrl = MapOptions.Value.StyleUrl, darkStyleUrl = MapOptions.Value.DarkStyleUrl },
         new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 <link rel="stylesheet" href="~/lib/maplibre/maplibre-gl.css" asp-append-version="true" />
 <link rel="stylesheet" href="~/css/planning-map.css" asp-append-version="true" />
-<section class="content-card planning-map mb-4" data-planning-map
-         data-route-url="@Url.Action("Route", "PlanningMap")" data-search-url="@Url.Action("Search", "PlanningMap")"
+<section class="content-card planning-map mb-4 @(immersive ? "planning-map-immersive" : "")" data-planning-map data-auto-route="@((Model.Preview || ViewData["AutoRoute"] is true).ToString().ToLowerInvariant())"
+         data-route-url="@Url.Action("Route", "PlanningMap")" data-search-url="@Url.Action("Addresses", "PlanningMap")"
          aria-label="@Model.Title">
     <div class="planning-map-heading">
         <div><span class="page-kicker">Location workspace</span><h2 class="h5 mt-2">@Model.Title</h2></div>
         <button type="button" class="btn btn-outline-secondary" data-map-fit>Fit stops</button>
         <button type="button" class="btn btn-outline-secondary" data-map-retry>Retry map</button>
     </div>
-    <p class="text-muted">@Model.Description</p>
+    @if (!immersive) { <p class="text-muted">@Model.Description</p> }
     @Html.AntiForgeryToken()
     <script type="application/json" data-map-model>@Html.Raw(json)</script>
+    <div class="planning-map-canvas" data-map-canvas tabindex="0" aria-label="Interactive planning map. Arrow keys move the map; plus and minus change zoom."></div>
+    <p class="map-interaction-hint" data-map-interaction role="status" aria-live="polite">Click the map or press Enter to enable wheel zoom. Escape or click outside to return to page scrolling.</p>
+    @if (immersive)
+    {
+        <div class="map-route-summary"><span class="metric-symbol" aria-hidden="true">↗</span><div><strong data-map-route-title>@(Model.Preview || ViewData["AutoRoute"] is true ? "Route preview" : "Plan your next dispatch")</strong><p>@(Model.Routes.Count > 0 ? $"{Model.Routes.Count} vehicle routes · {Model.Routes.Sum(r => Math.Max(0, r.Points.Count - 1))} pickup / drop-off stops" : "Choose deliveries and vehicles, set the warehouse, then preview routes.")</p><span class="form-text">@(Model.Preview || ViewData["AutoRoute"] is true ? "Review and confirm before dispatching." : "Selected delivery pins appear on the map.")</span>
+        <p data-map-visible-status role="status" aria-live="polite"></p>
+        @if (Model.Routes.Count > 1 && ViewData["MapSummaryDetail"] is string detail) { <p>@detail</p> }
+        @if (Model.Routes.Count > 0)
+        {
+            <label class="form-label mt-2" for="map-route">Route to display</label>
+            <select id="map-route" class="form-select" data-map-route><option value="">All stop locations</option>@foreach (var route in Model.Routes) { <option value="@route.Id">@route.Label</option> }</select>
+            <button type="button" class="btn btn-primary mt-2" data-map-roads>Load road route</button>
+        }
+        </div></div>
+    }
+    <details class="planning-map-tools" open="@(immersive ? null : "open")">
+    <summary>Warehouse &amp; map tools</summary>
+    <p class="form-text">@Model.Description</p>
     <div class="planning-map-controls">
         @if (Model.Targets.Count > 0)
         {
@@ -30,14 +49,22 @@
                 </select>
             </div>
             <div class="planning-map-search">
-                <label class="form-label" for="map-search">Search OpenStreetMap addresses</label>
-                <div class="input-group">
-                    <input id="map-search" class="form-control" data-map-search minlength="3" maxlength="200" autocomplete="off" />
-                    <button type="button" class="btn btn-outline-primary" data-map-search-button>Search</button>
-                </div>
+                <button type="button" class="btn btn-outline-primary" data-google-open>Search street address</button>
+                <p class="form-text">Google address suggestions help with text. Confirm your own map pin separately. Business/place search is not available in this picker.</p>
+                <dialog data-google-dialog aria-label="Find the street address you intend to enter" class="content-card google-address-dialog">
+                    <button type="button" class="btn btn-outline-secondary" data-google-close>Back to map</button>
+                    <h3 class="h5 mt-3">Find a street address</h3>
+                    <p>Type a street address you already know for this transaction. Results do not set or verify map coordinates.</p>
+                    <label class="form-label" for="map-search">Street address</label>
+                    <div class="input-group"><input id="map-search" class="form-control" data-map-search minlength="3" maxlength="200" autocomplete="off" /><button type="button" class="btn btn-outline-primary" data-map-search-button>Search</button></div>
+                    <label class="d-flex gap-2 my-3"><input type="checkbox" data-address-intended /> This is the street address I intended to enter for this transaction.</label>
+                    <p data-google-status role="status" aria-live="polite"></p>
+                    <ul class="planning-map-results list-unstyled" data-map-results aria-label="Street address suggestions"></ul>
+                    <div class="google-attribution"><img src="/lib/google/google-maps-logo.svg" alt="Google Maps" height="18" /></div>
+                </dialog>
             </div>
         }
-        @if (Model.Routes.Count > 0)
+        @if (Model.Routes.Count > 0 && !immersive)
         {
             <div class="planning-map-route-control">
                 <label class="form-label" for="map-route">Route to display</label>
@@ -52,12 +79,16 @@
     </div>
     @if (Model.Targets.Count > 0)
     {
-        <p id="map-pick-help" class="text-muted mt-2">Click the map to set the selected location, or move it with the arrow keys and use “Use map center”. Coordinate fields remain editable.</p>
+        <p id="map-pick-help" class="text-muted mt-2">Search and select an address, click a map point, or move with the arrow keys and use “Use map center”. Confirm the location before continuing. Manual entry is available under Advanced coordinates.</p>
         <button type="button" class="btn btn-outline-secondary mb-3" data-map-use-center>Use map center</button>
-        <ul class="planning-map-results list-unstyled" data-map-results aria-label="Address search results"></ul>
+        <p data-map-selection role="status">Choose a location to confirm.</p>
+        <button type="button" class="btn btn-primary mb-3" data-map-confirm disabled>Confirm location</button>
+        <button type="button" class="btn btn-outline-secondary mb-3" data-map-advanced>Advanced coordinates</button>
+        <ul data-map-location-list aria-label="Confirmed locations" tabindex="0"></ul>
     }
-    <p class="planning-map-status" data-map-status role="status" aria-live="polite">Loading map. Coordinate fields and stop lists remain available if the map cannot load.</p>
-    <div class="planning-map-canvas" data-map-canvas tabindex="0" aria-label="Interactive planning map. Arrow keys move the map; plus and minus change zoom."></div>
+    <p class="planning-map-status" data-map-status role='@(immersive ? null : "status")' aria-live='@(immersive ? null : "polite")' >Loading map. Coordinate fields and stop lists remain available if the map cannot load.</p>
+    </details>
+
     <p class="planning-map-attribution mb-0">
         Map: <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> ·
         <a href="https://openmaptiles.org/" target="_blank" rel="noopener noreferrer">OpenMapTiles</a> ·

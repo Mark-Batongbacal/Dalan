@@ -19,6 +19,60 @@ public sealed class AnalyticsWebTests
 {
     [Theory]
     [InlineData("Admin")]
+    public async Task Overview_uses_real_reporting_period_and_registry_availability(string role)
+    {
+        var repository = new Repository { Snapshot = new(new(10,2,2,1,4,1,2,0,0,null),new(7,3,2,1,2,4000,900),[],[]) };
+        using var factory = Factory(repository);
+        using var client = Client(factory, role);
+        using var response = await client.GetAsync("/");
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Delivery progress", html);
+        Assert.Contains("40%", html);
+        Assert.Contains("Vehicles currently marked available", html);
+        Assert.Contains("Last 30 days", html);
+        Assert.Equal(new DateOnly(2026,10,19), repository.Period!.From);
+        Assert.Equal(1, repository.Calls);
+        Assert.True(response.Headers.CacheControl!.NoStore);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Driver")]
+    public async Task Overview_does_not_query_or_expose_metrics_to_non_staff(string? role)
+    {
+        var repository = new Repository();
+        using var factory = Factory(repository);
+        using var client = Client(factory, role);
+        var html = await client.GetStringAsync("/");
+        Assert.DoesNotContain("dashboard-report", html);
+        Assert.Equal(0, repository.Calls);
+    }
+
+    [Fact]
+    public async Task Dispatcher_home_enters_workspace_without_querying_overview()
+    {
+        var repository = new Repository();
+        using var factory = Factory(repository);
+        using var client = Client(factory, "Dispatcher");
+        using var response = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/DispatchBoard", response.Headers.Location?.ToString());
+        Assert.Equal(0, repository.Calls);
+    }
+
+    [Fact]
+    public async Task Overview_provider_failure_keeps_workspace_links_without_fake_metrics()
+    {
+        var repository = new Repository { Fail = true };
+        using var factory = Factory(repository);
+        using var client = Client(factory,"Admin");
+        var html = await client.GetStringAsync("/");
+        Assert.Contains("overview is temporarily unavailable", html);
+        Assert.Contains("View vehicles", html);
+        Assert.DoesNotContain("dashboard-report", html);
+    }
+    [Theory]
+    [InlineData("Admin")]
     [InlineData("Dispatcher")]
     public async Task Staff_can_read_default_report_and_navigation(string role)
     {
@@ -31,6 +85,9 @@ public sealed class AnalyticsWebTests
         Assert.Contains("data-analytics-report", html);
         Assert.Contains("No deliveries were created", html);
         Assert.Contains("No vehicles are registered", html);
+        Assert.Contains("How to read this report", html);
+        Assert.Contains("not GPS-measured utilization", html);
+        Assert.Contains("data-analytics-loading", html);
         Assert.Contains("href=\"/Analytics\"", html);
         Assert.Equal(new DateOnly(2026, 10, 19), repository.Period!.From);
         Assert.Equal(new DateOnly(2026, 11, 17), repository.Period.To);
@@ -63,6 +120,7 @@ public sealed class AnalyticsWebTests
         using var client = Client(factory, "Admin");
         var html = await client.GetStringAsync("/Analytics?" + query);
         Assert.Contains("validation-summary-errors", html);
+        Assert.Contains("Check the reporting period", html);
         Assert.DoesNotContain("data-analytics-report", html);
         Assert.Equal(0, repository.Calls);
     }
@@ -90,7 +148,30 @@ public sealed class AnalyticsWebTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("Analytics is temporarily unavailable", html);
+        Assert.Contains("Report unavailable", html);
+        Assert.Contains("unavailable data is not a zero result", html);
         Assert.DoesNotContain("data-analytics-report", html);
+    }
+
+    [Fact]
+    public async Task Long_period_exposes_exact_daily_alternative_and_full_fleet_denominator()
+    {
+        var rows = Enumerable.Range(0, 50).Select(i => new VehicleActivity(Guid.NewGuid(), $"VEH-{i:D3}", "Available", 1, 1500, 120)).ToArray();
+        var repository = new Repository { Snapshot = new(new(8, 2, 1, 1, 3, 1, 1, 1, 2, 10800),
+            new(51, 51, 1, 2, 2, 3500, 300), [new(new(2026, 11, 17), 8)], rows) };
+        using var factory = Factory(repository);
+        using var client = Client(factory, "Dispatcher");
+        var html = await client.GetStringAsync("/Analytics?from=2025-11-17&to=2026-11-17");
+        Assert.Contains("366 inclusive calendar days", html);
+        Assert.Contains("366 dates; peak 8", html);
+        Assert.Contains("Showing 50 of 51 current vehicles", html);
+        Assert.Contains("Fleet totals include all vehicles", html);
+        Assert.Contains("Exact delivery creation counts for every selected UTC date", html);
+        Assert.Contains("Current statuses", html);
+        Assert.Contains("not historical statuses", html);
+        Assert.Contains("saved planning estimates", html);
+        Assert.Contains("2025-11-17</th>", html);
+        Assert.Contains("2026-11-17</th>", html);
     }
 
     private static WebApplicationFactory<WebAssemblyMarker> Factory(Repository repository)
@@ -122,12 +203,13 @@ public sealed class AnalyticsWebTests
     {
         public int Calls { get; private set; }
         public bool Fail { get; init; }
+        public AnalyticsSnapshot Snapshot { get; init; } = new(new(0, 0, 0, 0, 0, 0, 0, 0, 0, null), new(0, 0, 0, 0, 0, 0, 0), [], []);
         public AnalyticsPeriod? Period { get; private set; }
         public Task<AnalyticsSnapshot> ReadAsync(AnalyticsPeriod period, DateTimeOffset asOfUtc, CancellationToken token)
         {
             Calls++; Period = period;
             if (Fail) throw new AnalyticsUnavailableException("Unavailable", new Exception());
-            return Task.FromResult(new AnalyticsSnapshot(new(0, 0, 0, 0, 0, 0, 0, 0, 0, null), new(0, 0, 0, 0, 0, 0, 0), [], []));
+            return Task.FromResult(Snapshot);
         }
     }
     private sealed class RoleHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)

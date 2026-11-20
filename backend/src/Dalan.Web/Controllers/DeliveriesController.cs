@@ -53,7 +53,7 @@ public sealed class DeliveriesController(
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-        CreateDeliveryViewModel model, CancellationToken cancellationToken)
+        CreateDeliveryViewModel model, CancellationToken cancellationToken, string? next = null)
     {
         if (!ModelState.IsValid) return View(model);
 
@@ -75,6 +75,7 @@ public sealed class DeliveriesController(
             return View(model);
         }
 
+        if (next == "another") { TempData["WorkflowNotice"] = "Delivery created. Add your next delivery."; return RedirectToAction(nameof(Create)); }
         return RedirectToAction(nameof(Details), new { id = result.Delivery!.Id });
     }
 
@@ -82,12 +83,12 @@ public sealed class DeliveriesController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Assign(
         Guid id, Guid driverId, Guid vehicleId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? next = null)
     {
         if (driverId == Guid.Empty || vehicleId == Guid.Empty)
         {
             TempData["DeliveryError"] = "Choose a driver and vehicle.";
-            return RedirectToAction(nameof(Details), new { id });
+            return next == "workflow" ? RedirectToAction("Assignments", "DeliveryWorkflow") : RedirectToAction(nameof(Details), new { id });
         }
 
         var result = await deliveries.AssignAsync(
@@ -101,7 +102,7 @@ public sealed class DeliveriesController(
             TempData["DeliveryError"] =
                 result.Error ?? "The assignment could not be saved.";
 
-        return RedirectToAction(nameof(Details), new { id });
+        return next == "workflow" ? RedirectToAction("Assignments", "DeliveryWorkflow") : RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost]

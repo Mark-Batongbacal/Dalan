@@ -1,0 +1,16 @@
+@model DeliveryAssignmentsViewModel
+@{ ViewData["Title"]="Delivery assignments"; }
+<div class="page-heading"><span class="page-kicker">Step 4 · Allocate work</span><h1>Assign drivers &amp; vehicles</h1><p>Select a registered driver and their assigned vehicle for each delivery, or let fleet planning allocate unassigned work.</p></div>
+@if(TempData["WorkflowNotice"] is string notice) { <p class="alert alert-success" role="status">@notice</p> }
+@if(TempData["DeliveryError"] is string error) { <p class="alert alert-danger" role="alert">@error</p> }
+<div class="workflow-actions mb-4"><a href="/Deliveries/Create" class="btn btn-outline-secondary">Add a delivery</a><a href="/DeliveryBatch" class="btn btn-outline-secondary">Add multiple deliveries</a><a href="/DispatchBoard" class="btn btn-primary">Continue to fleet dispatch →</a></div>
+@if(Model.Deliveries.Count==0) { <section class="content-card"><h2 class="h5">No deliveries to assign</h2><p>Create deliveries in step 3, then return here. Picked-up or completed work stays in the delivery queue.</p></section> }
+@foreach(var delivery in Model.Deliveries) {
+    <section class="content-card mb-3"><div class="card-header"><div><h2 class="h5">@delivery.RecipientName</h2><p class="form-text">@delivery.PickupAddress → @delivery.DropoffAddress</p></div><span class="status-chip">@delivery.Status</span></div>
+    <form asp-controller="Deliveries" asp-action="Assign" asp-route-id="@delivery.Id" method="post">
+        <input name="next" value="workflow" type="hidden" /><div class="row g-3 align-items-end">
+        <div class="col-md-5"><label for="driver-@delivery.Id" class="form-label">Driver</label><select id="driver-@delivery.Id" name="driverId" class="form-select" required><option value="">Choose a driver</option>@foreach(var driver in Model.Drivers) {<option value="@driver.Id" selected="@(driver.Id==delivery.DriverId)">@driver.Name · @driver.Availability</option>}</select></div>
+        <div class="col-md-5"><label for="vehicle-@delivery.Id" class="form-label">Vehicle</label><select id="vehicle-@delivery.Id" name="vehicleId" class="form-select" required><option value="">Choose their vehicle</option>@foreach(var vehicle in Model.Vehicles) {<option value="@vehicle.Id" selected="@(vehicle.Id==delivery.VehicleId)">@vehicle.RegistrationNumber · @vehicle.Availability</option>}</select></div>
+        <div class="col-md-2"><button class="btn btn-primary" type="submit">Save assignment</button></div></div><a asp-controller="Deliveries" asp-action="Details" asp-route-id="@delivery.Id" class="btn btn-link mt-2">Delivery details</a>
+    </form></section>
+}

@@ -3,6 +3,7 @@
     ViewData["Title"] = "Confirmed dispatch";
 }
 
+<partial name="_DispatchNavigation" model='@("active")' />
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
     <h1>Confirmed dispatch</h1>
@@ -12,7 +13,7 @@
 </div>
 
 <div class="alert alert-info" role="status">
-    This is the approved route. Delivery statuses below reflect their current state.
+    This is the persisted confirmed plan. Delivery statuses below reflect their current state. <a href="/FleetTracking">Monitor shared fleet locations</a>.
 </div>
 
 <partial name="_PlanningMap" model="PlanningMapViewModel.ForPlan(Model)" />

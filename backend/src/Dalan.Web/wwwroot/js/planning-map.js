@@ -39,16 +39,106 @@
     document.querySelectorAll("[data-planning-map]").forEach(root => {
         const config = JSON.parse(root.querySelector("[data-map-model]").textContent);
         const model = config.model;
+        const ownerForm = root.closest("form") || document.getElementById(root.closest('[data-map-form]')?.dataset.mapForm);
         const find = selector => root.querySelector(selector);
         const byId = id => id ? document.getElementById(id) : null;
         const status = find("[data-map-status]");
+        const heading = find('.planning-map-heading');
+        if (heading && typeof ResizeObserver !== 'undefined')
+            new ResizeObserver(() => root.style.setProperty('--map-tools-top', (heading.offsetHeight + 12) + 'px')).observe(heading);
         const routeSelect = find("[data-map-route]");
         const roadButton = find("[data-map-roads]");
         const targetSelect = find("[data-map-target]");
+        const confirmButton = find("[data-map-confirm]");
+        let pendingLocation = null;
+        let selectedStreetAddress = null;
+        let candidateMarker = null;
+        const confirmedLabels = new Map();
+        function fixedWarehouse(target) {
+            const form=ownerForm;
+            return form?.dataset.warehouseSaved === 'true' && target?.latitudeInputId === form.dataset.warehouseLatitude;
+        }
+        function protectWarehouse() {
+            if(!targetSelect) return;
+            [...targetSelect.options].forEach((option,index)=>option.disabled=fixedWarehouse(model.targets[index]));
+            if(targetSelect.selectedOptions[0]?.disabled) targetSelect.value=[...targetSelect.options].find(option=>!option.disabled)?.value ?? '';
+            const none=[...targetSelect.options].every(option=>option.disabled);
+            targetSelect.disabled=none;
+            for(const selector of ['[data-google-open]','[data-map-use-center]','[data-map-advanced]']) { const button=find(selector); if(button) button.disabled=none; }
+        }
+        document.addEventListener('warehouse-default-loaded',event=>{if(ownerForm===event.detail.form) { protectWarehouse(); paint(); fit(); }});
+        protectWarehouse();
+        find("[data-map-advanced]")?.addEventListener("click", () => {
+            clearSelection();
+            const input = byId(model.targets[Number(targetSelect.value)].latitudeInputId);
+            for (let parent = input?.parentElement; parent; parent = parent.parentElement) {
+                if (parent.tagName === "DETAILS") parent.open = true;
+            }
+            input?.focus();
+        });
+        document.addEventListener("planning-map-job-added", event => {
+            const index = event.detail.index;
+            for (const [kind, label] of [["Pickup", "pickup"], ["Dropoff", "drop-off"]]) {
+                const target = { label: `Job ${index + 1} ${label}`, latitudeInputId: `Jobs_${index}__${kind}Latitude`,
+                    longitudeInputId: `Jobs_${index}__${kind}Longitude` };
+                const option = document.createElement("option");
+                option.value = model.targets.length; option.textContent = target.label;
+                targetSelect.append(option); model.targets.push(target);
+                model.overview.push({ ...target, order: 0 });
+            }
+        });
+        document.addEventListener('planning-map-targets-replaced', event => {
+            if (!model.targets.some(target=>target.latitudeInputId.startsWith('Rows_'))) return;
+            const old = new Set(model.targets.map(target=>target.latitudeInputId));
+            model.targets = event.detail.targets;
+            model.overview = model.overview.filter(point=>!old.has(point.latitudeInputId)).concat(model.targets.map(target=>({label:target.label,latitudeInputId:target.latitudeInputId,longitudeInputId:target.longitudeInputId})));
+            targetSelect.replaceChildren(...model.targets.map((target,index)=>{
+                const option=document.createElement('option'); option.value=index; option.textContent=target.label; return option;
+            }));
+            clearSelection(); paint();
+        });
+        function clearSelection() {
+            pendingLocation = null;
+            candidateMarker?.remove(); candidateMarker = null;
+            if (confirmButton) confirmButton.disabled = true;
+            const selection = find("[data-map-selection]");
+            if (selection) selection.textContent = "Choose a location to confirm. Existing confirmed locations are unchanged.";
+        }
+        function proposeLocation(lat, lon, label) {
+            if (coordinate(lat, 90) === null || coordinate(lon, 180) === null) return;
+            if(fixedWarehouse(model.targets[Number(targetSelect?.value)])) return;
+            if(targetSelect?.value === '') return;
+            const tools = find('.planning-map-tools');
+            if (tools) tools.open = true;
+            pendingLocation = { lat, lon, label: label || selectedStreetAddress || byId(model.targets[Number(targetSelect.value)].addressInputId)?.value || "Selected map point" };
+            candidateMarker?.remove();
+            if (map) candidateMarker = new maplibregl.Marker({ color: getComputedStyle(root).getPropertyValue("--primary").trim() })
+                .setLngLat([lon, lat]).addTo(map);
+            find("[data-map-selection]").textContent = model.targets[Number(targetSelect.value)].label + ": " +
+                pendingLocation.label + ". Confirm to use this location.";
+            confirmButton.disabled = false;
+        }
+        confirmButton?.addEventListener("click", () => {
+            if (!pendingLocation) return;
+            const { lat, lon, label } = pendingLocation;
+            setLocation(lat, lon, label);
+            confirmedLabels.set(targetSelect.value, label); paint();
+            clearSelection();
+        });
+        ownerForm?.addEventListener("submit", event => {
+            if (!pendingLocation) return;
+            event.preventDefault();
+            message("Confirm the selected location before continuing, or choose another location to keep existing inputs.");
+            confirmButton.focus();
+        });
+        ownerForm?.addEventListener("invalid", event => {
+            const details = event.target.closest("details");
+            if (details) details.open = true;
+        }, true);
         let map = null, markers = [], stale = false, mapFailed = false, styleReady = false;
         let request = null, requestVersion = 0, geometry = [];
         let searchRequest = null, searchVersion = 0;
-        const message = text => { status.textContent = text; };
+        const message = text => { status.textContent = text; const visible = find("[data-map-visible-status]"); if (visible) visible.textContent = text.startsWith('Road route loaded:') ? text.split(' Saved dispatch estimates')[0] : text; };
         const emptyFeatures = () => ({ type: "FeatureCollection", features: [] });
 
         function resolve(point) {
@@ -90,15 +180,26 @@
         }
 
         function paint() {
+            const title = find('[data-map-route-title]');
+            if (title) title.textContent = !stale && activeRoute() ? activeRoute().label + ' · route preview' : (model.preview || root.dataset.autoRoute === 'true') ? 'Route preview' : 'Plan your next dispatch';
             markers.forEach(marker => marker.remove()); markers = [];
             const points = visiblePoints();
+            const list = find("[data-map-location-list]");
+            if (list) list.replaceChildren(...model.targets.map((target, index) => {
+                const item = document.createElement("li");
+                const valid = coordinate(byId(target.latitudeInputId)?.value, 90) !== null &&
+                    coordinate(byId(target.longitudeInputId)?.value, 180) !== null;
+                item.textContent = target.label + ": " + (valid ?
+                    byId(target.addressInputId)?.value || confirmedLabels.get(String(index)) || "Location selected" : "Not selected");
+                return item;
+            }));
             if (roadButton) roadButton.disabled = !!request || stale || !activeRoute() || pointsFor(activeRoute()).length < 2;
             if (!map) return;
             points.forEach((point, index) => {
                 const button = document.createElement("button");
                 button.type = "button"; button.className = "planning-map-marker";
                 button.textContent = point.order === -1 ? "S" : activeRoute() && !stale ? String(point.order + 1) : "•";
-                button.setAttribute("aria-label", point.label); button.title = point.label;
+                button.setAttribute("aria-label", button.textContent + ": " + point.label); button.title = point.label;
                 const popupContent = document.createElement("div"); popupContent.textContent = point.label;
                 markers.push(new maplibregl.Marker({ element: button })
                     .setLngLat([point.lon, point.lat])
@@ -111,12 +212,18 @@
             if (!map || points.length === 0) return;
             const bounds = new maplibregl.LngLatBounds();
             points.forEach(p => bounds.extend([p.lon, p.lat]));
-            map.fitBounds(bounds, { padding: 55, maxZoom: 15, duration: 0 });
+            const summary = find('.map-route-summary');
+            const canvasHeight = find('[data-map-canvas]')?.clientHeight || 640;
+            const bottom = summary ? Math.min(summary.offsetHeight + 32, canvasHeight * .55) : 55;
+            map.fitBounds(bounds, { padding: { top:55, bottom, left:55, right:55 }, maxZoom: 15, duration: 0 });
         }
 
         function changed(event) {
             if (root.contains(event.target)) return;
             const id = event.target.id || "";
+            model.targets.forEach((target, index) => {
+                if ([target.latitudeInputId, target.longitudeInputId].includes(id)) confirmedLabels.delete(String(index));
+            });
             const watched = model.targets.some(t => [t.latitudeInputId, t.longitudeInputId, t.selectionInputId].includes(id)) ||
                 model.overview.some(p => p.selectionInputId === id) ||
                 model.routes.some(r => r.points.some(p => [p.latitudeInputId, p.longitudeInputId, p.orderInputId, p.vehicleInputId].includes(id)));
@@ -140,13 +247,25 @@
             }
             if (label && target.addressInputId) {
                 const address = byId(target.addressInputId);
-                if (address) { address.value = label; address.dispatchEvent(new Event("input", { bubbles: true })); }
+                if (address) { if (label === selectedStreetAddress) address.dataset.googleAddress = "true"; else delete address.dataset.googleAddress; address.value = label; address.dispatchEvent(new Event("input", { bubbles: true })); }
             }
             if (target.selectionInputId && byId(target.selectionInputId)) {
                 byId(target.selectionInputId).checked = true;
                 byId(target.selectionInputId).dispatchEvent(new Event("change", { bubbles: true }));
             }
             clearRoad(); paint();
+            const form = ownerForm;
+            const summary = form?.querySelector(".validation-summary-errors[data-valmsg-summary]");
+            const validator = form && window.jQuery?.(form).data("validator");
+            if (summary && validator) {
+                validator.form();
+                const list = summary.querySelector("ul");
+                list?.replaceChildren(...validator.errorList.map(error => {
+                    const item = document.createElement("li"); item.textContent = error.message; return item;
+                }));
+                summary.classList.toggle("validation-summary-errors", validator.errorList.length > 0);
+                summary.classList.toggle("validation-summary-valid", validator.errorList.length === 0);
+            }
             message(target.label + " set to " + lat.toFixed(6) + ", " + lon.toFixed(6) +
                 ". Check the form before saving." + (stale ? " Preview routes again." : ""));
         }
@@ -160,10 +279,10 @@
             map = new maplibregl.Map({ container: find("[data-map-canvas]"), style: style(),
                 center: [120.9842, 14.5995], zoom: 11, attributionControl: true });
             map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-            map.scrollZoom.disable();
+            window.dalanMapFocus(root,map,find('[data-map-canvas]'),find('[data-map-interaction]'));
             map.on("click", event => {
-                if (model.targets.length && !event.originalEvent.target.closest(".planning-map-marker, .maplibregl-popup, .maplibregl-control-container"))
-                    setLocation(event.lngLat.lat, event.lngLat.lng);
+                if (model.targets.length && !event.originalEvent.target.closest(".planning-map-marker, .maplibregl-marker, .maplibregl-popup, .maplibregl-control-container"))
+                    proposeLocation(event.lngLat.lat, event.lngLat.lng);
             });
             map.on("load", () => {
                 mapFailed = false; renderGeometry(); paint(); fit();
@@ -199,9 +318,14 @@
         });
         find("[data-map-use-center]")?.addEventListener("click", () => {
             if (!map) return message("Map graphics are unavailable. Use coordinate fields or address search.");
-            const center = map.getCenter(); setLocation(center.lat, center.lng);
+            const center = map.getCenter(); proposeLocation(center.lat, center.lng);
         });
         targetSelect?.addEventListener("change", () => {
+            clearSelection();
+            searchRequest?.abort(); searchVersion++;
+            find("[data-map-search-button]").disabled = false;
+            find("[data-map-results]").replaceChildren();
+            find("[data-map-search]").value = "";
             const target = model.targets[Number(targetSelect.value)];
             const lat = coordinate(byId(target.latitudeInputId)?.value, 90);
             const lon = coordinate(byId(target.longitudeInputId)?.value, 180);
@@ -210,12 +334,13 @@
         });
         routeSelect?.addEventListener("change", () => {
             clearRoad(); paint(); fit();
-            message(activeRoute() ? "Stop markers show the selected order. Load road route for actual road geometry." : "Showing stop locations. Select a route to load road geometry.");
+            message(activeRoute() ? "Loading selected route…" : "Showing stop locations. Select a route to load road geometry.");
+            if (activeRoute() && !roadButton?.disabled) roadButton.click();
         });
 
         async function post(url, payload, signal) {
             const token = root.querySelector('input[name="__RequestVerificationToken"]') ||
-                root.closest("form")?.querySelector('input[name="__RequestVerificationToken"]') ||
+                ownerForm?.querySelector('input[name="__RequestVerificationToken"]') ||
                 document.querySelector('input[name="__RequestVerificationToken"]');
             if (!token) throw new Error("Reload this page before trying again.");
             const response = await fetch(url, { method: "POST", credentials: "same-origin", signal,
@@ -248,6 +373,7 @@
                 const seconds = body.legs.reduce((sum, leg) => sum + leg.durationSeconds, 0);
                 message("Road route loaded: " + (meters / 1000).toFixed(1) + " km, " + Math.round(seconds / 60) +
                     " min driving. Saved dispatch estimates are unchanged." + (mapFailed ? " Some map tiles are unavailable." : ""));
+                fit();
             } catch (error) {
                 if (version === requestVersion && error.name !== "AbortError")
                     message(error.message + " Stop markers and lists remain available.");
@@ -258,39 +384,51 @@
 
         const searchButton = find("[data-map-search-button]");
         const searchInput = find("[data-map-search]");
-        searchInput?.addEventListener("input", () => {
-            searchRequest?.abort(); searchVersion++; find("[data-map-results]").replaceChildren();
-            message("Press Search to look up this address, or choose a map point.");
-        });
-        searchInput?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); searchButton.click(); } });
-        searchButton?.addEventListener("click", async () => {
+        const dialog = find("[data-google-dialog]");
+        const searchStatus = find("[data-google-status]");
+        const results = find("[data-map-results]");
+        let timer;
+        function closeSearch() { searchRequest?.abort(); searchVersion++; clearTimeout(timer); if (searchButton) searchButton.disabled = false; results?.replaceChildren(); dialog?.close(); }
+        find("[data-google-open]")?.addEventListener("click", () => { find("[data-address-intended]").checked = false; dialog.showModal(); searchInput.focus(); });
+        find("[data-google-close]")?.addEventListener("click", closeSearch);
+        dialog?.addEventListener("cancel", closeSearch);
+        targetSelect?.addEventListener("change", () => { selectedStreetAddress = null; closeSearch(); });
+        async function search() {
             const query = searchInput.value.trim();
-            if (query.length < 3 || query.length > 200) return message("Enter 3–200 characters to search.");
+            if (query.length < 3 || query.length > 200) { searchStatus.textContent = "Enter 3–200 characters to search."; return; }
             searchRequest?.abort(); const version = ++searchVersion; searchRequest = new AbortController();
-            const results = find("[data-map-results]"); results.replaceChildren();
-            searchButton.disabled = true; message("Searching OpenStreetMap addresses…");
+            results.replaceChildren(); searchButton.disabled = true; searchStatus.textContent = "Searching street addresses…";
             try {
                 const body = await post(root.dataset.searchUrl, { query }, searchRequest.signal);
-                if (version !== searchVersion) return;
+                if (version !== searchVersion || !dialog.open) return;
                 for (const result of body.results) {
                     const row = document.createElement("li"), button = document.createElement("button");
-                    button.type = "button"; button.className = "planning-map-result";
-                    button.textContent = result.label;
+                    button.type = "button"; button.className = "planning-map-result"; button.textContent = result.address;
                     button.addEventListener("click", () => {
-                        setLocation(result.location.latitude, result.location.longitude, result.label);
-                        map?.easeTo({ center: [result.location.longitude, result.location.latitude], zoom: 15, duration: 0 });
-                        results.replaceChildren();
+                        if (!find("[data-address-intended]").checked) { searchStatus.textContent = "Confirm this is the street address you intended to enter."; find("[data-address-intended]").focus(); return; }
+                        selectedStreetAddress = result.address;
+                        closeSearch(); clearSelection();
+                        find("[data-map-selection]").textContent = "Address text: " + selectedStreetAddress + ". Select and confirm its map pin. Coordinates have not changed.";
+                        message("Street address selected as text only. Choose a map point or use Advanced coordinates to confirm its position.");
+                        find("[data-map-canvas]")?.focus();
                     });
                     row.append(button); results.append(row);
                 }
-                message(body.results.length ? "Select an address to use it. " + body.attribution :
-                    "No matching addresses. Select a map point or enter coordinates.");
-            } catch (error) {
-                if (version === searchVersion && error.name !== "AbortError") message(error.message);
-            } finally {
-                searchButton.disabled = false;
-            }
-        });
+                searchStatus.textContent = body.results.length ? "Choose the street address you intended to enter. No map coordinates are supplied." : "No matching street addresses. Keep your address and select a map point manually.";
+            } catch (error) { if (version === searchVersion && error.name !== "AbortError") searchStatus.textContent = error.message; }
+            finally { if (version === searchVersion) searchButton.disabled = false; }
+        }
+        searchInput?.addEventListener("input", () => { selectedStreetAddress = null; clearSelection(); searchRequest?.abort(); searchVersion++; clearTimeout(timer); results.replaceChildren(); searchButton.disabled = false; timer = setTimeout(search, 400); });
+        searchInput?.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); clearTimeout(timer); search(); } });
+        searchButton?.addEventListener("click", () => { clearTimeout(timer); search(); });
         paint();
+        root.addEventListener('dalan-route-focus', event => {
+            if (!routeSelect || stale || !model.routes.some(r => r.id === event.detail)) return;
+            routeSelect.value = event.detail; routeSelect.dispatchEvent(new Event('change'));
+        });
+        if ((model.preview || root.dataset.autoRoute === "true") && model.routes.length && routeSelect) {
+            routeSelect.value = model.routes.find(route => route.points.length > 1)?.id || model.routes[0].id;
+            routeSelect.dispatchEvent(new Event('change'));
+        }
     });
 })();

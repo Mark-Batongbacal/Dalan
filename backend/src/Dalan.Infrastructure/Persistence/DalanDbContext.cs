@@ -20,6 +20,8 @@ public sealed class DalanDbContext(DbContextOptions<DalanDbContext> options) : I
     public DbSet<DispatchStop> DispatchStops => Set<DispatchStop>();
     public DbSet<DispatchRotationState> DispatchRotations => Set<DispatchRotationState>();
 
+    public DbSet<DriverGpsException> DriverGpsExceptions => Set<DriverGpsException>();
+    public DbSet<AccountAccessAudit> AccountAccessAudits => Set<AccountAccessAudit>();
     public DbSet<DriverAccount> DriverAccounts => Set<DriverAccount>();
     public DbSet<DriverEventReceipt> DriverEventReceipts => Set<DriverEventReceipt>();
     public DbSet<OperationsSnapshot> OperationsSnapshots => Set<OperationsSnapshot>();
@@ -30,6 +32,16 @@ public sealed class DalanDbContext(DbContextOptions<DalanDbContext> options) : I
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.Entity<DriverGpsException>(review =>
+        {
+            review.HasKey(x => x.Id); review.Property(x => x.RowVersion).IsRowVersion();
+            review.Property(x => x.Reason).HasMaxLength(500); review.Property(x => x.ReviewReason).HasMaxLength(500);
+            review.Property(x => x.PayloadHash).HasMaxLength(64); review.Property(x => x.Status).HasMaxLength(20);
+            review.Property(x => x.ReviewerUserId).HasMaxLength(450);
+            review.HasIndex(x => new { x.Status, x.SubmittedAtUtc });
+            review.HasOne<Delivery>().WithMany().HasForeignKey(x => x.DeliveryId).OnDelete(DeleteBehavior.Restrict);
+            review.HasOne<Driver>().WithMany().HasForeignKey(x => x.DriverId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<VehicleTrackingSession>(session =>
         {
             session.HasKey(x => x.Id);
@@ -62,6 +74,20 @@ public sealed class DalanDbContext(DbContextOptions<DalanDbContext> options) : I
             rotation.HasKey(x => x.WarehouseKey);
             rotation.Property(x => x.WarehouseKey).HasMaxLength(64);
             rotation.Property(x => x.Version).IsConcurrencyToken();
+        });
+        modelBuilder.Entity<AccountAccessAudit>(audit =>
+        {
+            audit.ToTable("AccountAccessAudits");
+            audit.HasKey(x => x.Id);
+            audit.Property(x => x.Action).HasMaxLength(64).IsRequired();
+            audit.Property(x => x.Outcome).HasMaxLength(32).IsRequired();
+            audit.Property(x => x.ActorUserId).HasMaxLength(450);
+            audit.Property(x => x.TargetUserId).HasMaxLength(450);
+            audit.Property(x => x.Reason).HasMaxLength(240);
+            audit.Property(x => x.CorrelationId).HasMaxLength(128);
+            audit.HasIndex(x => x.OccurredAtUtc);
+            audit.HasIndex(x => new { x.DriverId, x.OccurredAtUtc });
+            audit.HasIndex(x => new { x.TargetUserId, x.OccurredAtUtc });
         });
         modelBuilder.Entity<DriverAccount>(account =>
         {

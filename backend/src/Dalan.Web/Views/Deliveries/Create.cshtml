@@ -1,21 +1,26 @@
-﻿@model CreateDeliveryViewModel
+@model CreateDeliveryViewModel
 @{
     ViewData["Title"] = "Create delivery";
 }
 
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
-    <h1>Create delivery</h1>
+    <h1>Create delivery</h1><p>Step 3 · <a href="/DeliveryBatch">Create multiple deliveries instead</a></p>
     <p>Select the warehouse pickup, then enter the recipient and delivery destination.</p>
 </div>
 
-<div class="content-card form-panel-wide">
+<div class="location-editor-shell">
     <form asp-action="Create" method="post" data-warehouse-selection
           data-warehouse-owner="@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)"
           data-warehouse-latitude="PickupLatitude" data-warehouse-longitude="PickupLongitude"
           data-warehouse-address="PickupAddress" data-warehouse-restore="@(ViewData.ModelState.Count == 0 ? "true" : "false")">
-        <div asp-validation-summary="All" class="text-danger"></div>
-        <partial name="_PlanningMap" model="PlanningMapViewModel.ForDelivery()" />
+        <div class="location-workspace">
+        <aside class="location-workspace-map" aria-label="Delivery location map">
+            <partial name="_PlanningMap" model="PlanningMapViewModel.ForDelivery()" />
+        </aside>
+        <section class="content-card location-workspace-fields" aria-label="Delivery details">
+    <div asp-validation-summary="All" class="text-danger"></div>
+
 
         <div class="mb-3">
             <label asp-for="RecipientName" class="form-label">Recipient name</label>
@@ -26,7 +31,7 @@
             <label asp-for="PickupAddress" class="form-label">Warehouse address or name</label>
             <input asp-for="PickupAddress" class="form-control" />
         </div>
-        <div class="row g-3 mb-3">
+        <details class="mb-3" data-map-coordinate-fields><summary>Advanced coordinates</summary><div class="row g-3 mb-3">
             <div class="col-sm-6">
                 <label asp-for="PickupLatitude" class="form-label">Warehouse latitude</label>
                 <input asp-for="PickupLatitude" class="form-control"
@@ -37,15 +42,15 @@
                 <input asp-for="PickupLongitude" class="form-control"
                        type="number" step="any" />
             </div>
-        </div>
+        </div></details>
 
-        <p class="form-text" data-warehouse-status aria-live="polite">This warehouse is also used as the start for vehicles on your dispatch board.</p>
+        <p class="form-text" data-warehouse-status aria-live="polite">Your saved warehouse is the pickup and fleet start. <a href="/Warehouse">Change your default warehouse in step 1</a>.</p>
 
         <div class="mb-3">
             <label asp-for="DropoffAddress" class="form-label">Drop-off address</label>
             <input asp-for="DropoffAddress" class="form-control" />
         </div>
-        <div class="row g-3 mb-3">
+        <details class="mb-3" data-map-coordinate-fields><summary>Advanced coordinates</summary><div class="row g-3 mb-3">
             <div class="col-sm-6">
                 <label asp-for="DropoffLatitude" class="form-label">Drop-off latitude</label>
                 <input asp-for="DropoffLatitude" class="form-control"
@@ -56,7 +61,7 @@
                 <input asp-for="DropoffLongitude" class="form-control"
                        type="number" step="any" />
             </div>
-        </div>
+        </div></details>
 
         <div class="row g-3 mb-3">
             <div class="col-sm-6">
@@ -71,16 +76,20 @@
                 <input asp-for="ExpectedDeliveryLocal" class="form-control" type="datetime-local" step="1800" data-delivery-time
                        data-time-default="@(ViewData.ModelState.Count == 0 ? "true" : "false")" />
                 <div class="d-flex gap-2 mt-2">
-                    <button type="button" class="btn btn-outline-secondary" data-time-step="-30" aria-label="Expected delivery time 30 minutes earlier">−30 min</button>
-                    <button type="button" class="btn btn-outline-secondary" data-time-step="30" aria-label="Expected delivery time 30 minutes later">+30 min</button>
+                    <button type="button" class="btn btn-outline-secondary" data-time-step="-30" aria-label="−30 min: expected delivery time 30 minutes earlier">−30 min</button>
+                    <button type="button" class="btn btn-outline-secondary" data-time-step="30" aria-label="+30 min: expected delivery time 30 minutes later">+30 min</button>
                 </div>
                 <small class="form-text text-muted" data-time-zone>Defaults to the next half-hour from now. Adjust in 30-minute steps.</small>
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary">Create delivery</button>
+        @if(TempData["WorkflowNotice"] is string notice) { <p class="alert alert-success" role="status">@notice</p> }
+        <button type="submit" class="btn btn-primary">Create delivery</button><button type="submit" name="next" value="another" class="btn btn-outline-secondary">Create and add another</button>
         <a asp-action="Index" class="btn btn-link">Cancel</a>
-    </form>
+
+        </section>
+    </div>
+</form>
 </div>
 
 @section Scripts {

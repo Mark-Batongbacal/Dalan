@@ -21,7 +21,7 @@ public sealed class PlannerVehicleInput
 
 public sealed class PlannerJobInput
 {
-    public string? Id { get; set; }
+    public string? Id { get; set; } = "preview-" + Guid.NewGuid().ToString("N");
     public double? PickupLatitude { get; set; }
     public double? PickupLongitude { get; set; }
     public double? DropoffLatitude { get; set; }

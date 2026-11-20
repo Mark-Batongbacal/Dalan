@@ -24,7 +24,8 @@ public sealed class OperationsNotificationRepository(DalanDbContext db) : IOpera
     }
 
     public Task<EmailEnvelope?> ClaimExistingAsync(string id, DateTimeOffset now, CancellationToken cancellationToken) =>
-        ClaimRow(id, now, null, cancellationToken);
+        id.StartsWith("ops/", StringComparison.Ordinal)
+            ? ClaimRow(id, now, null, cancellationToken) : Task.FromResult<EmailEnvelope?>(null);
 
     private async Task<EmailEnvelope?> ClaimRow(string id, DateTimeOffset now, Func<NotificationDelivery>? create, CancellationToken cancellationToken)
     {
@@ -60,12 +61,13 @@ public sealed class OperationsNotificationRepository(DalanDbContext db) : IOpera
     }
 
     public async Task<IReadOnlyList<string>> PendingAsync(DateTimeOffset now, CancellationToken cancellationToken) =>
-        await db.NotificationDeliveries.AsNoTracking().Where(x => x.AcceptedAtUtc == null && !x.NeedsReview
+        await db.NotificationDeliveries.AsNoTracking().Where(x => x.Id.StartsWith("ops/") && x.AcceptedAtUtc == null && !x.NeedsReview
             && (x.LeaseUntilUtc == null || x.LeaseUntilUtc <= now) && (x.NextAttemptAtUtc == null || x.NextAttemptAtUtc <= now))
             .OrderBy(x => x.CreatedAtUtc).Take(50).Select(x => x.Id).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<EmailDeliveryStatus>> RecentAsync(CancellationToken cancellationToken) =>
-        await db.NotificationDeliveries.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Take(50)
+        await db.NotificationDeliveries.AsNoTracking().Where(x => x.Id.StartsWith("ops/"))
+            .OrderByDescending(x => x.CreatedAtUtc).Take(50)
             .Select(x => new EmailDeliveryStatus(x.Id, x.CreatedAtUtc, x.Subject,
                 x.AcceptedAtUtc != null ? "Accepted by Resend" : x.NeedsReview ? "Needs review" : "Pending / retrying", x.Attempts, x.AcceptedAtUtc))
             .ToListAsync(cancellationToken);

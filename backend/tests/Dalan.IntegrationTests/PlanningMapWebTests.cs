@@ -19,6 +19,17 @@ namespace Dalan.IntegrationTests;
 
 public sealed class PlanningMapWebTests
 {
+    [Fact]
+    public async Task Create_location_selection_has_confirmation_and_explicit_coordinate_fallback()
+    {
+        using var factory = Factory();
+        using var client = Client(factory);
+        var html = await client.GetStringAsync("/Deliveries/Create");
+        Assert.Contains("data-map-confirm", html);
+        Assert.Contains("data-map-selection", html);
+        Assert.Contains("<summary>Advanced coordinates</summary>", html);
+    }
+
     [Theory]
     [InlineData("2040-01-01T12:30:00Z", "2040-01-01T13:00:00Z")]
     [InlineData("2040-01-01T23:50:00Z", "2040-01-02T00:00:00Z")]

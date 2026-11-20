@@ -1,27 +1,49 @@
-﻿@model IReadOnlyList<Dalan.Application.Deliveries.DeliveryDetails>
+@model IReadOnlyList<Dalan.Application.Deliveries.DeliveryDetails>
 @{
     ViewData["Title"] = "Delivery queue";
 }
 
-<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 page-heading">
+@if (User.IsInRole("Dispatcher")) { <partial name="_DispatchNavigation" model='@("deliveries")' /> }
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 page-heading">
     <div>
-        <span class="page-kicker">Dispatch operations</span>
+        <span class="page-kicker">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="6"/></svg>
+            Dispatch operations
+        </span>
         <h1>Delivery queue</h1>
-        <p>Review delivery status and assignments.</p>
+        <p>Review delivery status and assignments across all active routes.</p>
     </div>
-    <a asp-action="Create" class="btn btn-primary">Create delivery</a>
+    <div class="d-flex gap-2 flex-shrink-0 flex-wrap">
+        <a asp-controller="DispatchBoard" asp-action="Index" class="btn btn-outline-secondary">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2" y="2" width="7" height="8" rx="1.5"/><rect x="11" y="2" width="7" height="5" rx="1.5"/><rect x="11" y="10" width="7" height="8" rx="1.5"/><rect x="2" y="13" width="7" height="5" rx="1.5"/>
+            </svg>
+            Plan dispatch
+        </a>
+        <a asp-action="Create" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
+            Create delivery
+        </a>
+    </div>
 </div>
 
-<div class="content-card">
+<div class="table-wrap registry-table">
     @if (Model.Count == 0)
     {
-        <div class="alert alert-info mb-0" role="status">
-            No deliveries have been created yet.
+        <div class="empty-state">
+            <div class="empty-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 5h14M3 10h14M3 15h8"/>
+                </svg>
+            </div>
+            <h3>No deliveries yet</h3>
+            <p>Create your first delivery to start planning and dispatching routes.</p>
+            <a asp-action="Create" class="btn btn-primary btn-sm" style="margin-top:8px">Create first delivery</a>
         </div>
     }
     else
     {
-        <div class="table-responsive">
+        <div class="table-responsive-wrap" tabindex="0" role="region" aria-label="Scrollable data table">
             <table class="table align-middle">
                 <thead>
                     <tr>
@@ -37,14 +59,28 @@
                     @foreach (var delivery in Model)
                     {
                         <tr>
-                            <td>@delivery.RecipientName</td>
-                            <td>@delivery.PickupAddress</td>
-                            <td>@delivery.DropoffAddress</td>
-                            <td><span class="status-chip">@delivery.Status</span></td>
-                            <td>@delivery.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</td>
-                            <td>
-                                <a asp-action="Details" asp-route-id="@delivery.Id">
+                            <td data-label="Recipient"><strong>@delivery.RecipientName</strong></td>
+                            <td data-label="Pickup" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@delivery.PickupAddress</td>
+                            <td data-label="Drop-off" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@delivery.DropoffAddress</td>
+                            <td data-label="Status">
+                                @{
+                                    var st = delivery.Status.ToString();
+                                    var sc = st switch {
+                                        "Pending" => "status-chip status-chip-default",
+                                        "Assigned" => "status-chip status-chip-info",
+                                        "PickedUp" or "InTransit" => "status-chip status-chip-accent",
+                                        "Delivered" or "Completed" => "status-chip status-chip-success",
+                                        "Cancelled" => "status-chip status-chip-danger",
+                                        _ => "status-chip status-chip-default"
+                                    };
+                                }
+                                <span class="@sc">@st</span>
+                            </td>
+                            <td data-label="Created" style="white-space:nowrap;font-size:13px;color:var(--muted)">@delivery.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")</td>
+                            <td data-label="Action">
+                                <a asp-action="Details" asp-route-id="@delivery.Id" class="btn btn-ghost btn-sm">
                                     View details
+                                    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h10M13 7l3 3-3 3"/></svg>
                                 </a>
                             </td>
                         </tr>

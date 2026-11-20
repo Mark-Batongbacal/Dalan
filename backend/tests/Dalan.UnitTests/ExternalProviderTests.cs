@@ -73,6 +73,19 @@ public sealed class ExternalProviderTests
         await Assert.ThrowsAnyAsync<Exception>(() => sender.SendAsync(new("ops/test", Guid.NewGuid(), "a@test.test", ["b@test.test"], "test", "test"), default));
     }
 
+    [Fact]
+    public async Task Address_autocomplete_filters_POIs_and_never_returns_coordinates()
+    {
+        using var handler = new Handler("""{"suggestions":[{"placePrediction":{"text":{"text":"123 Main Street"},"types":["street_address","geocode"]}},{"placePrediction":{"text":{"text":"A shop"},"types":["street_address","establishment"]}},{"queryPrediction":{"text":{"text":"businesses"}}}]}""");
+        var search = new GoogleAddressSearch(new HttpClient(handler) { BaseAddress = new("https://places.googleapis.com/") }, "fixture");
+        var item = Assert.Single(await search.SearchAsync("123 Main"));
+        Assert.Equal("123 Main Street", item.Address);
+        Assert.EndsWith("/v1/places:autocomplete", handler.Uri!.AbsoluteUri);
+        using var request = JsonDocument.Parse(handler.Body!);
+        Assert.Equal("street_address", request.RootElement.GetProperty("includedPrimaryTypes")[0].GetString());
+        Assert.DoesNotContain("location", handler.Headers["X-Goog-FieldMask"], StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class Handler(string json, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
     {
         public Uri? Uri;

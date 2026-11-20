@@ -4,60 +4,114 @@
     ViewData["Title"] = "Fleet Registry";
 }
 
-<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 page-heading">
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 page-heading">
     <div>
-        <span class="page-kicker">Fleet operations</span>
+        <span class="page-kicker">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="6"/></svg>
+            Fleet operations
+        </span>
         <h1>Fleet Registry</h1>
-        <p>Registered company vehicles, ready for planning.</p>
+        <p>Registered company vehicles available for planning and dispatch.</p>
     </div>
     @if (User.IsInRole("Admin"))
     {
-        <a asp-action="Create" class="btn btn-primary">Register vehicle</a>
+        <a asp-action="Create" class="btn btn-primary" style="flex-shrink:0">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
+            Register vehicle
+        </a>
     }
 </div>
 
-<div class="content-card">
-@if (Model.Vehicles.Count == 0)
-{
-    <div class="alert alert-info" role="status">
-        No vehicles have been registered yet.
-    </div>
-}
-else
-{
-    <div class="table-responsive">
-        <table class="table table-striped align-middle">
-            <thead>
-                <tr>
-                    <th scope="col">Registration number</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Capacity</th>
-                    <th scope="col">Availability</th>
-                    <th scope="col">Maintenance due</th>
-                    @if (User.IsInRole("Admin")) { <th scope="col">Actions</th> }
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var vehicle in Model.Vehicles)
-                {
+<div class="table-wrap registry-table">
+    @if (Model.Vehicles.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="7" width="18" height="10" rx="2"/><path d="M4 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/><circle cx="5.5" cy="17" r="1.5"/><circle cx="14.5" cy="17" r="1.5"/>
+                </svg>
+            </div>
+            <h3>No vehicles registered</h3>
+            <p>Add your first vehicle to make it available for fleet planning.</p>
+            @if (User.IsInRole("Admin"))
+            {
+                <a asp-action="Create" class="btn btn-primary btn-sm" style="margin-top:8px">Register first vehicle</a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive-wrap" tabindex="0" role="region" aria-label="Scrollable data table">
+            <table class="table align-middle">
+                <thead>
                     <tr>
-                        <td>@vehicle.RegistrationNumber</td>
-                        <td>@(vehicle.Type ?? "—")</td>
-                        <td>
-                            @if (vehicle.PayloadCapacityKg is not null) { <span>@vehicle.PayloadCapacityKg.Value.ToString("N2") kg</span> }
-                            @if (vehicle.SeatCapacity is not null) { <span class="d-block">@vehicle.SeatCapacity seats</span> }
-                            @if (vehicle.PayloadCapacityKg is null && vehicle.SeatCapacity is null) { <span>—</span> }
-                        </td>
-                        <td><span class="status-chip">@vehicle.Availability</span></td>
-                        <td>@(vehicle.NextMaintenanceDate?.ToString("yyyy-MM-dd") ?? "—")</td>
-                        @if (User.IsInRole("Admin"))
-                        {
-                            <td><a asp-action="Edit" asp-route-id="@vehicle.Id">Edit</a></td>
-                        }
+                        <th scope="col">Registration</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Capacity</th>
+                        <th scope="col">Availability</th>
+                        <th scope="col">Maintenance due</th>
+                        @if (User.IsInRole("Admin")) { <th scope="col">Actions</th> }
                     </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}
+                </thead>
+                <tbody>
+                    @foreach (var vehicle in Model.Vehicles)
+                    {
+                        <tr>
+                            <td data-label="Registration">
+                                <strong>@vehicle.RegistrationNumber</strong>
+                            </td>
+                            <td data-label="Type">@(vehicle.Type ?? "—")</td>
+                            <td data-label="Capacity">
+                                @if (vehicle.PayloadCapacityKg is not null)
+                                {
+                                    <span>@vehicle.PayloadCapacityKg.Value.ToString("N2") kg</span>
+                                }
+                                @if (vehicle.SeatCapacity is not null)
+                                {
+                                    <span class="d-block text-muted" style="font-size:12px">@vehicle.SeatCapacity seats</span>
+                                }
+                                @if (vehicle.PayloadCapacityKg is null && vehicle.SeatCapacity is null)
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td data-label="Availability">
+                                @{
+                                    var avail = vehicle.Availability?.ToString() ?? "Unknown";
+                                    var chipClass = avail switch {
+                                        "Available" => "status-chip status-chip-success",
+                                        "Unavailable" => "status-chip status-chip-danger",
+                                        "InUse" => "status-chip status-chip-warning",
+                                        _ => "status-chip status-chip-default"
+                                    };
+                                }
+                                <span class="@chipClass">@avail</span>
+                            </td>
+                            <td data-label="Maintenance due">
+                                @if (vehicle.NextMaintenanceDate.HasValue)
+                                {
+                                    <span>@vehicle.NextMaintenanceDate.Value.ToString("yyyy-MM-dd")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <td data-label="Actions">
+                                    <a asp-action="Edit" asp-route-id="@vehicle.Id"
+                                       class="btn btn-ghost btn-sm"
+                                       aria-label="Edit @vehicle.RegistrationNumber">
+                                        <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3l3 3L7 16H4v-3L14 3z"/></svg>
+                                        Edit
+                                    </a>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 </div>

@@ -1,46 +1,138 @@
+@model HomeDashboardViewModel
 @{
     ViewData["Title"] = "Overview";
 }
-<div class="page-heading">
-    <span class="page-kicker">Operations workspace</span>
-    <h1>Keep your fleet moving.</h1>
-    <p>Manage vehicles and drivers, then preview an optimized delivery route.</p>
+<div class="page-heading @(User.Identity?.IsAuthenticated != true ? "landing-intro" : "")">
+    <span class="page-kicker">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="6"/></svg>
+        Operations workspace
+    </span>
+    <h1>@(User.Identity?.IsAuthenticated == true ? "Overview" : "Keep your fleet moving.")</h1>
+    <p>Manage vehicles and drivers, plan optimal routes, and track your fleet in real time.</p>
 </div>
-<div class="overview-grid">
-    @if (User.Identity?.IsAuthenticated != true)
-    {
+
+@if (User.Identity?.IsAuthenticated != true)
+{
+    <div class="overview-grid landing-signin">
         <section class="content-card feature-card">
-            <span class="feature-number">STAFF ACCESS</span>
+            <div class="icon-card" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="8" width="14" height="12" rx="1.5"/><path d="M1 8l9-6 9 6"/><path d="M8 20v-6h4v6"/>
+                </svg>
+            </div>
             <h2>Sign in to continue</h2>
-            <p>Use your staff account to open the fleet workspace.</p>
-            <a asp-controller="Account" asp-action="Login" class="btn btn-primary">Sign in</a>
+            <p>Use your staff account to open the fleet workspace and start managing operations.</p>
+            <a asp-controller="Account" asp-action="Login" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4v14h-4M10 15l5-5-5-5M14 10H3"/></svg>
+                Sign in
+            </a>
+        </section>
+    </div>
+}
+else
+{
+    @if (User.IsInRole("Dispatcher")) { <section class="workflow-callout"><div><h2>Ready to file a delivery?</h2><p>Warehouse → fleet → deliveries → assignments → dispatch → tracking</p></div><a href="/DeliveryWorkflow" class="btn btn-primary">Start delivery workflow</a></section> }
+    @if (Model.Error is not null) { <p class="alert alert-warning" role="status">@Model.Error</p> }
+    @if (Model.Report is { } report)
+    {
+        var d = report.Deliveries;
+        var percent = d.Total == 0 ? 0 : Math.Round(100.0 * d.Delivered / d.Total);
+        <section class="dashboard-report" aria-label="Operations overview">
+            <div class="dashboard-period"><span class="status-chip">Last 30 days · UTC</span><span>Deliveries created @report.Period.From.ToString("MMM d") – @report.Period.To.ToString("MMM d, yyyy") · current statuses</span><a asp-controller="Analytics" asp-action="Index">Full report →</a></div>
+            <div class="dashboard-metrics">
+                <article class="metric-tile"><span class="metric-symbol" aria-hidden="true">↗</span><strong>@d.Open</strong><span>Open deliveries</span></article>
+                <article class="metric-tile metric-success"><span class="metric-symbol" aria-hidden="true">✓</span><strong>@d.Delivered</strong><span>Delivered</span></article>
+                <article class="metric-tile metric-info"><span class="metric-symbol" aria-hidden="true">→</span><strong>@d.PickedUp</strong><span>Picked up</span></article>
+                <article class="metric-tile metric-warning"><span class="metric-symbol" aria-hidden="true">!</span><strong>@d.Overdue</strong><span>Overdue open deliveries</span></article>
+            </div>
+            <div class="dashboard-panels">
+                <section class="content-card dashboard-progress"><h2>Delivery progress</h2><div class="progress-layout">
+                    <div class="progress-ring" style="--progress:@(percent.ToString(System.Globalization.CultureInfo.InvariantCulture))%" role="img" aria-label="@percent percent of this delivery cohort delivered"><div><strong>@percent%</strong><span>Delivered</span></div></div>
+                    <dl class="progress-legend"><div><dt>Delivered</dt><dd>@d.Delivered</dd></div><div><dt>Picked up</dt><dd>@d.PickedUp</dd></div><div><dt>Pending / assigned</dt><dd>@(d.Pending + d.Assigned)</dd></div><div><dt>Cancelled</dt><dd>@d.Cancelled</dd></div></dl>
+                </div>@if(d.Total == 0){<p class="form-text">No deliveries were created in this period.</p>}</section>
+                <section class="content-card dashboard-fleet"><h2>Fleet availability</h2><span class="metric-symbol" aria-hidden="true">↗</span><p class="fleet-count"><strong>@report.Fleet.AvailableVehicles</strong> / @report.Fleet.TotalVehicles</p><p>Vehicles currently marked available</p><progress value="@report.Fleet.AvailableVehicles" max="@(Math.Max(1, report.Fleet.TotalVehicles))" aria-label="Available vehicles"></progress><p class="form-text">Availability is registry state. Confirmed-plan participation is reported separately in Analytics.</p></section>
+            </div>
         </section>
     }
-    @if (User.Identity?.IsAuthenticated == true)
-    {
+    <div class="workspace-section-heading"><h2>Your workspace</h2><p>Open the tools available to your role.</p></div>
+    <div class="overview-grid workspace-shortcuts">
         <section class="content-card feature-card">
-            <span class="feature-number">01 / FLEET</span>
+            <div class="icon-card" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="1" y="7" width="18" height="10" rx="2"/><path d="M4 7V5a2 2 0 012-2h8a2 2 0 012 2v2"/><circle cx="5.5" cy="17" r="1.5"/><circle cx="14.5" cy="17" r="1.5"/>
+                </svg>
+            </div>
             <h2>Fleet registry</h2>
-            <p>Review registered vehicles and their availability for planning.</p>
-            <a asp-controller="Vehicles" asp-action="Index" class="btn btn-outline-primary">View vehicles</a>
+            <p>Review registered vehicles, their type, capacity, and availability for planning.</p>
+            <a asp-controller="Vehicles" asp-action="Index" class="btn btn-outline-secondary">
+                View vehicles
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h10M13 7l3 3-3 3"/></svg>
+            </a>
         </section>
-    }
-    @if (User.IsInRole("Admin"))
-    {
-        <section class="content-card feature-card">
-            <span class="feature-number">02 / PEOPLE</span>
-            <h2>Driver registry</h2>
-            <p>Keep license details and active vehicle assignments current.</p>
-            <a asp-controller="Drivers" asp-action="Index" class="btn btn-outline-primary">View drivers</a>
-        </section>
-    }
-    @if (User.IsInRole("Dispatcher"))
-    {
-        <section class="content-card feature-card">
-            <span class="feature-number">02 / PLANNING</span>
-            <h2>Fleet planner</h2>
-            <p>Preview a pickup and drop-off plan using entered coordinates. Plans are not saved or dispatched.</p>
-            <a asp-controller="FleetPlanner" asp-action="Index" class="btn btn-primary">Open planner</a>
-        </section>
-    }
-</div>
+
+        @if (User.IsInRole("Admin"))
+        {
+            <section class="content-card feature-card">
+                <div class="icon-card" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="7" cy="6" r="3.5"/><path d="M1 18c0-4 2.7-6 6-6"/><circle cx="15" cy="12" r="3"/><path d="M12 18v-.5a3 3 0 016 0V18"/>
+                    </svg>
+                </div>
+                <h2>Driver accounts</h2>
+                <p>Keep driver license details, account status, and vehicle assignments up to date.</p>
+                <a asp-controller="Drivers" asp-action="Index" class="btn btn-outline-secondary">
+                    Manage drivers
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h10M13 7l3 3-3 3"/></svg>
+                </a>
+            </section>
+        }
+
+        @if (User.IsInRole("Dispatcher"))
+        {
+            <section class="content-card feature-card">
+                <div class="icon-card" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="7" height="8" rx="1.5"/><rect x="11" y="2" width="7" height="5" rx="1.5"/><rect x="11" y="10" width="7" height="8" rx="1.5"/><rect x="2" y="13" width="7" height="5" rx="1.5"/>
+                    </svg>
+                </div>
+                <h2>Dispatch board</h2>
+                <p>Choose deliveries and an optimization strategy, preview routes, then confirm dispatch.</p>
+                <a asp-controller="DispatchBoard" asp-action="Index" class="btn btn-primary">
+                    Open dispatch board
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h10M13 7l3 3-3 3"/></svg>
+                </a>
+            </section>
+
+            <section class="content-card feature-card">
+                <div class="icon-card" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 2L3 7v11h14V7L10 2z"/><path d="M7 18V10h6v8"/>
+                    </svg>
+                </div>
+                <h2>Fleet planner</h2>
+                <p>Preview a pickup and drop-off plan using entered coordinates. Plans are not saved or dispatched.</p>
+                <a asp-controller="FleetPlanner" asp-action="Index" class="btn btn-outline-secondary">
+                    Open planner
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h10M13 7l3 3-3 3"/></svg>
+                </a>
+            </section>
+        }
+
+        @if (User.IsInRole("Admin") || User.IsInRole("Dispatcher"))
+        {
+            <section class="content-card feature-card">
+                <div class="icon-card" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 15l4-5 3 3 3-4 2 2"/><rect x="2" y="2" width="16" height="16" rx="2"/>
+                    </svg>
+                </div>
+                <h2>Analytics</h2>
+                <p>Review delivery performance, fleet utilization, and driver metrics over time.</p>
+                <a asp-controller="Analytics" asp-action="Index" class="btn btn-outline-secondary">
+                    View analytics
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10h10M13 7l3 3-3 3"/></svg>
+                </a>
+            </section>
+        }
+    </div>
+}

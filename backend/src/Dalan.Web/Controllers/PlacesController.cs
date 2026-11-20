@@ -15,20 +15,11 @@ public sealed class PlaceSearchViewModel
 
 [Authorize(Roles = "Admin,Dispatcher")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class PlacesController(IEnumerable<IGooglePlacesSearch> providers) : Controller
+public sealed class PlacesController : Controller
 {
-    [HttpGet] public IActionResult Index() => View(new PlaceSearchViewModel());
+    [HttpGet] public IActionResult Index() => RedirectToAction("Index", "Vehicles");
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Index(PlaceSearchViewModel model, CancellationToken cancellationToken)
-    {
-        model.Results = null; model.Error = null;
-        if (!ModelState.IsValid) return View(model);
-        var provider = providers.SingleOrDefault();
-        if (provider is null) { Response.StatusCode = 503; model.Error = "Google Places search has not been configured."; return View(model); }
-        try { model.Results = await provider.SearchAsync(model.Query, cancellationToken); }
-        catch (Exception error) when (!cancellationToken.IsCancellationRequested && error is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException or InvalidDataException or InvalidOperationException)
-        { Response.StatusCode = 502; model.Error = "Place search is temporarily unavailable. Try again shortly."; }
-        return View(model);
-    }
+    public IActionResult Index(PlaceSearchViewModel model, CancellationToken cancellationToken)
+        => RedirectToAction("Index", "Vehicles");
 }

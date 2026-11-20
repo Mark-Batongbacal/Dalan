@@ -19,16 +19,34 @@ public sealed class PlanningMapViewModel
     public IReadOnlyList<PlanningMapPoint> Overview { get; init; } = [];
     public IReadOnlyList<PlanningMapRoute> Routes { get; init; } = [];
 
+    public static PlanningMapViewModel ForPlanner(FleetPlannerViewModel planner)
+    {
+        var targets = planner.Vehicles.Select((vehicle, i) => new PlanningMapTarget(
+            vehicle.RegistrationNumber + " start", $"Vehicles_{i}__StartLatitude", $"Vehicles_{i}__StartLongitude",
+            SelectionInputId: $"Vehicles_{i}__Selected")).ToList();
+        for (var i = 0; i < planner.Jobs.Count; i++)
+        {
+            targets.Add(new($"Job {i + 1} pickup", $"Jobs_{i}__PickupLatitude", $"Jobs_{i}__PickupLongitude"));
+            targets.Add(new($"Job {i + 1} drop-off", $"Jobs_{i}__DropoffLatitude", $"Jobs_{i}__DropoffLongitude"));
+        }
+        return new()
+        {
+            Title = "Choose vehicle starts and job locations",
+            Description = "Choose a location to set, search an address or position the map, then confirm. This planner previews jobs without saving or dispatching them.",
+            Targets = targets,
+            Overview = targets.Select(target => new PlanningMapPoint(target.Label,
+                LatitudeInputId: target.LatitudeInputId, LongitudeInputId: target.LongitudeInputId)).ToArray()
+        };
+    }
+
     public static PlanningMapViewModel ForBoard(DispatchBoardViewModel board)
     {
         var targets = new List<PlanningMapTarget> { new("Warehouse", "Settings_WarehouseLatitude", "Settings_WarehouseLongitude", "Settings_WarehouseAddress") };
-        var overview = new List<PlanningMapPoint>();
-        for (var i = 0; i < board.Vehicles.Count; i++)
+        var overview = new List<PlanningMapPoint>
         {
-            var v = board.Vehicles[i];
-            overview.Add(new(v.RegistrationNumber + " warehouse start", LatitudeInputId: "Settings_WarehouseLatitude",
-                LongitudeInputId: "Settings_WarehouseLongitude", SelectionInputId: $"Vehicles_{i}__Selected"));
-        }
+            new("Warehouse", LatitudeInputId: "Settings_WarehouseLatitude",
+                LongitudeInputId: "Settings_WarehouseLongitude", Order: -1)
+        };
         for (var i = 0; i < board.Deliveries.Count; i++)
         {
             var d = board.Deliveries[i];
@@ -55,7 +73,7 @@ public sealed class PlanningMapViewModel
     public static PlanningMapViewModel ForDelivery() => new()
     {
         Title = "Warehouse and drop-off",
-        Description = "Select your warehouse and the delivery destination. The warehouse is the pickup and is remembered for your dispatch board in this browser.",
+        Description = "Use your saved warehouse as pickup and confirm the delivery destination. Change your default warehouse from the dispatch workspace.",
         Targets = [new("Warehouse", "PickupLatitude", "PickupLongitude", "PickupAddress"),
                    new("Drop-off", "DropoffLatitude", "DropoffLongitude", "DropoffAddress")],
         Routes = [new("delivery", "Warehouse to drop-off", [

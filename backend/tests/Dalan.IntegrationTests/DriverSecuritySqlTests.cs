@@ -24,6 +24,43 @@ namespace Dalan.IntegrationTests;
 [Collection("SQL Server")]
 public sealed class DriverSecuritySqlTests(SqlServerFixture fixture)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Existing_receipt_replays_after_optional_GPS_fields_were_added(bool expandedFormat)
+    {
+        using var factory = CreateFactory();
+        using var client = Client(factory);
+        var seeded = await SeedAndLogin(factory, client, "Driver");
+        var request = new DriverTaskEvent(Guid.NewGuid(), seeded.AssignedAt, DateTimeOffset.UtcNow,
+            "Pickup", null, null, null, null);
+        var endpoint = $"/api/driver/tasks/{seeded.DeliveryId}/events";
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(endpoint, request)).StatusCode);
+        // Reproduce the exact pre-DLN-36 payload fingerprint stored by the old server.
+        var legacy = new
+        {
+            request.EventId,
+            request.AssignedAtUtc,
+            request.CapturedAtUtc,
+            request.Kind,
+            request.Latitude,
+            request.Longitude,
+            request.RecipientConfirmation,
+            request.Photo
+        };
+        await using (var db = fixture.CreateContext())
+        {
+            var legacyHash = Convert.ToHexString(SHA256.HashData(expandedFormat ? JsonSerializer.SerializeToUtf8Bytes(request) : JsonSerializer.SerializeToUtf8Bytes(legacy)));
+            await db.DriverEventReceipts.Where(x => x.DeliveryId == seeded.DeliveryId)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.PayloadHash, legacyHash));
+        }
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(endpoint, request)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(endpoint,
+            request with { CapturedAtUtc = request.CapturedAtUtc.AddSeconds(1) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync(endpoint,
+            request with { LocationAccuracyMeters = 10, LocationCapturedAtUtc = request.CapturedAtUtc })).StatusCode);
+    }
+
     [Fact]
     public async Task Tracking_http_requires_driver_token_owner_current_assignment_and_valid_stamp()
     {
@@ -184,6 +221,82 @@ public sealed class DriverSecuritySqlTests(SqlServerFixture fixture)
         await using var verify = fixture.CreateContext();
         Assert.Equal(DeliveryStatus.Assigned, (await verify.Deliveries.SingleAsync(d => d.Id == seeded.DeliveryId)).Status);
         Assert.False(await verify.DriverEventReceipts.AnyAsync(r => r.DeliveryId == seeded.DeliveryId));
+    }
+
+    [Fact]
+    public async Task Enabled_gps_proof_must_match_server_destination_and_have_fresh_accurate_fix()
+    {
+        using var factory = CreateFactory().WithWebHostBuilder(builder =>
+            builder.UseSetting("DriverGpsProof:Enabled", "true"));
+        using var client = Client(factory);
+        var seeded = await SeedAndLogin(factory, client, "Driver", pickedUp: true);
+        var eventTime = seeded.AssignedAt.AddMinutes(2);
+        var valid = new DriverTaskEvent(Guid.NewGuid(), seeded.AssignedAt, eventTime,
+            "Deliver", 14.1, 121.1, "Recipient confirmed",
+            [0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9],
+            LocationAccuracyMeters: 8,
+            LocationCapturedAtUtc: eventTime.AddSeconds(-10));
+        var endpoint = $"/api/driver/tasks/{seeded.DeliveryId}/events";
+
+        using var distant = await client.PostAsJsonAsync(endpoint,
+            valid with { EventId = Guid.NewGuid(), Latitude = 14.5, Longitude = 121.5 });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, distant.StatusCode);
+        Assert.Contains("GPS", await distant.Content.ReadAsStringAsync());
+
+        using var stale = await client.PostAsJsonAsync(endpoint,
+            valid with { EventId = Guid.NewGuid(), LocationCapturedAtUtc = eventTime.AddMinutes(-5) });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, stale.StatusCode);
+
+        using var unmeasured = await client.PostAsJsonAsync(endpoint,
+            valid with { EventId = Guid.NewGuid(), LocationAccuracyMeters = null });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, unmeasured.StatusCode);
+
+        await using (var db = fixture.CreateContext())
+        {
+            var delivery = await db.Deliveries.Include(x => x.Proof)
+                .SingleAsync(x => x.Id == seeded.DeliveryId);
+            Assert.Equal(DeliveryStatus.PickedUp, delivery.Status);
+            Assert.Null(delivery.Proof);
+            Assert.False(await db.DriverEventReceipts.AnyAsync(x => x.DeliveryId == seeded.DeliveryId));
+        }
+
+        using var accepted = await client.PostAsJsonAsync(endpoint, valid);
+        Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
+        using var replay = await client.PostAsJsonAsync(endpoint, valid);
+        Assert.Equal(HttpStatusCode.NoContent, replay.StatusCode);
+        await using var verify = fixture.CreateContext();
+        Assert.Equal(DeliveryStatus.Delivered,
+            (await verify.Deliveries.SingleAsync(x => x.Id == seeded.DeliveryId)).Status);
+        Assert.Equal(1, await verify.DriverEventReceipts.CountAsync(x => x.DeliveryId == seeded.DeliveryId));
+    }
+
+    [Fact]
+    public async Task Navigation_uses_current_origin_and_next_server_owned_stop_after_pickup()
+    {
+        var provider = new NavigationProvider(); using var factory = CreateFactory(provider);
+        using var client = Client(factory); var seeded = await SeedAndLogin(factory, client, "Driver");
+        var request = new Dalan.Application.DriverExecution.DriverNavigationRequest(new(14.02, 121.02), DateTimeOffset.UtcNow, 10);
+        var first = await client.PostAsJsonAsync("/api/driver/navigation", request);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal("Pickup", (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("stopKind").GetString());
+        Assert.Equal(request.Origin, provider.Origin); Assert.Equal(new GeoPoint(14, 121), provider.Destination);
+        var pickup = new DriverTaskEvent(Guid.NewGuid(), seeded.AssignedAt, DateTimeOffset.UtcNow.AddSeconds(-1), "Pickup", null, null, null, null);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync($"/api/driver/tasks/{seeded.DeliveryId}/events", pickup)).StatusCode);
+        var next = await client.PostAsJsonAsync("/api/driver/navigation", request);
+        Assert.Equal("Drop-off", (await next.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("stopKind").GetString());
+        Assert.Equal(new GeoPoint(14.1, 121.1), provider.Destination);
+        var calls = provider.Calls;
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.PostAsJsonAsync("/api/driver/navigation", request with { CapturedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5) })).StatusCode);
+        Assert.Equal(calls, provider.Calls);
+    }
+    private sealed class NavigationProvider : IRoutingService
+    {
+        public GeoPoint? Origin, Destination; public int Calls;
+        public Task<RoadRoute?> GetRouteAsync(GeoPoint origin, GeoPoint destination, CancellationToken token = default)
+        {
+            Origin = origin; Destination = destination; Calls++;
+            return Task.FromResult<RoadRoute?>(new(100, 30, "polyline", [new("Continue", 100, 30, 0, 1)]));
+        }
     }
 
     private WebApplicationFactory<Program> CreateFactory(IRoutingService? routing = null, bool tracking = false) =>

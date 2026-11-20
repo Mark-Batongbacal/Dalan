@@ -20,9 +20,13 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
         await page.locator("#Password").fill(fixture.password);
         await Promise.all([page.waitForURL(url => !url.pathname.includes("/Account/Login")), page.locator('button[type="submit"]').click()]);
         await page.goto(base + "/DispatchBoard");
+        if (!await page.locator(".dispatch-options").getAttribute("open").then(x => x !== null)) await page.locator(".dispatch-options > summary").click();
+        if (!await page.locator(".planning-map-tools").getAttribute("open").then(x => x !== null)) await page.locator(".planning-map-tools > summary").click();
         await page.locator("#Strategy").selectOption("WorkloadEquity");
         await page.locator('[name="Settings.ServiceSecondsPerStop"]').fill("60");
+        await page.locator("#Settings_WarehouseLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLatitude").fill("14.6");
+        await page.locator("#Settings_WarehouseLongitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });
         await page.locator("#Settings_WarehouseLongitude").fill("121.03");
         for (let i = 0; i < 2; i++) {
             await page.locator(`[name="Vehicles[${i}].Selected"][type="checkbox"]`).check();
@@ -39,8 +43,12 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
             fs.mkdirSync(output, { recursive: true });
             await page.screenshot({ path: path.join(output, "workload-preview.png"), fullPage: true });
             await page.locator("#theme-select").selectOption("dark");
-            await page.waitForFunction(() => getComputedStyle(document.querySelector(".btn-primary")).color === "rgb(37, 28, 19)");
-            await page.locator(".content-card").filter({ has: page.getByRole("heading", { name: "Available vehicles", exact: true }) })
+            await page.waitForFunction(() => {
+                const button = document.querySelector('.btn-primary'); if (!button) return true;
+                const probe = document.createElement('span'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--on-primary'); document.body.append(probe);
+                const expected = getComputedStyle(probe).color; probe.remove(); return getComputedStyle(button).color === expected;
+            });
+            await page.locator(".content-card").filter({ has: page.getByRole("heading", { name: "Choose 1 to 8 available vehicles", exact: true }) })
                 .screenshot({ path: path.join(output, "workload-dark.png") });
             await page.emulateMedia({ colorScheme: "light" });
             await page.locator("#theme-select").selectOption("system");

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Dalan.Application.DriverExecution;
@@ -9,11 +10,28 @@ using Dalan.Domain.Drivers;
 using Dalan.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Dalan.Infrastructure.Repositories;
 
-public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock) : IDriverTasks
+public sealed class DriverTasksRepository(
+    DalanDbContext db, TimeProvider clock, IConfiguration configuration) : IDriverTasks
 {
+    private readonly bool verifyGps = bool.TryParse(
+        configuration["DriverGpsProof:Enabled"], out var gpsEnabled) && gpsEnabled;
+    private readonly double radiusMeters = Number(configuration, "DriverGpsProof:RadiusMeters", 100, 10, 500);
+    private readonly double maximumAccuracyMeters = Number(configuration, "DriverGpsProof:MaxAccuracyMeters", 30, 1, 100);
+    private readonly double maximumFixAgeSeconds = Number(configuration, "DriverGpsProof:MaxFixAgeSeconds", 120, 10, 600);
+
+    private static double Number(IConfiguration configuration, string key, double fallback, double min, double max)
+    {
+        var setting = configuration[key];
+        if (string.IsNullOrWhiteSpace(setting)) return fallback;
+        if (!double.TryParse(setting, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            || !double.IsFinite(value) || value < min || value > max)
+            throw new InvalidOperationException($"{key} must be between {min} and {max}.");
+        return value;
+    }
     public Task<Guid?> FindDriverAsync(string userId, CancellationToken cancellationToken) =>
         (from account in db.DriverAccounts
          join driver in db.Drivers on account.DriverId equals driver.Id
@@ -24,9 +42,19 @@ public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock)
     {
         var deliveries = await ActiveDeliveries(driverId)
             .OrderBy(x => x.AssignedAtUtc).ThenBy(x => x.Id)
-            .Select(x => new { x.Id, x.RecipientName, x.PickupAddress, x.DropoffAddress,
-                x.Status, AssignedAt = x.AssignedAtUtc!.Value,
-                x.PickupLatitude, x.PickupLongitude, x.DropoffLatitude, x.DropoffLongitude })
+            .Select(x => new
+            {
+                x.Id,
+                x.RecipientName,
+                x.PickupAddress,
+                x.DropoffAddress,
+                x.Status,
+                AssignedAt = x.AssignedAtUtc!.Value,
+                x.PickupLatitude,
+                x.PickupLongitude,
+                x.DropoffLatitude,
+                x.DropoffLongitude
+            })
             .ToListAsync(cancellationToken);
         var ids = deliveries.Select(x => x.Id).ToArray();
         var stops = await (
@@ -68,19 +96,51 @@ public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock)
         db.DriverEventReceipts.Where(x => x.DeliveryId == deliveryId && x.Photo != null)
             .Select(x => x.Photo).SingleOrDefaultAsync(cancellationToken);
 
-    public async Task<DriverEventResult> ApplyAsync(Guid driverId, Guid deliveryId,
-        DriverTaskEvent request, CancellationToken cancellationToken)
+    public Task<DriverEventResult> ApplyAsync(Guid driverId, Guid deliveryId,
+        DriverTaskEvent request, CancellationToken cancellationToken) => ApplyCore(driverId, deliveryId, request, false, cancellationToken);
+    internal Task<DriverEventResult> ApplyReviewedAsync(Guid driverId, Guid deliveryId,
+        DriverTaskEvent request, CancellationToken cancellationToken) => ApplyCore(driverId, deliveryId, request, true, cancellationToken);
+    private async Task<DriverEventResult> ApplyCore(Guid driverId, Guid deliveryId,
+        DriverTaskEvent request, bool reviewedException, CancellationToken cancellationToken)
     {
         var delivery = await db.Deliveries.SingleOrDefaultAsync(
             x => x.Id == deliveryId && x.DriverId == driverId, cancellationToken);
         if (delivery is null) return DriverEventResult.Missing;
 
-        var hash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request)));
+        var expandedHash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request)));
+        // Preserve pre-GPS fingerprints for queued requests without fix metadata. Also accept
+        // the expanded-null format written during the rollout, without ignoring changed fixes.
+        var hash = request.LocationAccuracyMeters is null && request.LocationCapturedAtUtc is null
+            ? Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                request.EventId,
+                request.AssignedAtUtc,
+                request.CapturedAtUtc,
+                request.Kind,
+                request.Latitude,
+                request.Longitude,
+                request.RecipientConfirmation,
+                request.Photo
+            })))
+            : expandedHash;
         var replay = await ReadReceipt();
         if (replay is not null) return replay.Value;
         if (delivery.AssignedAtUtc != request.AssignedAtUtc) return DriverEventResult.Conflict;
         if (request.EventId == Guid.Empty || request.CapturedAtUtc > clock.GetUtcNow().AddMinutes(5))
             return DriverEventResult.Invalid;
+
+        // Feature-gated until the Android app submits accurate fix metadata and
+        // dispatcher exception/review UX is available. Validate against the
+        // server-stored destination, not any address or coordinates from the phone.
+        if (verifyGps && !reviewedException && request.Kind == "Deliver")
+        {
+            var gps = DeliveryGpsValidator.Check(
+                delivery.DropoffLatitude, delivery.DropoffLongitude,
+                request.Latitude, request.Longitude,
+                request.LocationAccuracyMeters, request.LocationCapturedAtUtc,
+                request.CapturedAtUtc, radiusMeters, maximumAccuracyMeters, maximumFixAgeSeconds);
+            if (gps != DeliveryGpsFailure.None) return DriverEventResult.GpsRejected;
+        }
 
         byte[]? photo = null;
         try
@@ -90,12 +150,16 @@ public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock)
                 case "Pickup" when request.Photo is null && request.RecipientConfirmation is null:
                     delivery.MarkPickedUp(driverId, request.CapturedAtUtc);
                     break;
-                case "Deliver" when request.Latitude is double latitude && request.Longitude is double longitude
+                case "Deliver" when (reviewedException || (request.Latitude is double && request.Longitude is double))
                     && request.Photo is { Length: >= 5 and <= 512_000 } jpeg
                     && jpeg[0] == 0xff && jpeg[1] == 0xd8 && jpeg[2] == 0xff
                     && jpeg[^2] == 0xff && jpeg[^1] == 0xd9:
-                    delivery.Complete(driverId, $"driver-upload:{request.EventId:D}",
-                        request.RecipientConfirmation, latitude, longitude, request.CapturedAtUtc);
+                    if (reviewedException)
+                        delivery.CompleteReviewedException(driverId, $"driver-upload:{request.EventId:D}",
+                            request.RecipientConfirmation!, request.Latitude, request.Longitude, request.CapturedAtUtc);
+                    else
+                        delivery.Complete(driverId, $"driver-upload:{request.EventId:D}",
+                            request.RecipientConfirmation, request.Latitude!.Value, request.Longitude!.Value, request.CapturedAtUtc);
                     photo = jpeg;
                     break;
                 default:
@@ -113,8 +177,11 @@ public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock)
 
         db.DriverEventReceipts.Add(new DriverEventReceipt
         {
-            DriverId = driverId, EventId = request.EventId, DeliveryId = deliveryId,
-            PayloadHash = hash, Photo = photo
+            DriverId = driverId,
+            EventId = request.EventId,
+            DeliveryId = deliveryId,
+            PayloadHash = hash,
+            Photo = photo
         });
         try
         {
@@ -134,7 +201,7 @@ public sealed class DriverTasksRepository(DalanDbContext db, TimeProvider clock)
                 .Select(x => new { x.DeliveryId, x.PayloadHash })
                 .SingleOrDefaultAsync(cancellationToken);
             if (receipt is null) return null;
-            return receipt.DeliveryId == deliveryId && receipt.PayloadHash == hash
+            return receipt.DeliveryId == deliveryId && (receipt.PayloadHash == hash || receipt.PayloadHash == expandedHash)
                 ? DriverEventResult.Applied : DriverEventResult.Conflict;
         }
     }
