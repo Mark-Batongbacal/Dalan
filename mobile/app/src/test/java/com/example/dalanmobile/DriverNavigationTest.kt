@@ -52,4 +52,31 @@ class DriverNavigationTest {
         assertEquals(2, navigationLines(navigation, point).single().coordinates().size)
         assertThrows(IllegalArgumentException::class.java) { navigationLines(navigation, NavigationPoint(16.0, 120.0)) }
     }
+
+    @Test fun starting_navigation_without_gps_keeps_the_assigned_road_preview() {
+        val preview = LineString.fromLngLats(listOf(Point.fromLngLat(120.0, 15.0), Point.fromLngLat(120.01, 15.01)))
+        assertEquals(listOf(preview), displayedRouteLines(true, emptyList(), preview))
+        assertEquals(listOf(preview), displayedRouteLines(false, emptyList(), preview))
+        assertTrue(displayedRouteLines(true, emptyList(), null).isEmpty())
+        assertEquals(listOf(preview), displayedRouteLines(true, listOf(preview), null))
+    }
+
+    @Test fun no_gps_preview_is_explicit_and_does_not_claim_a_driver_position() {
+        val request = driverJson.encodeToString(DriverNavigationRequest(null, "2026-11-20T10:00:00Z", 0.0,
+            includeRemainingStops = true, previewOnly = true))
+        assertTrue(request.contains("\"origin\":null"))
+        assertTrue(request.contains("\"previewOnly\":true"))
+    }
+
+    @Test fun preview_navigation_stop_restores_matching_geometry_and_distance_summary() {
+        val previewLine = LineString.fromLngLats(listOf(Point.fromLngLat(120.0, 15.0), Point.fromLngLat(120.01, 15.01)))
+        val activeLine = LineString.fromLngLats(listOf(Point.fromLngLat(120.02, 15.02), Point.fromLngLat(120.01, 15.01)))
+        val preview = DriverRoadRoute(1500.0, 240.0, previewLine.toPolyline(6))
+        val active = DriverRoadRoute(500.0, 60.0, activeLine.toPolyline(6))
+        for (navigating in listOf(false, true, false)) {
+            assertEquals(listOf(if (navigating) activeLine else previewLine), displayedRouteLines(navigating, listOf(activeLine), previewLine))
+            assertEquals(if (navigating) 500.0 else 1500.0, displayedRoadRoute(navigating, active, preview)!!.distanceMeters, .001)
+            assertEquals(if (navigating) 60.0 else 240.0, displayedRoadRoute(navigating, active, preview)!!.durationSeconds, .001)
+        }
+    }
 }

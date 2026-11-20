@@ -3,6 +3,12 @@ package com.example.dalanmobile.driver
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
+internal fun displayedRouteLines(navigating: Boolean, active: List<LineString>, preview: LineString?): List<LineString> =
+    if (navigating && active.isNotEmpty()) active else listOfNotNull(preview)
+
+internal fun displayedRoadRoute(navigating: Boolean, active: DriverRoadRoute?, preview: DriverRoadRoute?): DriverRoadRoute? =
+    if (navigating) active else preview
+
 internal fun navigationLines(navigation: DriverNavigationRoute, origin: NavigationPoint): List<LineString> {
     val stops = navigation.stops ?: listOf(DriverNavigationStop(navigation.deliveryId, navigation.stopKind,
         navigation.address, navigation.destination, navigation.route))

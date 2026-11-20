@@ -73,10 +73,50 @@ public sealed class DriverNavigationTests
         Assert.Empty(provider.Legs);
     }
 
+    [Theory]
+    [InlineData("null", 0)]
+    [InlineData("{\"latitude\":15,\"longitude\":120}", 100)]
+    public async Task Preview_can_use_assigned_stops_or_a_fresh_approximate_origin(string origin, int accuracy)
+    {
+        var provider = new Routing();
+        var delivery = Delivery("Assigned", 1, 2);
+        var service = new DriverNavigationService(new Tasks([delivery]), [provider], new Clock());
+        var request = JsonSerializer.Deserialize<DriverNavigationRequest>(
+            $$"""{"origin":{{origin}},"capturedAtUtc":"2026-11-20T10:00:00Z","accuracyMeters":{{accuracy}},"includeRemainingStops":true,"previewOnly":true}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        var result = await service.Navigate(Guid.NewGuid(), request, default);
+        Assert.Equal(2, result!.Stops!.Count);
+        Assert.Equal(origin == "null" ? new GeoPoint(delivery.PickupLatitude, delivery.PickupLongitude) : new GeoPoint(15, 120), provider.Legs[0].From);
+        Assert.Equal(0, provider.DirectionsRequests);
+    }
+
+    [Fact]
+    public async Task Guidance_still_rejects_an_imprecise_origin()
+    {
+        var provider = new Routing();
+        var service = new DriverNavigationService(new Tasks([Delivery("Assigned", 1, 2)]), [provider], new Clock());
+        await Assert.ThrowsAsync<ArgumentException>(() => service.Navigate(Guid.NewGuid(), new(new(15, 120), Now, 100, true), default));
+        Assert.Empty(provider.Legs);
+    }
+
+    [Theory]
+    [InlineData(1001, 0)]
+    [InlineData(100, -3)]
+    public async Task Preview_rejects_an_unusable_supplied_position(int accuracy, int minutes)
+    {
+        var provider = new Routing();
+        var service = new DriverNavigationService(new Tasks([Delivery("Assigned", 1, 2)]), [provider], new Clock());
+        await Assert.ThrowsAsync<ArgumentException>(() => service.Navigate(Guid.NewGuid(), new(new(15, 120), Now.AddMinutes(minutes), accuracy, true, true), default));
+        Assert.Empty(provider.Legs);
+    }
+
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => Now; }
     private sealed class Routing : IRoutingService
     {
         public List<(GeoPoint From, GeoPoint To)> Legs { get; } = [];
+        public int DirectionsRequests { get; private set; }
+        public Task<RoadRoute?> GetDirectionsAsync(GeoPoint origin, GeoPoint destination, CancellationToken token = default)
+        { DirectionsRequests++; return GetRouteAsync(origin, destination, token); }
         public Task<RoadRoute?> GetRouteAsync(GeoPoint origin, GeoPoint destination, CancellationToken token = default)
         { Legs.Add((origin, destination)); return Task.FromResult<RoadRoute?>(new(100, 10, "test-polyline")); }
     }
