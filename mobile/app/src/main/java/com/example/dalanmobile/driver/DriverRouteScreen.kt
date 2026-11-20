@@ -33,6 +33,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -84,6 +85,9 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
     val dropoff = stopPoint(task.dropoffLatitude, task.dropoffLongitude)
     var route by remember(task.id) { mutableStateOf<DriverRoadRoute?>(null) }
     var line by remember(task.id) { mutableStateOf<LineString?>(null) }
+    var previewLine by remember(task.id) { mutableStateOf<LineString?>(null) }
+    var previewRoute by remember(task.id) { mutableStateOf<DriverRoadRoute?>(null) }
+    var previewStatus by remember(task.id) { mutableStateOf("Loading road route…") }
     var remainingLines by remember(task.id) { mutableStateOf<List<LineString>>(emptyList()) }
     var status by remember(task.id) { mutableStateOf("Loading road route…") }
     var mapLoaded by remember(task.id) { mutableStateOf<Boolean?>(null) }
@@ -98,6 +102,8 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
     val navigationLifecycle = LocalLifecycleOwner.current.lifecycle
     val assignedStops = NavigationPolicy.remainingStops(workspace.tasks)
     var navigating by remember { mutableStateOf(false) }
+    val navigationActive by rememberUpdatedState(navigating)
+    var routePreviewOnly by remember { mutableStateOf(true) }
     var navigation by remember { mutableStateOf<DriverNavigationRoute?>(null) }
     var position by remember { mutableStateOf<Point?>(null) }
     var guidance by remember { mutableStateOf("") }
@@ -115,40 +121,43 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
         while (true) {
             if (!navigationLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { delay(15_000); continue }
             try {
-                val fix = currentLocation(context)
-                if (fix == null || !fix.hasAccuracy() || fix.accuracy > 50 ||
-                    java.time.Instant.now().toEpochMilli() - fix.time !in 0..120_000) {
-                    status = "Navigation paused. Get a fresh, precise location. Shown route is a preview."
-                    guidance = ""; position = null
-                } else {
-                    val point = NavigationPoint(fix.latitude, fix.longitude)
-                    position = Point.fromLngLat(fix.longitude, fix.latitude)
-                    val points = line?.coordinates().orEmpty().map { NavigationPoint(it.latitude(), it.longitude()) }
-                    val now = SystemClock.elapsedRealtime()
-                    if (lastRequest == 0L || NavigationPolicy.shouldReroute(now - lastRequest,
-                            NavigationPolicy.distanceToRoute(point, points), navigation != null)) {
-                        lastRequest = now
-                        val result = model.navigate(fix)
-                        if (result == null) { status = "No remaining assigned stops. Sync your deliveries."; guidance = ""; break }
-                        val allLegs = navigationLines(result, point)
-                        require(allLegs.isNotEmpty())
-                        navigation = result; route = result.route; line = allLegs.first(); shapeProgress = 0
-                        remainingLines = allLegs
-                    }
-                    if (navigation == null) { delay(15_000); continue }
-                    val activePoints = line?.coordinates().orEmpty().map { NavigationPoint(it.latitude(), it.longitude()) }
-                    val distance = NavigationPolicy.distanceToRoute(point, activePoints)
-                    val nearest = activePoints.indices.minByOrNull { NavigationPolicy.distance(point, activePoints[it]) } ?: 0
-                    if (distance <= NavigationPolicy.OFF_ROUTE_METERS) shapeProgress = maxOf(shapeProgress, nearest)
-                    remainingMeters = if (activePoints.isEmpty()) null else NavigationPolicy.distance(point, activePoints[shapeProgress.coerceAtMost(activePoints.lastIndex)]) +
-                        activePoints.drop(shapeProgress).zipWithNext().sumOf { (a,b) -> NavigationPolicy.distance(a,b) }
-                    remainingSeconds = route?.let { if (it.distanceMeters > 0) it.durationSeconds * ((remainingMeters ?: it.distanceMeters) / it.distanceMeters).coerceIn(0.0,1.0) else 0.0 }
-                    guidance = if (distance > NavigationPolicy.OFF_ROUTE_METERS) "Off route. Waiting for the reroute cooldown."
-                        else route?.maneuvers?.firstOrNull { it.endShapeIndex >= shapeProgress }?.instruction
-                            ?: "No turn instructions available. Follow the route preview carefully."
-                    status = if (navigation?.stops == null) "Next leg only. Full route needs the updated server."
-                        else "ETA estimated. Follow road signs."
+                val fix = currentLocation(context, maximumAccuracyMeters = 50f)?.takeIf { it.accuracy <= 1000f }
+                val point = fix?.let { NavigationPoint(it.latitude, it.longitude) }
+                val previewOnly = fix == null || fix.accuracy > 50f
+                position = point?.let { Point.fromLngLat(it.longitude, it.latitude) }
+                val points = line?.coordinates().orEmpty().map { NavigationPoint(it.latitude(), it.longitude()) }
+                val now = SystemClock.elapsedRealtime()
+                if (lastRequest == 0L || routePreviewOnly != previewOnly || NavigationPolicy.shouldReroute(now - lastRequest,
+                        point?.let { NavigationPolicy.distanceToRoute(it, points) } ?: 0.0, navigation != null)) {
+                    lastRequest = now
+                    val result = model.navigate(fix, previewOnly = previewOnly)
+                    if (result == null) { status = "No remaining assigned stops. Sync your deliveries."; guidance = ""; break }
+                    val allLegs = navigationLines(result, point ?: result.stops?.firstOrNull()?.destination ?: result.destination)
+                    require(allLegs.isNotEmpty())
+                    navigation = result; route = result.route; line = allLegs.first(); shapeProgress = 0
+                    remainingLines = allLegs.filter { it.coordinates().distinct().size > 1 }
+                    routePreviewOnly = previewOnly
                 }
+                if (navigation == null) { delay(15_000); continue }
+                if (point == null || previewOnly) {
+                    guidance = ""
+                    status = if (fix == null) "Assigned route preview. Waiting for current GPS."
+                        else "Approximate route · GPS ±${fix.accuracy.roundToInt()} m. Precise GPS needed for guidance."
+                    delay(15_000)
+                    continue
+                }
+                val activePoints = line?.coordinates().orEmpty().map { NavigationPoint(it.latitude(), it.longitude()) }
+                val distance = NavigationPolicy.distanceToRoute(point, activePoints)
+                val nearest = activePoints.indices.minByOrNull { NavigationPolicy.distance(point, activePoints[it]) } ?: 0
+                if (distance <= NavigationPolicy.OFF_ROUTE_METERS) shapeProgress = maxOf(shapeProgress, nearest)
+                remainingMeters = if (activePoints.isEmpty()) null else NavigationPolicy.distance(point, activePoints[shapeProgress.coerceAtMost(activePoints.lastIndex)]) +
+                    activePoints.drop(shapeProgress).zipWithNext().sumOf { (a,b) -> NavigationPolicy.distance(a,b) }
+                remainingSeconds = route?.let { if (it.distanceMeters > 0) it.durationSeconds * ((remainingMeters ?: it.distanceMeters) / it.distanceMeters).coerceIn(0.0,1.0) else 0.0 }
+                guidance = if (distance > NavigationPolicy.OFF_ROUTE_METERS) "Off route. Waiting for the reroute cooldown."
+                    else route?.maneuvers?.firstOrNull { it.endShapeIndex >= shapeProgress }?.instruction
+                        ?: "No turn instructions available. Follow the route preview carefully."
+                status = if (navigation?.stops == null) "Next leg only. Full route needs the updated server."
+                    else "ETA estimated. Follow road signs."
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 guidance = ""
@@ -162,31 +171,30 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
             delay(15_000)
         }
     }
-    LaunchedEffect(task.id, task.assignedAtUtc, attempt, pickup, dropoff, navigating) {
-        if (navigating) return@LaunchedEffect
+    LaunchedEffect(task.id, task.assignedAtUtc, attempt, pickup, dropoff) {
         if (pickup == null || dropoff == null) {
             status = "Sync deliveries to load the map stops."
             return@LaunchedEffect
         }
-        status = "Loading road route…"
+        if (!navigationActive) status = "Loading road route…"
         try {
             val result = model.route(task.id)
             val geometry = LineString.fromPolyline(result.encodedPolyline6, 6)
             require(geometry.coordinates().size >= 2)
-            line = geometry
-            route = result
-            status = ""
+            previewLine = geometry
+            previewRoute = result
+            previewStatus = ""
+            if (!navigationActive) { line = geometry; route = result; status = "" }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            route = null
-            line = null
-            status = when ((error as? DriverHttpException)?.status) {
+            previewStatus = when ((error as? DriverHttpException)?.status) {
                 401, 403 -> "Sign in again to load the road route."
                 404 -> "This delivery is no longer assigned to you."
                 422 -> "No road route was found between these stops."
                 else -> "Road route unavailable. Check connection and retry."
             }
+            if (!navigationActive) { route = previewRoute; line = previewLine; status = previewStatus }
         }
     }
 
@@ -212,7 +220,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                     dropoff?.let { DriverNavigationStop(task.id, "Drop-off", task.dropoffAddress, NavigationPoint(it.latitude(), it.longitude())) })
                 if (mapStops.isNotEmpty()) {
                     key(task.id, attempt) {
-                        DeliveryMap(mapStops, if (navigating) remainingLines else listOfNotNull(line),
+                        DeliveryMap(mapStops, displayedRouteLines(navigating, remainingLines, previewLine),
                             Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.extraLarge)
                                 .onGloballyPositioned { mapBounds = it.boundsInRoot() }, position, mapFocused) { mapLoaded = it }
                     }
@@ -228,7 +236,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                 }
                 WorkspacePanel {
                     Text(navigation?.let { "${it.stopKind}: ${it.address}" } ?: "Assigned stops", style = MaterialTheme.typography.titleLarge)
-                    route?.let {
+                    displayedRoadRoute(navigating, route, previewRoute)?.takeIf { !navigating || !routePreviewOnly || position != null }?.let {
                         val distance = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 1 }.format(it.distanceMeters / 1000)
                         val minutes = (it.durationSeconds / 60).roundToInt().coerceAtLeast(1)
                         Text("$distance km · about $minutes min by road", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
@@ -247,7 +255,11 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(onClick = {
                         mapFocused = false
-                        if (navigating) { navigating = false; navigation = null; position = null; guidance = "" }
+                        if (navigating) {
+                            navigating = false; navigation = null; position = null; guidance = ""
+                            route = previewRoute; line = previewLine; status = previewStatus
+                            remainingLines = emptyList(); remainingMeters = null; remainingSeconds = null
+                        }
                         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) navigating = true
                         else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = CircleShape) {

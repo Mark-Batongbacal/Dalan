@@ -122,11 +122,13 @@ class DriverViewModel(application: Application) : AndroidViewModel(application) 
         return api.route(account, deliveryId)
     }
 
-    suspend fun navigate(location: android.location.Location): DriverNavigationRoute? {
+    suspend fun navigate(location: android.location.Location?, previewOnly: Boolean = false): DriverNavigationRoute? {
         val account = session.value ?: throw DriverHttpException(401)
-        return api.navigate(account, DriverNavigationRequest(NavigationPoint(location.latitude, location.longitude),
-            Instant.ofEpochMilli(location.time).toString(), if (location.hasAccuracy()) location.accuracy.toDouble() else 10000.0,
-            includeRemainingStops = true))
+        require(location != null || previewOnly)
+        return api.navigate(account, DriverNavigationRequest(location?.let { NavigationPoint(it.latitude, it.longitude) },
+            location?.let { Instant.ofEpochMilli(it.time).toString() } ?: Instant.now().toString(),
+            location?.let { if (it.hasAccuracy()) it.accuracy.toDouble() else 10000.0 } ?: 0.0,
+            includeRemainingStops = true, previewOnly = previewOnly))
     }
 
     fun discard(event: PendingEvent) = runOperation {
