@@ -22,6 +22,7 @@ val SemanticWarning   = Color(0xFF8F5C0A)
 val SemanticWarningBg = Color(0xFFFFF3DB)
 val SemanticError     = Color(0xFFB42318)
 val SemanticErrorBg   = Color(0xFFFDE8E8)
+val SemanticInfo      = Color(0xFF315C8C)
 
 // Dark mode
 val DarkNav           = Color(0xFF1A1D21)

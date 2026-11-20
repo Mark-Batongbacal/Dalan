@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -39,6 +41,13 @@ class MainActivity : ComponentActivity() {
                 "Dark" -> true
                 "Light" -> false
                 else -> isSystemInDarkTheme()
+            }
+            DisposableEffect(dark) {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+                onDispose { }
             }
             DalanMobileTheme(dark) {
                 DriverScreen(model, appearance) { choice ->
