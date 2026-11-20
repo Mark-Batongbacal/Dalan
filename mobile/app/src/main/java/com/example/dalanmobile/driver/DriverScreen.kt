@@ -484,18 +484,17 @@ private fun ProofForm(task: TaskInfo, busy: Boolean, gpsProofEnabled: Boolean, m
     }
 }
 
-internal suspend fun currentLocation(context: Context): Location? {
+internal suspend fun currentLocation(context: Context, maximumAccuracyMeters: Float = Float.MAX_VALUE): Location? {
     val manager = context.getSystemService(LocationManager::class.java)
     val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
     val providers = buildList {
-        if (fine) add(LocationManager.GPS_PROVIDER to 8_000L)
-        add(LocationManager.FUSED_PROVIDER to 6_000L)
-        add(LocationManager.NETWORK_PROVIDER to 6_000L)
+        if (fine) add(LocationManager.GPS_PROVIDER)
+        add(LocationManager.FUSED_PROVIDER)
+        add(LocationManager.NETWORK_PROVIDER)
     }
-    for ((provider, timeout) in providers) {
-        if (!manager.isProviderEnabled(provider)) continue
-        val fix = withTimeoutOrNull(timeout) {
+    return selectLocationFix(providers, maximumAccuracyMeters) { provider ->
+        if (!manager.isProviderEnabled(provider)) null else withTimeoutOrNull(if (provider == LocationManager.GPS_PROVIDER) 8_000L else 6_000L) {
             suspendCancellableCoroutine { continuation ->
                 val cancel = CancellationSignal()
                 continuation.invokeOnCancellation { cancel.cancel() }
@@ -510,7 +509,5 @@ internal suspend fun currentLocation(context: Context): Location? {
                 }
             }
         }
-        if (fix != null) return fix
     }
-    return null
 }

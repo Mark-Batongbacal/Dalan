@@ -107,6 +107,21 @@ public sealed class DriverExecutionTests(SqlServerFixture fixture)
         Assert.All(navigation.GetProperty("stops").EnumerateArray(), stop => Assert.Equal(delivery.Id, stop.GetProperty("deliveryId").GetGuid()));
         Assert.Equal("Pickup", navigation.GetProperty("stops")[0].GetProperty("stopKind").GetString());
         Assert.Equal("Drop-off", navigation.GetProperty("stops")[1].GetProperty("stopKind").GetString());
+        foreach (var origin in new object?[] { null, new { latitude = 14.01, longitude = 121.01 } })
+        {
+            using var preview = await client.PostAsJsonAsync("/api/driver/navigation", new {
+                origin, capturedAtUtc = DateTimeOffset.UtcNow, accuracyMeters = 100,
+                includeRemainingStops = true, previewOnly = true
+            });
+            Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
+            var previewRoute = await preview.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2, previewRoute.GetProperty("stops").GetArrayLength());
+        }
+        using var impreciseGuidance = await client.PostAsJsonAsync("/api/driver/navigation", new {
+            origin = new { latitude = 14.01, longitude = 121.01 }, capturedAtUtc = DateTimeOffset.UtcNow,
+            accuracyMeters = 100, includeRemainingStops = true
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, impreciseGuidance.StatusCode);
         routing.Result = null;
         Assert.Equal(HttpStatusCode.UnprocessableEntity, (await client.GetAsync(ownRoute)).StatusCode);
         routing.Fail = true;
