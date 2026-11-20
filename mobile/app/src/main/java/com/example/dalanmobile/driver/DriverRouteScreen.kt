@@ -69,6 +69,7 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import kotlin.math.roundToInt
@@ -83,6 +84,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
     val dropoff = stopPoint(task.dropoffLatitude, task.dropoffLongitude)
     var route by remember(task.id) { mutableStateOf<DriverRoadRoute?>(null) }
     var line by remember(task.id) { mutableStateOf<LineString?>(null) }
+    var remainingLines by remember(task.id) { mutableStateOf<List<LineString>>(emptyList()) }
     var status by remember(task.id) { mutableStateOf("Loading road route…") }
     var mapLoaded by remember(task.id) { mutableStateOf<Boolean?>(null) }
     var attempt by remember(task.id) { mutableIntStateOf(0) }
@@ -94,9 +96,7 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
     val context = LocalContext.current
     val workspace by model.state.collectAsState()
     val navigationLifecycle = LocalLifecycleOwner.current.lifecycle
-    val nextStopKey = workspace.tasks.sortedWith(compareBy<TaskInfo> { it.assignedAtUtc }.thenBy {
-        if (it.status == "PickedUp") it.dropoffPosition ?: Int.MAX_VALUE else it.pickupPosition ?: Int.MAX_VALUE
-    }).firstOrNull()?.let { "${it.id}:${it.status}:${it.assignedAtUtc}" }
+    val assignedStops = NavigationPolicy.remainingStops(workspace.tasks)
     var navigating by remember { mutableStateOf(false) }
     var navigation by remember { mutableStateOf<DriverNavigationRoute?>(null) }
     var position by remember { mutableStateOf<Point?>(null) }
@@ -109,9 +109,9 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
         navigating = result.values.any { it }
         if (!navigating) status = "Location permission denied. The assigned-stop preview remains available."
     }
-    LaunchedEffect(navigating, nextStopKey, attempt) {
+    LaunchedEffect(navigating, workspace.tasks, attempt) {
         if (!navigating) return@LaunchedEffect
-        navigation = null; line = null; route = null; guidance = ""; lastRequest = 0L
+        navigation = null; remainingLines = emptyList(); guidance = ""; lastRequest = 0L
         while (true) {
             if (!navigationLifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { delay(15_000); continue }
             try {
@@ -130,10 +130,12 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                         lastRequest = now
                         val result = model.navigate(fix)
                         if (result == null) { status = "No remaining assigned stops. Sync your deliveries."; guidance = ""; break }
-                        val geometry = LineString.fromPolyline(result.route.encodedPolyline6, 6)
-                        require(geometry.coordinates().size >= 2)
-                        navigation = result; route = result.route; line = geometry; shapeProgress = 0
+                        val allLegs = navigationLines(result, point)
+                        require(allLegs.isNotEmpty())
+                        navigation = result; route = result.route; line = allLegs.first(); shapeProgress = 0
+                        remainingLines = allLegs
                     }
+                    if (navigation == null) { delay(15_000); continue }
                     val activePoints = line?.coordinates().orEmpty().map { NavigationPoint(it.latitude(), it.longitude()) }
                     val distance = NavigationPolicy.distanceToRoute(point, activePoints)
                     val nearest = activePoints.indices.minByOrNull { NavigationPolicy.distance(point, activePoints[it]) } ?: 0
@@ -144,11 +146,12 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                     guidance = if (distance > NavigationPolicy.OFF_ROUTE_METERS) "Off route. Waiting for the reroute cooldown."
                         else route?.maneuvers?.firstOrNull { it.endShapeIndex >= shapeProgress }?.instruction
                             ?: "No turn instructions available. Follow the route preview carefully."
-                    status = "ETA estimated. Follow road signs."
+                    status = if (navigation?.stops == null) "Next leg only. Full route needs the updated server."
+                        else "ETA estimated. Follow road signs."
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                guidance = ""; position = null
+                guidance = ""
                 status = when ((error as? DriverHttpException)?.status) {
                     401,403 -> "Sign in again to navigate."
                     422 -> "No route or fresh accurate position. Check location and retry."
@@ -204,11 +207,13 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                 Text(if (navigating) "Current route" else "Pickup to drop-off", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
                 Text(if (navigating) navigation?.let { active -> workspace.tasks.firstOrNull { it.id == active.deliveryId }?.recipientName } ?: "Next assigned stop" else task.recipientName,
                     style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (pickup != null && dropoff != null) {
+                val mapStops = if (navigating) navigation?.stops ?: assignedStops else listOfNotNull(
+                    pickup?.let { DriverNavigationStop(task.id, "Pickup", task.pickupAddress, NavigationPoint(it.latitude(), it.longitude())) },
+                    dropoff?.let { DriverNavigationStop(task.id, "Drop-off", task.dropoffAddress, NavigationPoint(it.latitude(), it.longitude())) })
+                if (mapStops.isNotEmpty()) {
                     key(task.id, attempt) {
-                        DeliveryMap(if (navigating) null else pickup,
-                            navigation?.destination?.let { Point.fromLngLat(it.longitude, it.latitude) } ?: dropoff,
-                            line, Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.extraLarge)
+                        DeliveryMap(mapStops, if (navigating) remainingLines else listOfNotNull(line),
+                            Modifier.fillMaxWidth().height(mapHeight).clip(MaterialTheme.shapes.extraLarge)
                                 .onGloballyPositioned { mapBounds = it.boundsInRoot() }, position, mapFocused) { mapLoaded = it }
                     }
                     DriverRouteLegend(navigating)
@@ -233,6 +238,10 @@ fun DriverRouteScreen(task: TaskInfo, model: DriverViewModel, close: () -> Unit)
                     }
                     if (guidance.isNotBlank()) Text(guidance, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.titleMedium)
                     if (status.isNotEmpty()) Text(status, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodyMedium)
+                    if (navigating) {
+                        Text("${mapStops.size} remaining stops", style = MaterialTheme.typography.titleMedium)
+                        mapStops.forEachIndexed { index, stop -> Text("${index + 1}. ${stop.stopKind} · ${stop.address}", style = MaterialTheme.typography.bodySmall) }
+                    }
                     Text(if (navigating) "Uses location while this map is open. Dispatch sharing is separate."
                         else "Start navigation from your location.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -255,11 +264,9 @@ internal fun DriverRouteLegend(navigating: Boolean) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (navigating) {
             MapStopLegend("Current position", driverPositionColor())
-            MapStopLegend("Next stop", MaterialTheme.colorScheme.primary)
-        } else {
-            MapStopLegend("Pickup", MaterialTheme.colorScheme.tertiary)
-            MapStopLegend("Drop-off", MaterialTheme.colorScheme.primary)
         }
+        MapStopLegend("Pickup", MaterialTheme.colorScheme.tertiary)
+        MapStopLegend("Drop-off", MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -279,7 +286,7 @@ private fun stopPoint(latitude: Double?, longitude: Double?): Point? =
     if (latitude != null && longitude != null) Point.fromLngLat(longitude, latitude) else null
 
 @Composable
-private fun DeliveryMap(pickup: Point?, dropoff: Point, line: LineString?, modifier: Modifier,
+internal fun DeliveryMap(stops: List<DriverNavigationStop>, lines: List<LineString>, modifier: Modifier,
                         currentPosition: Point? = null, focused: Boolean = false, basemapLoaded: (Boolean) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val dark = colors.background.luminance() < .5f
@@ -328,8 +335,8 @@ private fun DeliveryMap(pickup: Point?, dropoff: Point, line: LineString?, modif
                         PropertyFactory.lineColor(casingColor), PropertyFactory.lineWidth(8f)))
                     style.addLayer(LineLayer("dalan-route-line", ROUTE_SOURCE).withProperties(
                         PropertyFactory.lineColor(routeColor), PropertyFactory.lineWidth(5f)))
-                    addStop(style, "dalan-pickup", pickup, pickupColor)
-                    addStop(style, "dalan-dropoff", dropoff, routeColor)
+                    addStop(style, "dalan-pickup", null, pickupColor)
+                    addStop(style, "dalan-dropoff", null, routeColor)
                     readyStyle = style
                     basemapLoaded(!fallback)
                 }
@@ -351,16 +358,15 @@ private fun DeliveryMap(pickup: Point?, dropoff: Point, line: LineString?, modif
         }
     }
 
-    LaunchedEffect(view, readyMap, readyStyle, line, pickup, dropoff, currentPosition, frameRequest) {
+    LaunchedEffect(view, readyMap, readyStyle, lines, stops, currentPosition, frameRequest) {
         val map = readyMap ?: return@LaunchedEffect
         val style = readyStyle ?: return@LaunchedEffect
         val source = style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE) ?: return@LaunchedEffect
-        if (line == null) source.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
-        else source.setGeoJson(line)
-        style.getSourceAs<GeoJsonSource>("dalan-pickup")?.let {
-            if (pickup == null) it.setGeoJson(FeatureCollection.fromFeatures(emptyList())) else it.setGeoJson(pickup)
+        source.setGeoJson(FeatureCollection.fromFeatures(lines.map { Feature.fromGeometry(it) }))
+        for ((kind, id) in listOf("Pickup" to "dalan-pickup", "Drop-off" to "dalan-dropoff")) {
+            style.getSourceAs<GeoJsonSource>(id)?.setGeoJson(FeatureCollection.fromFeatures(stops.filter { it.stopKind == kind }
+                .map { Feature.fromGeometry(Point.fromLngLat(it.destination.longitude, it.destination.latitude)) }))
         }
-        style.getSourceAs<GeoJsonSource>("dalan-dropoff")?.setGeoJson(dropoff)
         val current = style.getSourceAs<GeoJsonSource>("dalan-current-position")
         if (current == null) {
             style.addSource(GeoJsonSource("dalan-current-position", FeatureCollection.fromFeatures(emptyList())))
@@ -371,7 +377,7 @@ private fun DeliveryMap(pickup: Point?, dropoff: Point, line: LineString?, modif
         style.getSourceAs<GeoJsonSource>("dalan-current-position")?.let {
             if (currentPosition == null) it.setGeoJson(FeatureCollection.fromFeatures(emptyList())) else it.setGeoJson(currentPosition)
         }
-        val points = (listOfNotNull(pickup, dropoff, currentPosition) + line?.coordinates().orEmpty())
+        val points = (stops.map { Point.fromLngLat(it.destination.longitude, it.destination.latitude) } + listOfNotNull(currentPosition) + lines.flatMap { it.coordinates() })
             .map { LatLng(it.latitude(), it.longitude()) }.distinct()
         view.post {
             if (!view.isAttachedToWindow) return@post

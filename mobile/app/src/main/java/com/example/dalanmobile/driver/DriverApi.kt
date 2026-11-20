@@ -58,9 +58,12 @@ data class DriverRoadRoute(
 @Serializable data class DriverManeuver(val instruction: String, val distanceMeters: Double,
     val durationSeconds: Double, val beginShapeIndex: Int, val endShapeIndex: Int)
 @Serializable data class NavigationPoint(val latitude: Double, val longitude: Double)
-@Serializable data class DriverNavigationRequest(val origin: NavigationPoint, val capturedAtUtc: String, val accuracyMeters: Double)
+@Serializable data class DriverNavigationRequest(val origin: NavigationPoint, val capturedAtUtc: String, val accuracyMeters: Double,
+    val includeRemainingStops: Boolean = false)
+@Serializable data class DriverNavigationStop(val deliveryId: String, val stopKind: String, val address: String,
+    val destination: NavigationPoint, val route: DriverRoadRoute? = null)
 @Serializable data class DriverNavigationRoute(val deliveryId: String, val stopKind: String, val address: String,
-    val destination: NavigationPoint, val route: DriverRoadRoute)
+    val destination: NavigationPoint, val route: DriverRoadRoute, val stops: List<DriverNavigationStop>? = null)
 
 @Serializable
 data class TaskEvent(
