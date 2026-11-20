@@ -1,0 +1,28 @@
+@model DeliveryBatchViewModel
+@{
+    ViewData["Title"]="Create multiple deliveries";
+    var targets=Model.Rows.Select((_,i)=>new PlanningMapTarget($"Delivery {i+1} destination",$"Rows_{i}__DropoffLatitude",$"Rows_{i}__DropoffLongitude",$"Rows_{i}__DropoffAddress")).ToArray();
+    var map=new PlanningMapViewModel { Title="Set delivery destinations",Description="Choose a delivery, search its address and confirm your own destination pin. Every pickup uses your saved warehouse.",Targets=targets,
+        Overview=(Model.Warehouse is null ? Array.Empty<PlanningMapPoint>() : new[]{new PlanningMapPoint(Model.Warehouse.Name,Model.Warehouse.Latitude,Model.Warehouse.Longitude)}).Concat(targets.Select(t=>new PlanningMapPoint(t.Label,LatitudeInputId:t.LatitudeInputId,LongitudeInputId:t.LongitudeInputId))).ToArray() };
+}
+<div class="page-heading"><span class="page-kicker">Step 3 · Multiple deliveries</span><h1>Create a delivery batch</h1><p>Add up to 15 deliveries. Review all destinations before saving; the batch is created together.</p></div>
+@if(Model.Warehouse is null) { <section class="content-card"><h2 class="h5">Set your warehouse first</h2><p>The batch needs your saved default pickup location.</p><a href="/Warehouse" class="btn btn-primary">Go to step 1</a></section> }
+else {
+<form method="post"><div class="location-workspace">
+    <aside class="location-workspace-map" aria-label="Batch destination map"><partial name="_PlanningMap" model="map" /></aside>
+    <div class="location-workspace-fields"><div asp-validation-summary="All" class="text-danger" role="alert"></div>
+    <section class="content-card mb-3"><h2 class="h5">Pickup: @Model.Warehouse.Name</h2><a href="/Warehouse">Change default warehouse</a><label for="ExpectedDeliveryLocal" class="form-label mt-3">Expected delivery time for this batch</label><input asp-for="ExpectedDeliveryAtUtc" type="hidden" value="@(Model.ExpectedDeliveryAtUtc?.ToString("O"))" /><input asp-for="ExpectedDeliveryLocal" class="form-control" type="datetime-local" step="1800" data-delivery-time data-time-default="@(ViewData.ModelState.Count==0 ? "true":"false")" /><div class="workflow-actions mt-2"><button type="button" class="btn btn-outline-secondary" data-time-step="-30">−30 min</button><button type="button" class="btn btn-outline-secondary" data-time-step="30">+30 min</button></div><small class="form-text" data-time-zone>Times use your local time zone.</small></section>
+    <div data-batch-rows>
+    @for(var i=0;i<Model.Rows.Count;i++) {
+        <section class="content-card mb-3" data-batch-row><h2 class="h5" data-batch-heading>Delivery @(i+1)</h2>
+            <label asp-for="Rows[i].RecipientName" class="form-label">Recipient name</label><input asp-for="Rows[i].RecipientName" class="form-control mb-3" required />
+            <label asp-for="Rows[i].DropoffAddress" class="form-label">Drop-off address</label><input asp-for="Rows[i].DropoffAddress" class="form-control mb-3" required />
+            <label asp-for="Rows[i].PayloadWeightKg" class="form-label">Payload weight (kg)</label><input asp-for="Rows[i].PayloadWeightKg" class="form-control" type="number" min="0.01" step="0.01" />
+            <details data-map-coordinate-fields><summary>Advanced destination coordinates</summary><label asp-for="Rows[i].DropoffLatitude" class="form-label">Drop-off latitude</label><input asp-for="Rows[i].DropoffLatitude" class="form-control" type="number" step="any" /><label asp-for="Rows[i].DropoffLongitude" class="form-label">Drop-off longitude</label><input asp-for="Rows[i].DropoffLongitude" class="form-control" type="number" step="any" /></details>
+        </section>
+    }
+    </div><div class="workflow-actions"><button type="button" class="btn btn-outline-secondary" data-batch-add>Add another delivery</button><button type="button" class="btn btn-outline-secondary" data-batch-remove>Remove last delivery</button></div><p class="form-text" data-batch-count role="status"></p><button type="submit" class="btn btn-primary">Create deliveries &amp; assign</button>
+    </div>
+</div></form>
+}
+@section Scripts { <partial name="_PlanningMapAssets" /><partial name="_ValidationScriptsPartial" /><script src="~/js/delivery-time.js" asp-append-version="true"></script><script src="~/js/delivery-batch.js" asp-append-version="true"></script> }

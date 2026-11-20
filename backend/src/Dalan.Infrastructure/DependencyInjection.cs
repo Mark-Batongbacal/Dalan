@@ -48,6 +48,10 @@ public static class DependencyInjection
         services.AddScoped<IGpsExceptionService, GpsExceptionService>();
         services.AddScoped<IDriverNavigationService, DriverNavigationService>();
         services.AddScoped<IDeliveryRepository, DeliveryRepository>();
+        services.AddScoped<IDeliveryBatchRepository, DeliveryRepository>();
+        services.AddScoped<IDeliveryBatchService, DeliveryBatchService>();
+        services.AddScoped<IWarehousePreferenceRepository, WarehousePreferenceRepository>();
+        services.AddScoped<IWarehousePreferenceService, WarehousePreferenceService>();
         services.AddScoped<IDispatchRepository, DispatchRepository>();
         services.AddScoped<Dalan.Application.Analytics.IAnalyticsRepository, AnalyticsRepository>();
         services.AddSingleton(new TrackingOptions { Enabled = bool.TryParse(configuration["Tracking:Enabled"], out var trackingEnabled) && trackingEnabled });

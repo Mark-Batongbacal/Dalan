@@ -1,8 +1,9 @@
-﻿@model IReadOnlyList<Dalan.Application.Deliveries.DeliveryDetails>
+@model IReadOnlyList<Dalan.Application.Deliveries.DeliveryDetails>
 @{
     ViewData["Title"] = "Delivery queue";
 }
 
+@if (User.IsInRole("Dispatcher")) { <partial name="_DispatchNavigation" model='@("deliveries")' /> }
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 page-heading">
     <div>
         <span class="page-kicker">

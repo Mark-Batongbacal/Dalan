@@ -19,6 +19,60 @@ public sealed class AnalyticsWebTests
 {
     [Theory]
     [InlineData("Admin")]
+    public async Task Overview_uses_real_reporting_period_and_registry_availability(string role)
+    {
+        var repository = new Repository { Snapshot = new(new(10,2,2,1,4,1,2,0,0,null),new(7,3,2,1,2,4000,900),[],[]) };
+        using var factory = Factory(repository);
+        using var client = Client(factory, role);
+        using var response = await client.GetAsync("/");
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Delivery progress", html);
+        Assert.Contains("40%", html);
+        Assert.Contains("Vehicles currently marked available", html);
+        Assert.Contains("Last 30 days", html);
+        Assert.Equal(new DateOnly(2026,10,19), repository.Period!.From);
+        Assert.Equal(1, repository.Calls);
+        Assert.True(response.Headers.CacheControl!.NoStore);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Driver")]
+    public async Task Overview_does_not_query_or_expose_metrics_to_non_staff(string? role)
+    {
+        var repository = new Repository();
+        using var factory = Factory(repository);
+        using var client = Client(factory, role);
+        var html = await client.GetStringAsync("/");
+        Assert.DoesNotContain("dashboard-report", html);
+        Assert.Equal(0, repository.Calls);
+    }
+
+    [Fact]
+    public async Task Dispatcher_home_enters_workspace_without_querying_overview()
+    {
+        var repository = new Repository();
+        using var factory = Factory(repository);
+        using var client = Client(factory, "Dispatcher");
+        using var response = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/DispatchBoard", response.Headers.Location?.ToString());
+        Assert.Equal(0, repository.Calls);
+    }
+
+    [Fact]
+    public async Task Overview_provider_failure_keeps_workspace_links_without_fake_metrics()
+    {
+        var repository = new Repository { Fail = true };
+        using var factory = Factory(repository);
+        using var client = Client(factory,"Admin");
+        var html = await client.GetStringAsync("/");
+        Assert.Contains("overview is temporarily unavailable", html);
+        Assert.Contains("View vehicles", html);
+        Assert.DoesNotContain("dashboard-report", html);
+    }
+    [Theory]
+    [InlineData("Admin")]
     [InlineData("Dispatcher")]
     public async Task Staff_can_read_default_report_and_navigation(string role)
     {

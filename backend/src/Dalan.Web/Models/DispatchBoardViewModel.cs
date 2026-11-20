@@ -1,4 +1,4 @@
-﻿using Dalan.Application.Deliveries;
+using Dalan.Application.Deliveries;
 using Dalan.Application.Dispatch;
 using Dalan.Application.Vehicles;
 using Dalan.Contracts.Dispatch;
@@ -18,6 +18,8 @@ public sealed class DispatchBoardViewModel
 
 public sealed class DispatchVehicleInput
 {
+    public string? DriverName { get; set; }
+    public string Readiness { get; set; } = "Eligibility checked on preview";
     public Guid Id { get; set; }
     public string RegistrationNumber { get; set; } = string.Empty;
     public bool Selected { get; set; }
@@ -29,6 +31,8 @@ public sealed class DispatchVehicleInput
 
 public sealed class DispatchDeliveryInput
 {
+    public string? AssignmentSummary { get; set; }
+    public bool LocationsValid { get; set; } = true;
     public Guid Id { get; set; }
     public string RecipientName { get; set; } = string.Empty;
     public string PickupAddress { get; set; } = string.Empty;

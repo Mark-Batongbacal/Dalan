@@ -42,19 +42,28 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         const page = await browser.newPage();
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.route('https://**/*', route => route.abort());
+        await page.route('https://**/*', route => process.env.DALAN_REAL_BASEMAP === '1' && /^(tiles.openfreemap.org|fonts.googleapis.com|fonts.gstatic.com)$/.test(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
         await page.goto(base + '/Account/Login');
         await page.locator('#Email').fill(fixture.email);
         await page.locator('#Password').fill(fixture.password);
-        await Promise.all([page.waitForURL('**/Vehicles'), page.getByRole('button', { name: /^Sign in(?: to workspace)?$/ }).click()]);
+        await Promise.all([page.waitForURL(/\/(Vehicles|DispatchBoard)$/), page.getByRole('button', { name: /^Sign in(?: to workspace)?$/ }).click()]);
         async function submit(name) {
             await Promise.all([page.waitForNavigation(), page.getByRole('button', { name, exact: true }).click()]);
         }
+        const accessibility = [];
         async function capture(stage) {
             for (const width of [390, 1440]) for (const theme of ['light', 'dark', 'system']) {
                 await page.setViewportSize({ width, height: 1000 });
                 await page.emulateMedia({ colorScheme: theme === 'system' ? 'dark' : theme });
                 await page.locator('#theme-select').selectOption(theme);
+                await page.waitForTimeout(250); // Inspect the settled theme, after its short color transition.
+                if (process.env.DALAN_AXE_MODULE) {
+                    await page.addScriptTag({ content: fs.readFileSync(process.env.DALAN_AXE_MODULE, 'utf8') });
+                    const issues = await page.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21a','wcag21aa'] } })).violations.map(v => ({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))})));
+                    accessibility.push({stage,width,theme,violations:issues}); fs.writeFileSync(path.join(output,'workflow-accessibility.json'),JSON.stringify(accessibility,null,2));
+                    assert.deepEqual(issues, [], 'Dispatch workflow accessibility');
+                }
+                if (process.env.DALAN_REAL_BASEMAP === '1') await page.waitForTimeout(2000);
                 await page.waitForFunction(() => {
                     const button = document.querySelector('.btn-primary:not(:disabled)'); if (!button) return true;
                     const probe = document.createElement('span'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--on-primary'); document.body.append(probe);
@@ -67,7 +76,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         }
         await page.goto(base + '/Deliveries');
         await capture('delivery-queue');
-        await page.goto(base + '/FleetPlanner');
+        await page.goto(base + '/FleetPlanner?mode=advanced');
         await page.route('**/PlanningMap/Addresses', route => route.fulfill({ json: {
             results: [{ address: '123 UX Street' }]
         } }));
@@ -139,13 +148,31 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.locator('#PayloadWeightKg').fill('2');
         await submit('Create delivery');
         assert.match(await page.locator('#main-content').innerText(), /Location workflow/);
+        await page.setViewportSize({width:1440,height:1000});
         await page.goto(base + '/DispatchBoard');
+        await page.locator('.dispatch-vehicles').evaluate(x=>x.open=true);
+        await page.locator('.dispatch-options').evaluate(x=>x.open=true);
+        const mapCanvas = page.locator('.maplibregl-canvas');
+        const mapBounds = await mapCanvas.boundingBox();
+        await mapCanvas.click({position:{x:mapBounds.width / 2,y:mapBounds.height / 2}});
+        assert.ok(await page.locator('.planning-map-tools').evaluate(x=>x.open), 'A map choice reveals its explicit confirmation controls');
+        await page.locator('[data-map-advanced]').click();
+        assert.ok(await page.locator('#Settings_WarehouseLatitude').isVisible(), 'Advanced fallback opens all enclosing settings panels');
+        await page.locator('.dispatch-options details[open] > summary').click();
+        await page.locator('.planning-map-tools > summary').click();
         assert.equal(matrices, 0);
         const vehicle = page.locator('input[name$=".Id"][value="' + fixture.vehicleId + '"]').first();
         const prefix = (await vehicle.getAttribute('name')).replace('.Id', '');
         await page.locator(`[name="${prefix}.Selected"][type=checkbox]`).check();
         await page.locator(`[name="${prefix}.ExistingWorkloadSeconds"]`).fill('600');
-        await page.getByLabel(/UX Recipient/).check();
+        await page.getByRole('checkbox', { name: /UX Recipient/ }).check();
+        await page.locator('[data-assignment-search]').fill('no-matching-reference-delivery');
+        assert.equal(await page.locator('[data-assignment-card]:visible').count(), 0);
+        await page.locator('[data-assignment-search]').fill('');
+        assert.ok(await page.getByRole('checkbox', { name: /UX Recipient/ }).isChecked(), 'Filtering keeps selected deliveries');
+        await page.locator('[data-delivery-filter="Assigned"]').click();
+        assert.equal(await page.locator('[data-delivery-filter="Assigned"]').getAttribute('aria-pressed'), 'true');
+        await page.locator('[data-delivery-filter="all"]').click();
         assert.equal(await page.locator('#Settings_WarehouseLatitude').inputValue(), '14.6');
         assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), '123 UX Street');
         await page.locator('#Strategy').selectOption('WorkloadEquity');
@@ -160,13 +187,13 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         fail = false;
         await submit('Preview routes');
         assert.equal(matrices, 1);
-        await page.getByRole('heading', { name: 'Selected-plan results' }).waitFor();
+        await page.getByRole('heading', { name: 'Route preview' }).waitFor();
         await capture('preview');
         await submit('Review this plan');
         assert.equal(matrices, 2);
         await capture('review');
         const beforeReturn = matrices;
-        await submit('Change selections (new preview required)');
+        await submit('Back to selections (new preview required)');
         assert.equal(matrices, beforeReturn);
         assert.equal(await page.locator('#Strategy').inputValue(), 'WorkloadEquity');
         assert.equal(await page.locator('#Settings_WarehouseAddress').inputValue(), '123 UX Street');

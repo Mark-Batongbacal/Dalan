@@ -1,4 +1,5 @@
-﻿@model DeliveryDetailsViewModel
+<div class="workflow-actions mb-4"><a href="/Deliveries/Create" class="btn btn-outline-secondary">Add another delivery</a><a href="/DeliveryWorkflow/Assignments" class="btn btn-outline-secondary">Assign deliveries</a><a href="/DispatchBoard" class="btn btn-primary">Continue to fleet dispatch →</a></div>
+@model DeliveryDetailsViewModel
 @{
     ViewData["Title"] = "Delivery details";
     var delivery = Model.Delivery;

@@ -1,18 +1,19 @@
+@model HomeDashboardViewModel
 @{
     ViewData["Title"] = "Overview";
 }
-<div class="page-heading">
+<div class="page-heading @(User.Identity?.IsAuthenticated != true ? "landing-intro" : "")">
     <span class="page-kicker">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="6"/></svg>
         Operations workspace
     </span>
-    <h1>Keep your fleet moving.</h1>
+    <h1>@(User.Identity?.IsAuthenticated == true ? "Overview" : "Keep your fleet moving.")</h1>
     <p>Manage vehicles and drivers, plan optimal routes, and track your fleet in real time.</p>
 </div>
 
 @if (User.Identity?.IsAuthenticated != true)
 {
-    <div class="overview-grid" style="max-width:480px">
+    <div class="overview-grid landing-signin">
         <section class="content-card feature-card">
             <div class="icon-card" aria-hidden="true">
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -30,7 +31,31 @@
 }
 else
 {
-    <div class="overview-grid">
+    @if (User.IsInRole("Dispatcher")) { <section class="workflow-callout"><div><h2>Ready to file a delivery?</h2><p>Warehouse → fleet → deliveries → assignments → dispatch → tracking</p></div><a href="/DeliveryWorkflow" class="btn btn-primary">Start delivery workflow</a></section> }
+    @if (Model.Error is not null) { <p class="alert alert-warning" role="status">@Model.Error</p> }
+    @if (Model.Report is { } report)
+    {
+        var d = report.Deliveries;
+        var percent = d.Total == 0 ? 0 : Math.Round(100.0 * d.Delivered / d.Total);
+        <section class="dashboard-report" aria-label="Operations overview">
+            <div class="dashboard-period"><span class="status-chip">Last 30 days · UTC</span><span>Deliveries created @report.Period.From.ToString("MMM d") – @report.Period.To.ToString("MMM d, yyyy") · current statuses</span><a asp-controller="Analytics" asp-action="Index">Full report →</a></div>
+            <div class="dashboard-metrics">
+                <article class="metric-tile"><span class="metric-symbol" aria-hidden="true">↗</span><strong>@d.Open</strong><span>Open deliveries</span></article>
+                <article class="metric-tile metric-success"><span class="metric-symbol" aria-hidden="true">✓</span><strong>@d.Delivered</strong><span>Delivered</span></article>
+                <article class="metric-tile metric-info"><span class="metric-symbol" aria-hidden="true">→</span><strong>@d.PickedUp</strong><span>Picked up</span></article>
+                <article class="metric-tile metric-warning"><span class="metric-symbol" aria-hidden="true">!</span><strong>@d.Overdue</strong><span>Overdue open deliveries</span></article>
+            </div>
+            <div class="dashboard-panels">
+                <section class="content-card dashboard-progress"><h2>Delivery progress</h2><div class="progress-layout">
+                    <div class="progress-ring" style="--progress:@(percent.ToString(System.Globalization.CultureInfo.InvariantCulture))%" role="img" aria-label="@percent percent of this delivery cohort delivered"><div><strong>@percent%</strong><span>Delivered</span></div></div>
+                    <dl class="progress-legend"><div><dt>Delivered</dt><dd>@d.Delivered</dd></div><div><dt>Picked up</dt><dd>@d.PickedUp</dd></div><div><dt>Pending / assigned</dt><dd>@(d.Pending + d.Assigned)</dd></div><div><dt>Cancelled</dt><dd>@d.Cancelled</dd></div></dl>
+                </div>@if(d.Total == 0){<p class="form-text">No deliveries were created in this period.</p>}</section>
+                <section class="content-card dashboard-fleet"><h2>Fleet availability</h2><span class="metric-symbol" aria-hidden="true">↗</span><p class="fleet-count"><strong>@report.Fleet.AvailableVehicles</strong> / @report.Fleet.TotalVehicles</p><p>Vehicles currently marked available</p><progress value="@report.Fleet.AvailableVehicles" max="@(Math.Max(1, report.Fleet.TotalVehicles))" aria-label="Available vehicles"></progress><p class="form-text">Availability is registry state. Confirmed-plan participation is reported separately in Analytics.</p></section>
+            </div>
+        </section>
+    }
+    <div class="workspace-section-heading"><h2>Your workspace</h2><p>Open the tools available to your role.</p></div>
+    <div class="overview-grid workspace-shortcuts">
         <section class="content-card feature-card">
             <div class="icon-card" aria-hidden="true">
                 <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">

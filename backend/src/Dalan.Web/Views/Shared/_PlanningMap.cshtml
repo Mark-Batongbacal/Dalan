@@ -3,12 +3,13 @@
 @inject IOptions<PlanningMapOptions> MapOptions
 @model PlanningMapViewModel
 @{
+    var immersive = ViewData["ImmersiveMap"] is true;
     var json = JsonSerializer.Serialize(new { model = Model, styleUrl = MapOptions.Value.StyleUrl, darkStyleUrl = MapOptions.Value.DarkStyleUrl },
         new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }
 <link rel="stylesheet" href="~/lib/maplibre/maplibre-gl.css" asp-append-version="true" />
 <link rel="stylesheet" href="~/css/planning-map.css" asp-append-version="true" />
-<section class="content-card planning-map mb-4" data-planning-map
+<section class="content-card planning-map mb-4 @(immersive ? "planning-map-immersive" : "")" data-planning-map data-auto-route="@((Model.Preview || ViewData["AutoRoute"] is true).ToString().ToLowerInvariant())"
          data-route-url="@Url.Action("Route", "PlanningMap")" data-search-url="@Url.Action("Addresses", "PlanningMap")"
          aria-label="@Model.Title">
     <div class="planning-map-heading">
@@ -16,10 +17,27 @@
         <button type="button" class="btn btn-outline-secondary" data-map-fit>Fit stops</button>
         <button type="button" class="btn btn-outline-secondary" data-map-retry>Retry map</button>
     </div>
-    <p class="text-muted">@Model.Description</p>
+    @if (!immersive) { <p class="text-muted">@Model.Description</p> }
     @Html.AntiForgeryToken()
     <script type="application/json" data-map-model>@Html.Raw(json)</script>
     <div class="planning-map-canvas" data-map-canvas tabindex="0" aria-label="Interactive planning map. Arrow keys move the map; plus and minus change zoom."></div>
+    <p class="map-interaction-hint" data-map-interaction role="status" aria-live="polite">Click the map or press Enter to enable wheel zoom. Escape or click outside to return to page scrolling.</p>
+    @if (immersive)
+    {
+        <div class="map-route-summary"><span class="metric-symbol" aria-hidden="true">↗</span><div><strong data-map-route-title>@(Model.Preview || ViewData["AutoRoute"] is true ? "Route preview" : "Plan your next dispatch")</strong><p>@(Model.Routes.Count > 0 ? $"{Model.Routes.Count} vehicle routes · {Model.Routes.Sum(r => Math.Max(0, r.Points.Count - 1))} pickup / drop-off stops" : "Choose deliveries and vehicles, set the warehouse, then preview routes.")</p><span class="form-text">@(Model.Preview || ViewData["AutoRoute"] is true ? "Review and confirm before dispatching." : "Selected delivery pins appear on the map.")</span>
+        <p data-map-visible-status role="status" aria-live="polite"></p>
+        @if (Model.Routes.Count > 1 && ViewData["MapSummaryDetail"] is string detail) { <p>@detail</p> }
+        @if (Model.Routes.Count > 0)
+        {
+            <label class="form-label mt-2" for="map-route">Route to display</label>
+            <select id="map-route" class="form-select" data-map-route><option value="">All stop locations</option>@foreach (var route in Model.Routes) { <option value="@route.Id">@route.Label</option> }</select>
+            <button type="button" class="btn btn-primary mt-2" data-map-roads>Load road route</button>
+        }
+        </div></div>
+    }
+    <details class="planning-map-tools" open="@(immersive ? null : "open")">
+    <summary>Warehouse &amp; map tools</summary>
+    <p class="form-text">@Model.Description</p>
     <div class="planning-map-controls">
         @if (Model.Targets.Count > 0)
         {
@@ -46,7 +64,7 @@
                 </dialog>
             </div>
         }
-        @if (Model.Routes.Count > 0)
+        @if (Model.Routes.Count > 0 && !immersive)
         {
             <div class="planning-map-route-control">
                 <label class="form-label" for="map-route">Route to display</label>
@@ -66,9 +84,10 @@
         <p data-map-selection role="status">Choose a location to confirm.</p>
         <button type="button" class="btn btn-primary mb-3" data-map-confirm disabled>Confirm location</button>
         <button type="button" class="btn btn-outline-secondary mb-3" data-map-advanced>Advanced coordinates</button>
-        <ul data-map-location-list aria-label="Confirmed locations"></ul>
+        <ul data-map-location-list aria-label="Confirmed locations" tabindex="0"></ul>
     }
-    <p class="planning-map-status" data-map-status role="status" aria-live="polite">Loading map. Coordinate fields and stop lists remain available if the map cannot load.</p>
+    <p class="planning-map-status" data-map-status role='@(immersive ? null : "status")' aria-live='@(immersive ? null : "polite")' >Loading map. Coordinate fields and stop lists remain available if the map cannot load.</p>
+    </details>
 
     <p class="planning-map-attribution mb-0">
         Map: <a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> ·

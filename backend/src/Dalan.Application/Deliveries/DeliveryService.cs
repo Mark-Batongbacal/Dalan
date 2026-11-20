@@ -12,6 +12,8 @@ public sealed class DeliveryService(
     IVehicleRepository vehicles,
     TimeProvider timeProvider) : IDeliveryService
 {
+    public async Task<IReadOnlyList<DeliveryDetails>> ListForPlanningAsync(CancellationToken cancellationToken = default)
+        => (await deliveries.ListForPlanningAsync(cancellationToken)).Select(ToDetails).ToArray();
     public async Task<DeliveryMutationResult> CreateAsync(
         CreateDeliveryCommand command, CancellationToken cancellationToken = default)
     {

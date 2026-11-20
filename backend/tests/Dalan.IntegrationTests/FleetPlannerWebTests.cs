@@ -47,7 +47,7 @@ public sealed class FleetPlannerWebTests
         });
         if (role is not null) client.DefaultRequestHeaders.Add("X-Test-Role", role);
 
-        using var response = await client.GetAsync("/FleetPlanner");
+        using var response = await client.GetAsync("/FleetPlanner?mode=advanced");
 
         Assert.Equal(expected, response.StatusCode);
         if (expected == HttpStatusCode.OK)
@@ -55,6 +55,10 @@ public sealed class FleetPlannerWebTests
             var page = await response.Content.ReadAsStringAsync();
             Assert.Contains("Fleet Planner", page);
             Assert.Contains("TEST-001", page);
+            Assert.DoesNotContain("aria-label=\"Job ID\"", page);
+            using var canonical = await client.GetAsync("/FleetPlanner");
+            Assert.Equal(HttpStatusCode.Redirect, canonical.StatusCode);
+            Assert.Equal("/DispatchBoard", canonical.Headers.Location!.ToString());
         }
     }
 

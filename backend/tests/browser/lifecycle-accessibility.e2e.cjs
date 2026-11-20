@@ -25,7 +25,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
    await page.getByRole('button',{name:/^Sign in(?: to workspace)?$/}).click();
    await page.getByRole('alert').filter({hasText:'Invalid sign-in attempt'}).waitFor({state:'visible'});
    await page.locator('#Password').fill(fixture.adminPassword);
-   await Promise.all([page.waitForURL('**/Vehicles'),page.getByRole('button',{name:/^Sign in(?: to workspace)?$/}).click()]);
+   await Promise.all([page.waitForURL(/\/(Vehicles|DispatchBoard)$/),page.getByRole('button',{name:/^Sign in(?: to workspace)?$/}).click()]);
    return {context,page};
   }
   const admin = await session(fixture.adminEmail), page = admin.page;
@@ -84,12 +84,12 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
   assert.equal(await dispatcher.page.locator('[data-map-search]').inputValue(),'Unavailable'); await dispatcher.page.locator('[data-google-close]').click();
   for (const [role,session,pages] of [
    ['Admin',admin,['/','/Vehicles','/Vehicles/Create',`/Vehicles/Edit/${fixture.vehicleId}`,'/Drivers','/Drivers/Create',`/Drivers/Edit/${fixture.inviteDriverId}`,`/Drivers/${fixture.inviteDriverId}/Access`,'/StaffAccounts/Create','/AccountAudit','/DriverCredentialEmails','/GpsExceptions','/Analytics','/FleetTracking','/Notifications','/Account/Login','/DriverRecovery/Request','/DriverRecovery/Reset','/DriverInvitations/Activate']],
-   ['Dispatcher',dispatcher,['/','/Vehicles','/Deliveries','/Deliveries/Create',`/Deliveries/Details/${fixture.deliveryId}`,'/DispatchBoard','/FleetPlanner','/Analytics','/GpsExceptions','/FleetTracking','/Notifications','/Account/Login']]]) {
+   ['Dispatcher',dispatcher,['/','/Vehicles','/Deliveries','/Deliveries/Create',`/Deliveries/Details/${fixture.deliveryId}`,'/DispatchBoard','/FleetPlanner','/DeliveryWorkflow','/Warehouse','/DeliveryBatch','/DeliveryWorkflow/Assignments','/Analytics','/GpsExceptions','/FleetTracking','/Notifications','/Account/Login']]]) {
    const smoke = process.env.DALAN_UX_SMOKE === '1';
    for (const width of (smoke ? [390,1440] : [390,768,1440])) for (const theme of (smoke ? ['light','dark'] : ['light','dark','system'])) for (const route of pages.filter(route=>!smoke || ['/FleetPlanner','/Deliveries/Create'].includes(route))) {
     const page = session.page; await page.setViewportSize({width,height:900});
     const response = await page.goto(base+route); assert.equal(response.status(),200,`${role} ${route} must render successfully`); await page.locator('#theme-select').selectOption(theme);
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(250);
     if (width === 390 && !['/Account/Login','/DriverRecovery/Request','/DriverRecovery/Reset','/DriverInvitations/Activate'].includes(route)) {
      assert.ok(await page.locator('.nav-toggle').isVisible(), 'Mobile navigation is visible');
      assert.ok(await page.locator('.nav-toggle svg').evaluate(x=>x.getBoundingClientRect().width>=20),'Mobile navigation icon is visibly rendered');

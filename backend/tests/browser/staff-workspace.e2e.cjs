@@ -43,7 +43,7 @@ const { chromium } = require(process.env.DALAN_PLAYWRIGHT_MODULE || 'playwright'
         await page.keyboard.type(fixture.password);
         await page.keyboard.press('Tab');
         await page.keyboard.press('Tab');
-        await Promise.all([page.waitForURL('**/Vehicles'), page.keyboard.press('Enter')]);
+        await Promise.all([page.waitForURL(/\/(Vehicles|DispatchBoard)$/), page.keyboard.press('Enter')]);
         const routes = fixture.role === 'Admin' ? ['/Vehicles', '/Vehicles/Create', '/Drivers', '/Drivers/Create', '/StaffAccounts/Create', '/Vehicles/Edit/' + fixture.vehicleId, '/Drivers/Edit/' + fixture.driverId] : ['/Vehicles'];
         for (const width of [390, 1440]) for (const theme of ['light', 'dark', 'system']) for (const route of routes) {
             await page.setViewportSize({ width, height: 1000 });

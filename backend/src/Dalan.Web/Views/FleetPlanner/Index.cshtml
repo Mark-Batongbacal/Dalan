@@ -57,12 +57,12 @@
     <p class="text-muted">Leave “Vehicle” blank to let the planner assign a job. A selected vehicle keeps that job while the planner reorders its stops.</p>
     <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable data table">
         <table class="table table-sm align-middle registry-table" id="jobs-table">
-            <thead><tr><th>Job ID</th><th>Pickup location</th><th>Drop-off location</th><th>Vehicle</th></tr></thead>
+            <thead><tr><th>Delivery</th><th>Pickup location</th><th>Drop-off location</th><th>Vehicle</th></tr></thead>
             <tbody>
             @for (var i = 0; i < Model.Jobs.Count; i++)
             {
                 <tr>
-                    <td data-label="Job ID"><input asp-for="Jobs[i].Id" class="form-control form-control-sm" aria-label="Job ID" /></td>
+                    <td data-label="Delivery"><input asp-for="Jobs[i].Id" type="hidden" /><span>Delivery @(i+1)</span></td>
                     <td data-label="Pickup"><details data-map-coordinate-fields><summary>Advanced coordinates</summary><input asp-for="Jobs[i].PickupLatitude" class="form-control form-control-sm" type="number" step="any" min="-90" max="90" aria-label="Pickup latitude" /><input asp-for="Jobs[i].PickupLongitude" class="form-control form-control-sm" type="number" step="any" min="-180" max="180" aria-label="Pickup longitude" /></details></td>
                     <td data-label="Drop-off"><details data-map-coordinate-fields><summary>Advanced coordinates</summary><input asp-for="Jobs[i].DropoffLatitude" class="form-control form-control-sm" type="number" step="any" min="-90" max="90" aria-label="Drop-off latitude" /><input asp-for="Jobs[i].DropoffLongitude" class="form-control form-control-sm" type="number" step="any" min="-180" max="180" aria-label="Drop-off longitude" /></details></td>
                     <td data-label="Vehicle"><select asp-for="Jobs[i].AssignedVehicleId" class="form-select form-select-sm" aria-label="Assigned vehicle">
@@ -123,7 +123,7 @@
         const index = body.rows.length;
         const row = document.createElement('tr');
         const fields = [
-            ['Id', 'text', 'Job ID'],
+            ['Id', 'hidden', 'Delivery'],
             ['PickupLatitude', 'number', 'Pickup latitude'],
             ['PickupLongitude', 'number', 'Pickup longitude'],
             ['DropoffLatitude', 'number', 'Drop-off latitude'],
@@ -149,7 +149,7 @@
                     details.append(summary); cell.append(details);
                 }
                 cell.querySelector('details').append(input);
-            } else cell.appendChild(input);
+            } else { input.value = `preview-${crypto.randomUUID()}`; cell.appendChild(input); const label = document.createElement('span'); label.textContent = `Delivery ${index+1}`; cell.appendChild(label); }
         }
         const cell = row.insertCell();
         cell.dataset.label = 'Vehicle';

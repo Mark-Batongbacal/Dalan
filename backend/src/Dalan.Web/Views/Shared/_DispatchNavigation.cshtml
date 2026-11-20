@@ -1,0 +1,6 @@
+@model string
+<nav class="dispatch-segments" aria-label="Dispatch workspace sections">
+    <a href="/DispatchBoard" aria-current='@(Model == "prepare" ? "page" : null)'>Prepare dispatch</a>
+    <a href="/FleetTracking" aria-current='@(Model == "active" ? "page" : null)'>Active fleet</a>
+    <a href="/Deliveries" aria-current='@(Model == "deliveries" ? "page" : null)'>Deliveries &amp; history</a>
+</nav>

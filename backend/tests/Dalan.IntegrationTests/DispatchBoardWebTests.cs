@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Dalan.Application.Deliveries;
@@ -85,7 +85,10 @@ public sealed class DispatchBoardWebTests
         var html = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Optimization strategy", html);
-        Assert.Contains("default policy", html);
+        Assert.Contains("Fastest fleet travel", html);
+        Assert.Contains("dispatch-preparation", html);
+        Assert.Contains("Fleet readiness", html);
+        Assert.DoesNotContain("class=\"delivery-steps\"", html);
         Assert.Null(service.LastPreview);
     }
 

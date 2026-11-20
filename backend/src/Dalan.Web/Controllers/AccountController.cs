@@ -39,7 +39,7 @@ public sealed class AccountController(SignInManager<IdentityUser> signInManager,
 
         return !string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl)
             ? LocalRedirect(model.ReturnUrl)
-            : RedirectToAction("Index", "Vehicles");
+            : RedirectToAction("Index", await users.IsInRoleAsync(user, "Dispatcher") && !await users.IsInRoleAsync(user, "Admin") ? "DispatchBoard" : "Vehicles");
     }
 
     [Authorize]
