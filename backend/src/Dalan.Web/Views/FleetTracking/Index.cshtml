@@ -1,6 +1,7 @@
 @model Dalan.Web.Controllers.FleetTrackingViewModel
 @inject Microsoft.Extensions.Options.IOptions<PlanningMapOptions> MapOptions
 @{ ViewData["Title"] = "Live fleet"; }
+@if (User.IsInRole("Dispatcher")) { <partial name="_DispatchNavigation" model='@("active")' /> }
 <div class="page-heading"><span class="page-kicker">Observed vehicle activity</span><h1>Live fleet</h1><p>Driver-shared GPS locations and measured movement during active delivery tracking.</p></div>
 @if (Model.Error is not null) { <div class="alert alert-danger" role="alert">@Model.Error</div> }
 @if (Model.Report is { } report)
@@ -24,7 +25,8 @@
         <section class="content-card" data-fleet-tracking data-feed-url="@Url.Action("Positions")" data-style-url="@MapOptions.Value.StyleUrl" data-dark-style-url="@MapOptions.Value.DarkStyleUrl" aria-label="Current vehicle locations">
             <h2 class="h5">Current vehicle locations</h2><p>Refreshes every 15 seconds. Samples older than 90 seconds are stale. Up to 200 current registered vehicles are shown; period metrics include all tracked vehicles.</p>
             <p data-fleet-status role="status">Loading current positions…</p>
-            <div data-fleet-map style="height:420px;max-height:60vh;border-radius:12px" aria-label="Vehicle location map"></div>
+            <div data-fleet-map style="height:420px;max-height:60vh;border-radius:12px" tabindex="0" aria-label="Vehicle location map"></div>
+            <p class="map-interaction-hint" data-map-interaction role="status" aria-live="polite">Click the map or press Enter to enable wheel zoom. Escape or click outside to return to page scrolling.</p>
             <p>Map: <a href="https://openfreemap.org/">OpenFreeMap</a> · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
             <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable data table"><table class="table"><thead><tr><th>Vehicle</th><th>Driver</th><th>Location status</th><th>Last GPS fix (UTC)</th><th>Accuracy</th></tr></thead><tbody data-fleet-rows></tbody></table></div>
         </section>
@@ -33,5 +35,6 @@
 @section Scripts {
     <link rel="stylesheet" href="~/lib/maplibre/maplibre-gl.css" />
     <script src="~/lib/maplibre/maplibre-gl.js"></script>
+    <script src="~/js/map-focus.js" asp-append-version="true"></script>
     <script src="~/js/fleet-tracking.js" asp-append-version="true"></script>
 }

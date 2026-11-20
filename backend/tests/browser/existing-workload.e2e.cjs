@@ -20,6 +20,8 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
         await page.locator("#Password").fill(fixture.password);
         await Promise.all([page.waitForURL(url => !url.pathname.includes("/Account/Login")), page.locator('button[type="submit"]').click()]);
         await page.goto(base + "/DispatchBoard");
+        if (!await page.locator(".dispatch-options").getAttribute("open").then(x => x !== null)) await page.locator(".dispatch-options > summary").click();
+        if (!await page.locator(".planning-map-tools").getAttribute("open").then(x => x !== null)) await page.locator(".planning-map-tools > summary").click();
         await page.locator("#Strategy").selectOption("WorkloadEquity");
         await page.locator('[name="Settings.ServiceSecondsPerStop"]').fill("60");
         await page.locator("#Settings_WarehouseLatitude").evaluate(input => { const details = input.closest("details"); if (details) details.open = true; });

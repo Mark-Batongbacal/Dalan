@@ -20,9 +20,7 @@
             document.documentElement.dataset.theme = choice;
         })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preload" href="~/lib/inter/Inter-Variable.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
@@ -41,12 +39,13 @@
         {
             <aside class="sidebar" id="main-navigation" aria-label="Main navigation">
                 <a class="brand" asp-controller="Home" asp-action="Index">
-                    <span class="brand-mark">D</span>
+                    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 40" width="32" height="40"><path fill="currentColor" d="M16 1C7.7 1 1 7.7 1 16c0 10.8 15 23 15 23s15-12.2 15-23C31 7.7 24.3 1 16 1Z"/><circle cx="16" cy="15" r="6" fill="#FFFAF6"/></svg></span>
                     <span>Dalan<small>Fleet workspace</small></span>
                 </a>
 
                 <nav class="sidebar-nav" aria-label="Primary">
-                    <!-- Always visible -->
+                    @if (!User.IsInRole("Dispatcher") || User.IsInRole("Admin"))
+                    {
                     <a class="@(controller == "Home" ? "active" : "")"
                        asp-controller="Home" asp-action="Index">
                         <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -54,6 +53,18 @@
                         </svg>
                         Overview
                     </a>
+
+                    }
+                    @if (User.IsInRole("Dispatcher"))
+                    {
+                        <a class="@(controller == "DispatchBoard" && action != "Drivers" ? "active" : "")"
+                           asp-controller="DispatchBoard" asp-action="Index">
+                            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="2" y="2" width="7" height="8" rx="1.5"/><rect x="11" y="2" width="7" height="5" rx="1.5"/><rect x="11" y="10" width="7" height="8" rx="1.5"/><rect x="2" y="13" width="7" height="5" rx="1.5"/>
+                            </svg>
+                            Dispatch
+                        </a>
+                    }
 
                     <a class="@(controller == "Vehicles" ? "active" : "")"
                        asp-controller="Vehicles" asp-action="Index">
@@ -105,6 +116,7 @@
                     {
                         <hr class="sidebar-divider" />
                         <span class="sidebar-section">Dispatch</span>
+                        <a class="@(controller is "DeliveryWorkflow" or "Warehouse" or "DeliveryBatch" ? "active" : "")" href="/DeliveryWorkflow">Workflow guide</a>
 
                         <a class="@(controller == "Deliveries" ? "active" : "")"
                            asp-controller="Deliveries" asp-action="Index">
@@ -122,21 +134,9 @@
                             Drivers
                         </a>
 
-                        <a class="@(controller == "DispatchBoard" && action != "Drivers" ? "active" : "")"
-                           asp-controller="DispatchBoard" asp-action="Index">
-                            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <rect x="2" y="2" width="7" height="8" rx="1.5"/><rect x="11" y="2" width="7" height="5" rx="1.5"/><rect x="11" y="10" width="7" height="8" rx="1.5"/><rect x="2" y="13" width="7" height="5" rx="1.5"/>
-                            </svg>
-                            Dispatch board
-                        </a>
 
-                        <a class="@(controller == "FleetPlanner" ? "active" : "")"
-                           asp-controller="FleetPlanner" asp-action="Index">
-                            <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M10 2L3 7v11h14V7L10 2z"/><path d="M7 18V10h6v8"/>
-                            </svg>
-                            Fleet planner
-                        </a>
+
+
                     }
 
                     @if (User.IsInRole("Admin"))
@@ -209,7 +209,14 @@
                 }
             </header>
 
-            <main class="main-content" id="main-content" tabindex="-1">@RenderBody()</main>
+            <main class="main-content" id="main-content" tabindex="-1">
+                @if (User.IsInRole("Dispatcher") && controller == "DeliveryWorkflow")
+                {
+                    var step = controller switch { "Warehouse" => 1, "Vehicles" or "Drivers" => 2, "Deliveries" when action=="Create" => 3, "DeliveryBatch" => 3, "DeliveryWorkflow" when action=="Assignments" => 4, "Deliveries" => 4, "DispatchBoard" when action=="Drivers" => 2, "DispatchBoard" or "FleetPlanner" => 5, "FleetTracking" => 6, _ => 0 };
+                    <partial name="_DeliverySteps" model="step" />
+                }
+                @RenderBody()
+            </main>
 
             <footer class="app-footer">
                 <span>Dalan · Internal fleet operations · <a asp-controller="Home" asp-action="Privacy">Privacy</a></span>
@@ -239,6 +246,7 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @if(User.IsInRole("Dispatcher")) { <script src="~/js/warehouse-selection.js" asp-append-version="true"></script> }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

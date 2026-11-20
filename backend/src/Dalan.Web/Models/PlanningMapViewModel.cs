@@ -42,13 +42,11 @@ public sealed class PlanningMapViewModel
     public static PlanningMapViewModel ForBoard(DispatchBoardViewModel board)
     {
         var targets = new List<PlanningMapTarget> { new("Warehouse", "Settings_WarehouseLatitude", "Settings_WarehouseLongitude", "Settings_WarehouseAddress") };
-        var overview = new List<PlanningMapPoint>();
-        for (var i = 0; i < board.Vehicles.Count; i++)
+        var overview = new List<PlanningMapPoint>
         {
-            var v = board.Vehicles[i];
-            overview.Add(new(v.RegistrationNumber + " warehouse start", LatitudeInputId: "Settings_WarehouseLatitude",
-                LongitudeInputId: "Settings_WarehouseLongitude", SelectionInputId: $"Vehicles_{i}__Selected"));
-        }
+            new("Warehouse", LatitudeInputId: "Settings_WarehouseLatitude",
+                LongitudeInputId: "Settings_WarehouseLongitude", Order: -1)
+        };
         for (var i = 0; i < board.Deliveries.Count; i++)
         {
             var d = board.Deliveries[i];
@@ -75,7 +73,7 @@ public sealed class PlanningMapViewModel
     public static PlanningMapViewModel ForDelivery() => new()
     {
         Title = "Warehouse and drop-off",
-        Description = "Select your warehouse and the delivery destination. The warehouse is the pickup and is remembered for your dispatch board in this browser.",
+        Description = "Use your saved warehouse as pickup and confirm the delivery destination. Change your default warehouse from the dispatch workspace.",
         Targets = [new("Warehouse", "PickupLatitude", "PickupLongitude", "PickupAddress"),
                    new("Drop-off", "DropoffLatitude", "DropoffLongitude", "DropoffAddress")],
         Routes = [new("delivery", "Warehouse to drop-off", [

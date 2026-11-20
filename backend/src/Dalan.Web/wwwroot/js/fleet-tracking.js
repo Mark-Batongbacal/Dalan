@@ -16,6 +16,7 @@
         map = new maplibregl.Map({ container: root.querySelector("[data-fleet-map]"), style: style(),
             center: [121.03, 14.6], zoom: 11, attributionControl: true });
         map.addControl(new maplibregl.NavigationControl());
+        window.dalanMapFocus(root,map,root.querySelector('[data-fleet-map]'),root.querySelector('[data-map-interaction]'));
         map.on("error", () => { basemapFailed = true; status.textContent = "Basemap unavailable. Vehicle positions and timestamps remain available below."; });
         const updateTheme = () => { basemapFailed = false; map.setStyle(style()); };
         new MutationObserver(updateTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

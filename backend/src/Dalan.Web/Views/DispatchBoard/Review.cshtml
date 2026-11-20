@@ -1,9 +1,12 @@
-﻿@model DispatchReviewViewModel
+@model DispatchReviewViewModel
 @{
     ViewData["Title"] = "Review dispatch";
+    ViewData["ImmersiveMap"] = true;
+    ViewData["AutoRoute"] = true;
 }
 
 @section Scripts { <partial name="_PlanningMapAssets" /> }
+<partial name="_DispatchNavigation" model='@("prepare")' />
 <div class="dispatch-workflow">
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
@@ -19,8 +22,9 @@
     <div class="alert alert-danger" role="alert" tabindex="-1" data-dispatch-error>@Model.Error<p class="mb-0">Your review edits are retained. Retry confirmation after a temporary routing failure. If the plan is stale or eligibility changed, use Change selections and generate a fresh preview.</p></div>
 }
 
-<div class="content-card">
-    <partial name="_PlanningMap" model="PlanningMapViewModel.ForReview(Model)" />
+<div class="location-workspace dispatch-review-workspace">
+    <aside class="location-workspace-map" aria-label="Review route map"><partial name="_PlanningMap" model="PlanningMapViewModel.ForReview(Model)" /></aside>
+    <section class="content-card location-workspace-fields"><h2 class="h5">Review stops &amp; assignments</h2>
     <form asp-action="Confirm" method="post">
         <div asp-validation-summary="All" class="text-danger" role="alert" tabindex="-1"></div>
         <input asp-for="Strategy" type="hidden" />
@@ -30,7 +34,7 @@
         <input asp-for="Settings.WarehouseLongitude" type="hidden" />
         <input asp-for="Settings.WarehouseAddress" type="hidden" />
         <input asp-for="RotationVersion" type="hidden" />
-        <p><strong>Final review before saving.</strong> Confirm dispatch saves this plan and assigns its deliveries.
+        <p><strong>Final review: @Model.Vehicles.Count vehicles · @(Model.Stops.Count / 2) deliveries.</strong> Confirm dispatch saves this plan and assigns its deliveries.
         </p><p>Strategy: @DispatchStrategyInput.Label(Model.Strategy). Reviewed stops are validated again on confirmation.</p>
         <p>All vehicles start at the selected warehouse: @Model.Settings.WarehouseAddress (@Model.Settings.WarehouseLatitude, @Model.Settings.WarehouseLongitude).</p>
         <p>Handling assumption: @Model.Settings.ServiceSecondsPerStop seconds per stop.
@@ -102,11 +106,12 @@
         <button type="submit" class="btn btn-primary">
             Confirm dispatch
         </button>
-        <button type="submit" asp-action="EditSelection" formnovalidate class="btn btn-outline-secondary">Change selections (new preview required)</button>
+        <button type="submit" asp-action="EditSelection" formnovalidate class="btn btn-outline-secondary">Back to selections (new preview required)</button>
         <a asp-action="Index" class="btn btn-link">
             Start over (clear selections)
         </a>
     </form>
+    </section>
 </div>
 
 </div>

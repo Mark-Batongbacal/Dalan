@@ -9,6 +9,8 @@ import android.view.inspector.WindowInspector
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
@@ -85,7 +87,13 @@ class DriverMultiRouteE2ETest {
         assertTrue(first.tasks.all { it.pickupPosition != null && it.dropoffPosition!! > it.pickupPosition!! })
         showScreen()
         checkMaps(first.tasks)
+        compose.onNodeWithText("Home",useUnmergedTree=true).performClick()
+        compose.onNodeWithText("Open next delivery").performScrollTo().assertIsDisplayed()
         captureThemes("assigned-deliveries")
+        compose.onNodeWithText("Account",useUnmergedTree=true).performClick()
+        compose.onNodeWithText("Account & device").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Deliveries",useUnmergedTree=true).performClick()
+        captureThemes("delivery-list")
         val firstIds = first.tasks.map { it.id }.toSet()
 
         DriverApi().use { api ->
@@ -226,6 +234,10 @@ class DriverMultiRouteE2ETest {
     private fun checkMaps(tasks: List<TaskInfo>) {
         for (task in tasks.groupBy { it.routeId }.values.map { it.first() }) {
             openTask(task)
+            val detailsFolder = File(context.filesDir,"dalan-e2e/screenshots").apply { mkdirs() }
+            val detailsImage = instrumentation.uiAutomation.takeScreenshot()
+            File(detailsFolder,"delivery-${task.routeId}.png").outputStream().use { detailsImage.compress(Bitmap.CompressFormat.PNG,100,it) }
+            detailsImage.recycle()
             compose.onNodeWithText("View route map").performScrollTo().performClick()
             try {
                 compose.waitUntil(40_000) {
@@ -247,8 +259,8 @@ class DriverMultiRouteE2ETest {
     }
 
     private fun openTask(task: TaskInfo) {
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText(task.recipientName))
-        compose.onNodeWithText(task.recipientName).performClick()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText(task.recipientName) and hasClickAction())
+        compose.onNode(hasText(task.recipientName) and hasClickAction()).performClick()
     }
 
     private fun routeGeometryLoaded(): Boolean {

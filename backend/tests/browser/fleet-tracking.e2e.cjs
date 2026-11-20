@@ -56,7 +56,7 @@ const output = process.env.DALAN_BROWSER_OUTPUT;
         assert.equal(await page.locator("[data-fleet-rows] tr").count(), 0);
         assert.equal(await page.locator(".fleet-position").count(), 0);
         await page.goto(base + "/Places");
-        assert.match(page.url(), /\/Vehicles$/);
+        assert.match(page.url(), /\/(Vehicles|DispatchBoard)$/);
         assert.equal(await page.locator('.sidebar-nav a[href="/Places"]').count(),0);
         const search = await page.evaluate(async()=>{
             const token=document.querySelector('[name=__RequestVerificationToken]').value;

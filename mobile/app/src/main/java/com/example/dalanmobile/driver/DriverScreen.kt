@@ -41,6 +41,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
@@ -77,16 +79,31 @@ import kotlinx.coroutines.withTimeoutOrNull
 fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (String) -> Unit) {
     val state by model.state.collectAsState()
     var selected by remember(state.driverId) { mutableStateOf<String?>(null) }
+    var destination by remember(state.driverId) { mutableStateOf("Home") }
     val task = state.tasks.firstOrNull { it.id == selected }
     var mapOpen by remember(task?.id, task?.assignedAtUtc) { mutableStateOf(false) }
     if (mapOpen && task != null) {
         Dialog(onDismissRequest = { mapOpen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            DriverRouteScreen(task, model) { mapOpen = false }
+            DriverRouteScreen(task, model) { mapOpen = false; destination = "Deliveries" }
         }
     }
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if (state.signedIn && !state.needsLogin) NavigationBar(containerColor=MaterialTheme.colorScheme.surface) {
+                listOf("Home", "Deliveries", "Route", "Account").forEach { item ->
+                    NavigationBarItem(selected=destination == item, onClick={
+                        destination = item
+                        if(item == "Route") {
+                            val next = state.tasks.firstOrNull()
+                            selected = next?.id
+                            mapOpen = next != null
+                        } else selected = null
+                    }, icon={ DriverWorkspaceIcon(item) }, label={ Text(item) })
+                }
+            }
+        }
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 20.dp),
@@ -100,7 +117,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                 ) {
                     Text(
                         "Dalan",
-                        style = MaterialTheme.typography.headlineLarge.copy(
+                        style = MaterialTheme.typography.headlineSmall.copy(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
                         ),
                         color = MaterialTheme.colorScheme.onBackground
@@ -132,6 +149,9 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                 }
             }
             if (state.signedIn) {
+                if (destination == "Home" && task == null) item {
+                    DriverHomeSummary(state.tasks.size, state.tasks.firstOrNull()) { selected = state.tasks.firstOrNull()?.id; destination = "Deliveries" }
+                }
                 item { SyncStatusCard(state) }
                 item {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -144,7 +164,10 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                         }, enabled = !state.busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("Sign out") }
                     }
                 }
-                if (task == null) {
+                if (destination == "Account") {
+                    item { Text("Account & device", Modifier.semantics { heading() }, style=MaterialTheme.typography.headlineSmall)
+                        Text("Use the appearance controls above to choose your theme. Sync before signing out; saved updates remain owned by the signed-in Driver.") }
+                } else if (task == null) {
                     item {
                         Text("Assigned deliveries", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
                         Text("Open a delivery to see its next action. Follow the assigned pickup and drop-off stop order.")
@@ -155,7 +178,7 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                         val nextAction = deliveryNextAction(delivery, events)
                         val hasFailed = events.any { it.failure != null }
                         Card(
-                            onClick = { selected = delivery.id },
+                            onClick = { selected = delivery.id; destination = "Deliveries" },
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.large,
                             colors = CardDefaults.cardColors(
@@ -166,12 +189,14 @@ fun DriverScreen(model: DriverViewModel, appearance: String, onAppearance: (Stri
                             ),
                             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                         ) {
-                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(
                                     Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.Top
                                 ) {
+                                    DriverWorkspaceIcon("Deliveries")
+                                    Spacer(Modifier.width(12.dp))
                                     Text(
                                         delivery.recipientName,
                                         style = MaterialTheme.typography.titleMedium,
@@ -329,9 +354,16 @@ private fun LoginForm(busy: Boolean, login: (String, String) -> Unit) {
 @Composable
 private fun TaskDetails(task: TaskInfo, events: List<PendingEvent>, busy: Boolean, gpsProofEnabled: Boolean,
                         model: DriverViewModel, openMap: () -> Unit) {
-    val pickedUp = task.status == "PickedUp" || events.any { it.kind == "Pickup" }
+    val pickedUp = task.status == "PickedUp" || events.any { it.kind == "Pickup" && it.failure == null }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(task.recipientName, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
+        Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text("Delivery progress",style=MaterialTheme.typography.titleSmall)
+                Text(if(task.status == "PickedUp") "✓ Pickup accepted by server" else if(pickedUp) "◷ Pickup saved on this device" else "○ Pickup awaiting confirmation",style=MaterialTheme.typography.bodyMedium)
+                Text(if(events.any { it.kind == "Deliver" }) "◷ Delivery update awaiting server acceptance" else "○ Delivery confirmation & proof",style=MaterialTheme.typography.bodyMedium)
+            }
+        }
 
         // Next action pill
         Card(

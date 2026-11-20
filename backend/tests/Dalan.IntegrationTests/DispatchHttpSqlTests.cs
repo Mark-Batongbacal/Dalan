@@ -1,4 +1,4 @@
-﻿using Dalan.Application.Dispatch;
+using Dalan.Application.Dispatch;
 using Dalan.Application.FleetOptimization;
 using Dalan.Application.Routing;
 using Dalan.Contracts.Deliveries;
@@ -268,7 +268,7 @@ public sealed class DispatchHttpSqlTests(SqlServerFixture fixture)
             "/DispatchBoard", new FormUrlEncodedContent(choices)))
         {
             Assert.Equal(HttpStatusCode.OK, previewPage.StatusCode);
-            Assert.Contains("Selected-plan results", await previewPage.Content.ReadAsStringAsync());
+            Assert.Contains("Route preview", await previewPage.Content.ReadAsStringAsync());
         }
 
         using (var reviewPage = await client.PostAsync(

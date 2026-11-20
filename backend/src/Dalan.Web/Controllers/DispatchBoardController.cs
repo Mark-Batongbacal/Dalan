@@ -1,4 +1,4 @@
-﻿using Dalan.Application.Deliveries;
+using Dalan.Application.Deliveries;
 using Dalan.Application.Dispatch;
 using Dalan.Application.Drivers;
 using Dalan.Application.Routing;
@@ -460,6 +460,8 @@ public sealed class DispatchBoardController(
             .ToHashSet();
 
         var availableVehicles = await vehicles.ListAsync(cancellationToken);
+        var roster = await drivers.ListAsync(cancellationToken);
+        var today = DateOnly.FromDateTime((services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow().UtcDateTime);
         model.Vehicles = availableVehicles
             .Where(x => x.Availability == "Available")
             .Select(x =>
@@ -469,6 +471,8 @@ public sealed class DispatchBoardController(
                 {
                     Id = x.Id,
                     RegistrationNumber = x.RegistrationNumber,
+                    DriverName = roster.FirstOrDefault(d => d.AssignedVehicleId == x.Id && d.Availability == "Available" && d.LicenseExpiry >= today)?.Name,
+                    Readiness = Readiness(x.Id),
                     Selected = submitted?.Selected ?? false,
                     StartLatitude = submitted?.StartLatitude,
                     StartLongitude = submitted?.StartLongitude,
@@ -476,7 +480,16 @@ public sealed class DispatchBoardController(
                 };
             }).ToList();
 
-        var currentDeliveries = await deliveries.ListAsync(cancellationToken);
+        string Readiness(Guid vehicleId)
+        {
+            var assigned = roster.Where(d => d.AssignedVehicleId == vehicleId).ToArray();
+            var eligible = assigned.Where(d => d.Availability == "Available" && d.LicenseExpiry >= today).ToArray();
+            return eligible.Length == 1 ? $"{eligible[0].Name} · license current"
+                : assigned.Length == 0 ? "No driver assigned"
+                : eligible.Length > 1 ? "Multiple eligible drivers; resolve assignment"
+                : "Driver unavailable or license expired";
+        }
+        var currentDeliveries = await deliveries.ListForPlanningAsync(cancellationToken);
         model.Deliveries = currentDeliveries
             .Where(x => x.Status.ToString() is "Pending" or "Assigned")
             .Select(x => new DispatchDeliveryInput
@@ -490,6 +503,10 @@ public sealed class DispatchBoardController(
                 DropoffLatitude = x.DropoffLatitude,
                 DropoffLongitude = x.DropoffLongitude,
                 Status = x.Status.ToString(),
+                AssignmentSummary = x.VehicleId is Guid boundVehicle
+                    ? $"Bound to {availableVehicles.FirstOrDefault(v => v.Id == boundVehicle)?.RegistrationNumber ?? "unavailable vehicle"} · {roster.FirstOrDefault(d => d.Id == x.DriverId)?.Name ?? "assigned driver"}"
+                    : null,
+                LocationsValid = new GeoPoint(x.PickupLatitude, x.PickupLongitude).IsValid && new GeoPoint(x.DropoffLatitude, x.DropoffLongitude).IsValid,
                 Selected = submittedDeliveries.Contains(x.Id)
             }).ToList();
     }

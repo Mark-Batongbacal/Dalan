@@ -12,8 +12,9 @@ public sealed class FleetPlannerController(
     IVehicleService vehicleService, IServiceProvider services) : Controller
 {
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(CancellationToken cancellationToken, string? mode = null)
     {
+        if (mode != "advanced") return RedirectToAction("Index", "DispatchBoard");
         var model = new FleetPlannerViewModel();
         await PopulateVehicles(model, cancellationToken);
         return View(model);

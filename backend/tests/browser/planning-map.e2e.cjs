@@ -138,6 +138,8 @@ function polyline(points) {
         console.log("PASS: existing delivery creation saves map-selected form coordinates");
 
         await page.goto(base + "/DispatchBoard");
+        if (!await page.locator(".dispatch-options").getAttribute("open").then(x => x !== null)) await page.locator(".dispatch-options > summary").click();
+        if (!await page.locator(".planning-map-tools").getAttribute("open").then(x => x !== null)) await page.locator(".planning-map-tools > summary").click();
         const vehicle = page.locator('input[type=checkbox][name$=".Selected"][name^="Vehicles"]').first();
         const delivery = page.locator('input[type=checkbox][name$=".Selected"][name^="Deliveries"]').first();
         await vehicle.check(); await delivery.check();

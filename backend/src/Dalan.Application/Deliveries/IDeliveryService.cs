@@ -60,6 +60,8 @@ public sealed record DeliveryMutationResult(
 
 public interface IDeliveryService
 {
+    async Task<IReadOnlyList<DeliveryDetails>> ListForPlanningAsync(CancellationToken cancellationToken = default)
+        => (await ListAsync(cancellationToken)).Where(x => x.Status is DeliveryStatus.Pending or DeliveryStatus.Assigned).ToArray();
     Task<DeliveryMutationResult> CreateAsync(
         CreateDeliveryCommand command, CancellationToken cancellationToken = default);
     Task<DeliveryMutationResult> AssignAsync(

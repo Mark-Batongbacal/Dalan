@@ -5,7 +5,7 @@
 
 <div class="page-heading">
     <span class="page-kicker">Dispatch operations</span>
-    <h1>Create delivery</h1>
+    <h1>Create delivery</h1><p>Step 3 · <a href="/DeliveryBatch">Create multiple deliveries instead</a></p>
     <p>Select the warehouse pickup, then enter the recipient and delivery destination.</p>
 </div>
 
@@ -44,7 +44,7 @@
             </div>
         </div></details>
 
-        <p class="form-text" data-warehouse-status aria-live="polite">This warehouse is also used as the start for vehicles on your dispatch board.</p>
+        <p class="form-text" data-warehouse-status aria-live="polite">Your saved warehouse is the pickup and fleet start. <a href="/Warehouse">Change your default warehouse in step 1</a>.</p>
 
         <div class="mb-3">
             <label asp-for="DropoffAddress" class="form-label">Drop-off address</label>
@@ -83,7 +83,8 @@
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary">Create delivery</button>
+        @if(TempData["WorkflowNotice"] is string notice) { <p class="alert alert-success" role="status">@notice</p> }
+        <button type="submit" class="btn btn-primary">Create delivery</button><button type="submit" name="next" value="another" class="btn btn-outline-secondary">Create and add another</button>
         <a asp-action="Index" class="btn btn-link">Cancel</a>
 
         </section>
